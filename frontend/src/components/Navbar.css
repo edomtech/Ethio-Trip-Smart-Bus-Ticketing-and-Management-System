@@ -1,0 +1,394 @@
+/* EthioBus Navbar — Modern Green Theme */
+.eb-navbar-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: #ffffff;
+  border-bottom: 1px solid #dcfce7;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+[data-theme="dark"] .eb-navbar-wrap {
+  background: #071410;
+  border-bottom-color: #1a3028;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.eb-navbar-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  height: 68px;
+}
+
+/* Logo */
+.eb-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.eb-brand-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #059669, #047857);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.4);
+}
+
+.eb-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.eb-brand-title {
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: #0f172a;
+  letter-spacing: 0.5px;
+}
+
+[data-theme="dark"] .eb-brand-title {
+  color: #f1f5f9;
+}
+
+.eb-green-accent {
+  color: #059669;
+}
+
+.eb-brand-subtitle {
+  font-size: 0.65rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .eb-brand-subtitle {
+  color: #94a3b8;
+}
+
+/* Nav links */
+.eb-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 1.75rem;
+}
+
+.eb-nav-item {
+  color: #334155;
+  font-weight: 600;
+  font-size: 0.88rem;
+  text-decoration: none;
+  padding: 0.4rem 0;
+  position: relative;
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+[data-theme="dark"] .eb-nav-item {
+  color: #cbd5e1;
+}
+
+.eb-nav-item svg {
+  font-size: 0.95rem;
+  color: #64748b;
+  transition: color 0.2s;
+}
+
+[data-theme="dark"] .eb-nav-item svg {
+  color: #94a3b8;
+}
+
+.eb-nav-item:hover,
+.eb-nav-item.active {
+  color: #059669;
+}
+
+.eb-nav-item:hover svg,
+.eb-nav-item.active svg {
+  color: #059669;
+}
+
+.eb-nav-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #059669;
+  border-radius: 3px;
+}
+
+/* Right actions */
+.eb-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-shrink: 0;
+}
+
+/* Theme toggle button */
+.eb-theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 50px;
+  border: 1.5px solid #d1fae5;
+  background: #f0fdf4;
+  color: #059669;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Poppins', sans-serif;
+}
+
+[data-theme="dark"] .eb-theme-toggle {
+  background: #0d2418;
+  border-color: #1a3a28;
+  color: #fbbf24;
+}
+
+.eb-theme-toggle:hover {
+  border-color: #059669;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.2);
+}
+
+.eb-toggle-label {
+  font-size: 0.75rem;
+}
+
+/* Auth buttons */
+.eb-auth-btns {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.eb-btn-login {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 1.1rem;
+  border: 1.5px solid #059669;
+  color: #059669;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.eb-btn-login:hover {
+  background: #059669;
+  color: #ffffff;
+}
+
+.eb-btn-register {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 1.2rem;
+  background: linear-gradient(135deg, #059669, #047857);
+  color: #ffffff;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35);
+  transition: all 0.2s;
+}
+
+.eb-btn-register:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(5, 150, 105, 0.5);
+}
+
+/* User logged in */
+.eb-user-menu {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.eb-btn-dashboard {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.9rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 50px;
+  text-decoration: none;
+  color: #059669;
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+[data-theme="dark"] .eb-btn-dashboard {
+  background: #0d2418;
+  border-color: #1a3a28;
+}
+
+.eb-avatar-circle {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #059669;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.eb-btn-logout-icon {
+  background: #fee2e2;
+  border: none;
+  color: #dc2626;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.eb-btn-logout-icon:hover {
+  background: #dc2626;
+  color: #fff;
+}
+
+/* Mobile */
+.eb-mobile-toggle {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 1.35rem;
+  color: #0f172a;
+  cursor: pointer;
+  padding: 0.3rem;
+}
+
+[data-theme="dark"] .eb-mobile-toggle {
+  color: #f1f5f9;
+}
+
+.eb-mobile-menu {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  padding: 1rem 1.5rem 1.5rem;
+  border-top: 1px solid #e2e8f0;
+  gap: 0.75rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .eb-mobile-menu {
+  background: #071410;
+  border-top-color: #1a3028;
+}
+
+.eb-mobile-link {
+  text-decoration: none;
+  color: #334155;
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0;
+}
+
+[data-theme="dark"] .eb-mobile-link {
+  color: #cbd5e1;
+}
+
+.eb-mobile-link.active {
+  color: #059669;
+  font-weight: 700;
+}
+
+.eb-mobile-menu hr {
+  border: none;
+  border-top: 1px solid #e2e8f0;
+  margin: 0.4rem 0;
+}
+
+[data-theme="dark"] .eb-mobile-menu hr {
+  border-top-color: #1a3028;
+}
+
+.eb-mobile-theme-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #64748b;
+  padding: 0.3rem 0;
+}
+
+.eb-mobile-theme-btn {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #059669;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.eb-mobile-logout {
+  background: #fee2e2;
+  border: none;
+  color: #dc2626;
+  padding: 0.6rem 1rem;
+  border-radius: 10px;
+  font-weight: 700;
+  font-family: inherit;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.eb-mobile-register {
+  background: #059669;
+  color: #fff !important;
+  border-radius: 10px;
+  padding: 0.6rem 1rem;
+  justify-content: center;
+}
+
+@media (max-width: 960px) {
+  .eb-nav-links {
+    display: none;
+  }
+  .eb-mobile-toggle {
+    display: block;
+  }
+}

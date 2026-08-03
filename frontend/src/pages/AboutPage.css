@@ -1,0 +1,414 @@
+/* ══════════════════════════════════════════════════════════════════
+   ABOUT PAGE - DARK MODE MODERN ETHIO BUS DESIGN
+   ══════════════════════════════════════════════════════════════════ */
+
+.eb-about-page {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: #f1f5f9;
+  background-color: #070d14;
+  min-height: 100vh;
+}
+
+.eb-text-green {
+  color: #4ade80;
+  text-shadow: 0 0 20px rgba(74, 222, 128, 0.3);
+}
+
+/* ══ HERO SECTION ══ */
+.eb-ab-hero {
+  position: relative;
+  background: radial-gradient(circle at 20% 20%, #0a251a 0%, #06131d 50%, #03080e 100%);
+  padding: 5rem 1.5rem 7rem;
+  overflow: hidden;
+}
+
+.eb-ab-hero-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 3rem;
+  align-items: center;
+}
+
+.eb-ab-hero-title {
+  font-size: 3.5rem;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.5rem;
+  line-height: 1.15;
+}
+
+.eb-ab-hero-subtitle {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #facc15;
+  margin: 0 0 1.25rem;
+}
+
+.eb-ab-hero-desc {
+  font-size: 1.1rem;
+  color: #94a3b8;
+  line-height: 1.7;
+  max-width: 540px;
+  margin: 0 0 2.25rem;
+}
+
+/* Stats Pill Cards Grid */
+.eb-ab-stats-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.eb-ab-stat-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(16px);
+  padding: 0.8rem 1.35rem;
+  border-radius: 50px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.eb-ab-stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 36px rgba(74, 222, 128, 0.2);
+  border-color: #4ade80;
+  background: rgba(15, 23, 42, 0.85);
+}
+
+.eb-ab-stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.eb-ab-stat-info h4 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.eb-ab-stat-info p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+/* Hero Right Bus Image */
+.eb-ab-hero-right {
+  display: flex;
+  justify-content: center;
+  position: relative;
+}
+
+.eb-ab-bus-frame {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6);
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+}
+
+.eb-ab-hero-img {
+  width: 100%;
+  height: 350px;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.5s ease;
+}
+
+.eb-ab-bus-frame:hover .eb-ab-hero-img {
+  transform: scale(1.04);
+}
+
+.eb-ab-wave-divider {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  overflow: hidden;
+  line-height: 0;
+}
+
+.eb-ab-wave-divider svg {
+  position: relative;
+  display: block;
+  width: calc(100% + 1.3px);
+  height: 60px;
+}
+
+/* ══ COMMON CONTAINERS ══ */
+.eb-ab-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.eb-ab-section-title {
+  font-size: 2.35rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0 0 2.5rem;
+  letter-spacing: -0.02em;
+}
+
+/* ══ MISSION SECTION ══ */
+.eb-ab-mission-section {
+  padding: 5rem 0;
+  background: #09111e;
+}
+
+.eb-ab-mission-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4rem;
+  align-items: center;
+}
+
+.eb-ab-mission-text {
+  font-size: 1.1rem;
+  color: #cbd5e1;
+  line-height: 1.7;
+  margin-bottom: 2rem;
+}
+
+.eb-ab-mission-img-wrap {
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.eb-ab-mission-img {
+  width: 100%;
+  height: 250px;
+  object-fit: cover;
+  display: block;
+}
+
+.eb-ab-mission-right {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.eb-ab-feat-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+  background: rgba(15, 23, 42, 0.5);
+  padding: 1.25rem 1.5rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.eb-ab-feat-item:hover {
+  transform: translateX(5px);
+  border-color: #4ade80;
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.eb-ab-fi-icon {
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  border-radius: 50%;
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+}
+
+.eb-ab-fi-content h4 {
+  margin: 0 0 0.35rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.eb-ab-fi-content p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+/* ══ VALUES SECTION ══ */
+.eb-ab-values-section {
+  padding: 5rem 0;
+  background: #060c14;
+}
+
+.eb-ab-values-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+}
+
+.eb-ab-val-card {
+  background: rgba(15, 23, 42, 0.6);
+  padding: 2.5rem 1.5rem;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(12px);
+  transition: all 0.3s ease;
+}
+
+.eb-ab-val-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 40px rgba(74, 222, 128, 0.15);
+  border-color: #4ade80;
+  background: rgba(15, 23, 42, 0.85);
+}
+
+.eb-ab-vc-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 1.35rem;
+  border-radius: 50%;
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+}
+
+.eb-ab-val-card h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 0.5rem;
+}
+
+.eb-ab-val-card p {
+  font-size: 0.92rem;
+  color: #94a3b8;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ══ CTA SECTION ══ */
+.eb-ab-cta-section {
+  padding: 4.5rem 0 6rem;
+  background: #09111e;
+}
+
+.eb-ab-cta-card {
+  background: linear-gradient(135deg, #0a3321 0%, #08291a 50%, #03140c 100%);
+  border-radius: 24px;
+  padding: 3.5rem 4rem;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 2.5rem;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.eb-ab-cta-icon-badge {
+  width: 76px;
+  height: 76px;
+  min-width: 76px;
+  border-radius: 50%;
+  background: rgba(74, 222, 128, 0.15);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.2rem;
+  color: #4ade80;
+}
+
+.eb-ab-cta-text {
+  flex: 1;
+}
+
+.eb-ab-cta-text h2 {
+  font-size: 2rem;
+  font-weight: 800;
+  margin: 0 0 0.5rem;
+  color: #ffffff;
+}
+
+.eb-ab-cta-text p {
+  font-size: 1.08rem;
+  color: #cbd5e1;
+  margin: 0;
+}
+
+.eb-ab-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: #facc15;
+  color: #0f172a;
+  font-weight: 800;
+  padding: 1.05rem 2rem;
+  border-radius: 50px;
+  text-decoration: none;
+  font-size: 1.05rem;
+  box-shadow: 0 8px 25px rgba(250, 204, 21, 0.35);
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.eb-ab-cta-btn:hover {
+  background: #eab308;
+  transform: translateY(-3px);
+  box-shadow: 0 12px 30px rgba(250, 204, 21, 0.5);
+}
+
+/* Responsive Breakdown */
+@media (max-width: 1024px) {
+  .eb-ab-hero-container {
+    grid-template-columns: 1fr;
+  }
+  .eb-ab-mission-grid {
+    grid-template-columns: 1fr;
+  }
+  .eb-ab-values-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .eb-ab-cta-card {
+    flex-direction: column;
+    text-align: center;
+    padding: 2.5rem 2rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .eb-ab-hero-title {
+    font-size: 2.5rem;
+  }
+  .eb-ab-values-grid {
+    grid-template-columns: 1fr;
+  }
+  .eb-ab-stats-grid {
+    flex-direction: column;
+  }
+}

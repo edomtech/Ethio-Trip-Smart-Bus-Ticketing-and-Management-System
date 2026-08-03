@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <rect width="64" height="64" rx="16" fill="url(#ethiobus_grad)" />
+  <path d="M16 22C16 18.6863 18.6863 16 22 16H42C45.3137 16 48 18.6863 48 22V38C48 40.2091 46.2091 42 44 42H20C17.7909 42 16 40.2091 16 38V22Z" fill="white" fill-opacity="0.15"/>
+  <path d="M18 24C18 20.6863 20.6863 18 24 18H40C43.3137 18 46 20.6863 46 24V36C46 38.2091 44.2091 40 42 40H22C19.7909 40 18 38.2091 18 36V24Z" fill="white"/>
+  <rect x="22" y="22" width="9" height="7" rx="2" fill="#10B981" />
+  <rect x="33" y="22" width="9" height="7" rx="2" fill="#10B981" />
+  <circle cx="24" cy="42" r="4" fill="#1F2937" stroke="white" stroke-width="2" />
+  <circle cx="40" cy="42" r="4" fill="#1F2937" stroke="white" stroke-width="2" />
+  <path d="M22 33H42" stroke="#10B981" stroke-width="2" stroke-linecap="round" />
+  <defs>
+    <linearGradient id="ethiobus_grad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10B981"/>
+      <stop offset="1" stop-color="#059669"/>
+    </linearGradient>
+  </defs>
+</svg>

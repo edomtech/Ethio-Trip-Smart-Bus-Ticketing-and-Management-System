@@ -1,0 +1,100 @@
+/* ═════════════════════════════════════════════════════════════════
+   ETHIOBUS DESIGN SYSTEM
+═════════════════════════════════════════════════════════════════ */
+:root {
+  /* EthioBus Purple & Purple-Indigo Gradient Theme */
+  --eb-purple-darker: #0f0728;
+  --eb-purple-dark: #1b0c42;
+  --eb-purple-main: #2b1464;
+  --eb-purple-primary: #6c2bd9;
+  --eb-purple-light: #8b5cf6;
+  --eb-purple-lighter: #f3e8ff;
+  --eb-purple-accent: #a78bfa;
+
+  /* Ethiopian Flag Accents */
+  --eb-green: #078930;
+  --eb-green-light: #dcfce7;
+  --eb-yellow: #FCDD09;
+  --eb-yellow-dark: #d97706;
+  --eb-red: #DA121A;
+  --eb-red-light: #fee2e2;
+
+  /* Dashboard Colors */
+  --eb-blue: #2563eb;
+  --eb-blue-light: #dbeafe;
+  --eb-teal: #0d9488;
+  --eb-teal-light: #ccfbf1;
+  --eb-pink: #db2777;
+  --eb-pink-light: #fce7f3;
+
+  /* Neutral Surface Colors */
+  --eb-bg-main: #f8fafc;
+  --eb-surface: #ffffff;
+  --eb-text-main: #0f172a;
+  --eb-text-muted: #64748b;
+  --eb-border: #e2e8f0;
+
+  /* Shadows & Radius */
+  --eb-radius-sm: 8px;
+  --eb-radius-md: 12px;
+  --eb-radius-lg: 20px;
+  --eb-radius-pill: 50px;
+  --eb-shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
+  --eb-shadow-md: 0 8px 24px rgba(0,0,0,0.08);
+  --eb-shadow-lg: 0 20px 50px rgba(0,0,0,0.15);
+  --eb-shadow-purple: 0 10px 30px rgba(108, 43, 217, 0.35);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+  background-color: var(--eb-bg-main);
+  color: var(--eb-text-main);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Currency formatting */
+.eb-currency {
+  font-weight: 800;
+  color: var(--eb-purple-primary);
+}
+
+/* Badge pills */
+.eb-badge-popular {
+  background: var(--eb-purple-primary);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: var(--eb-radius-pill);
+}
+
+.eb-badge-trending {
+  background: #f59e0b;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: var(--eb-radius-pill);
+}
+
+/* Glass & Card styles */
+.eb-card {
+  background: #fff;
+  border-radius: var(--eb-radius-lg);
+  border: 1px solid var(--eb-border);
+  box-shadow: var(--eb-shadow-sm);
+  transition: all 0.25s ease;
+}
+
+.eb-card:hover {
+  box-shadow: var(--eb-shadow-md);
+  transform: translateY(-2px);
+}
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
