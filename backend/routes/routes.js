@@ -6,12 +6,12 @@ const {
   updateRoute,
   deleteRoute,
 } = require('../controllers/routeController');
-const { protect, authorize } = require('../middleware/auth');
+const { protect, optionalProtect, authorize } = require('../middleware/auth');
 
-router.get('/', getRoutes);
+router.get('/', optionalProtect, getRoutes);
 router.get('/:id', getRouteById);
-router.post('/', protect, authorize('admin'), createRoute);
-router.put('/:id', protect, authorize('admin'), updateRoute);
-router.delete('/:id', protect, authorize('admin'), deleteRoute);
+router.post('/', protect, authorize('company_admin', 'super_admin', 'admin'), createRoute);
+router.put('/:id', protect, authorize('company_admin', 'super_admin', 'admin'), updateRoute);
+router.delete('/:id', protect, authorize('company_admin', 'super_admin', 'admin'), deleteRoute);
 
 module.exports = router;

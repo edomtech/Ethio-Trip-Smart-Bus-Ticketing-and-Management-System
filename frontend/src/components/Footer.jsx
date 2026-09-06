@@ -1,7 +1,5 @@
 import { Link } from 'react-router-dom';
-import { FaBus, FaPhoneAlt, FaEnvelope, FaMapMarkerAlt, FaFacebook, FaTelegram, FaTwitter, FaArrowRight } from 'react-icons/fa';
-import './Footer.css';
-
+import { FaBus, FaPhoneAlt, FaEnvelope, FaMapMarkerAlt, FaFacebook, FaTelegram, FaTwitter, FaArrowRight } from 'react-icons/fa';
 const Footer = () => (
   <footer className="eb-footer">
     <div className="eb-footer-inner">
@@ -11,8 +9,8 @@ const Footer = () => (
           <div className="eb-footer-logo">
             <div className="eb-footer-logo-icon"><FaBus /></div>
             <div>
-              <div className="eb-footer-logo-name">ETHIO<span>BUS</span></div>
-              <div className="eb-footer-logo-sub">Smart Ticketing System</div>
+              <div className="eb-footer-logo-name">ETHIO<span>TRIP</span></div>
+              <div className="eb-footer-logo-sub">Smart Bus Travel Platform</div>
             </div>
           </div>
           <p>Ethiopia's leading bus ticketing platform — safe, affordable and reliable inter-city travel.</p>
@@ -31,13 +29,7 @@ const Footer = () => (
           <Link to="/contact"><FaArrowRight className="eb-link-arrow" /> Contact Us</Link>
         </div>
 
-        <div className="eb-fg-col">
-          <h4>Portals</h4>
-          <Link to="/passenger/login"><FaArrowRight className="eb-link-arrow" /> Passenger Login</Link>
-          <Link to="/passenger/register"><FaArrowRight className="eb-link-arrow" /> Sign Up</Link>
-          <Link to="/agent/login"><FaArrowRight className="eb-link-arrow" /> Agent Portal</Link>
-          <Link to="/admin/login"><FaArrowRight className="eb-link-arrow" /> Admin Panel</Link>
-        </div>
+
 
         <div className="eb-fg-col">
           <h4>Contact</h4>
@@ -52,7 +44,7 @@ const Footer = () => (
             <FaEnvelope />
             <div>
               <span className="lbl">Email</span>
-              <strong>support@ethiobus.gov.et</strong>
+              <strong>support@ethiotrip.com</strong>
             </div>
           </div>
           <div className="eb-footer-contact-item">
@@ -72,7 +64,7 @@ const Footer = () => (
           <span style={{ background: '#fbbf24' }} />
           <span style={{ background: '#ef4444' }} />
         </div>
-        <p>© {new Date().getFullYear()} EthioBus Smart Ticketing. All Rights Reserved.</p>
+        <p>© {new Date().getFullYear()} Ethio Trip. All Rights Reserved.</p>
         <div className="eb-flag-bar">
           <span style={{ background: '#059669' }} />
           <span style={{ background: '#fbbf24' }} />

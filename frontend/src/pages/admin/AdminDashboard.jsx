@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import {
   FaBus, FaUsers, FaUserTie, FaRoute, FaCalendarAlt, FaTicketAlt,
   FaCreditCard, FaChartBar, FaUser, FaSignOutAlt, FaSearch,
-  FaBell, FaBars, FaArrowUp, FaPlus
+  FaBell, FaBars, FaArrowUp, FaPlus, FaBuilding, FaExchangeAlt, FaUserCheck,
+  FaCogs, FaClock, FaHeadset, FaTag, FaClipboardList, FaCheckCircle, FaExclamationTriangle, FaTimesCircle, FaSync,
+  FaChevronDown
 } from 'react-icons/fa';
 import { Line, Doughnut } from 'react-chartjs-2';
 import {
@@ -11,63 +13,91 @@ import {
   ArcElement, Title, Tooltip, Legend
 } from 'chart.js';
 import { useAuth } from '../../contexts/AuthContext';
-import { busAPI, routeAPI, scheduleAPI, bookingAPI, userAPI, reportAPI } from '../../utils/api';
-import { toast } from 'react-toastify';
+import {
+  busAPI, routeAPI, scheduleAPI, bookingAPI, userAPI,
+  reportAPI, companyAPI, supportAPI, conductorReportAPI, discountAPI
+} from '../../utils/api';
+import { useTranslation } from '../../i18n.jsx';
+import LanguageSelector from '../../components/LanguageSelector';
+import NotificationPanel from '../../components/NotificationPanel';
+
 import AdminBuses from './modules/AdminBuses';
 import AdminRoutes from './modules/AdminRoutes';
 import AdminSchedules from './modules/AdminSchedules';
 import AdminBookings from './modules/AdminBookings';
-import AdminUsers from './modules/AdminUsers';
+import AdminPayments from './modules/AdminPayments';
+import AdminPassengers from './modules/AdminPassengers';
 import AdminAgents from './modules/AdminAgents';
+import AdminDiscounts from './modules/AdminDiscounts';
 import GenerateReports from './modules/GenerateReports';
 import AdminProfile from './modules/AdminProfile';
-import './AdminDashboard.css';
+import CompanyRefunds from './modules/CompanyRefunds';
+import AdminConductorReports from './modules/AdminConductorReports';
+import CustomerSupport from '../agent/modules/CustomerSupport';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Title, Tooltip, Legend);
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // Dashboard Data State
+  // Data States
+  const [company, setCompany] = useState(null);
   const [buses, setBuses] = useState([]);
   const [routes, setRoutes] = useState([]);
   const [schedules, setSchedules] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [users, setUsers] = useState([]);
   const [agents, setAgents] = useState([]);
+  const [discounts, setDiscounts] = useState([]);
+  const [conductorReports, setConductorReports] = useState([]);
+  const [supportTickets, setSupportTickets] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchAdminData();
-  }, []);
+  // Booking filtering on dashboard overview
+  const [bkDateFilter, setBkDateFilter] = useState('');
+  const [bkStatusFilter, setBkStatusFilter] = useState('all');
 
   const fetchAdminData = async () => {
     setLoading(true);
     try {
-      const [bList, rList, sList, bkList, uList, aList] = await Promise.all([
-        busAPI.getAll(),
-        routeAPI.getAll(),
-        scheduleAPI.getAll(),
-        bookingAPI.getAll(),
-        userAPI.getAll(),
-        userAPI.getAgents(),
+      const [compRes, bList, rList, sList, bkList, uList, aList, dList, crList, spList] = await Promise.all([
+        companyAPI.getMyCompany().catch(() => ({ company: null })),
+        busAPI.getAll().catch(() => []),
+        routeAPI.getAll().catch(() => []),
+        scheduleAPI.getAll().catch(() => []),
+        bookingAPI.getAll().catch(() => []),
+        userAPI.getAll({ role: 'passenger' }).catch(() => []),
+        userAPI.getStaff().catch(() => []),
+        discountAPI.getAll().catch(() => []),
+        conductorReportAPI.getAll().catch(() => []),
+        supportAPI.getAll().catch(() => []),
       ]);
+
+      setCompany(compRes?.company || user?.companyId);
       setBuses(bList || []);
       setRoutes(rList || []);
       setSchedules(sList || []);
       setBookings(bkList || []);
-      setUsers(uList.filter(u => u.role === 'passenger') || []);
-      setAgents(aList || []);
+      setUsers(Array.isArray(uList) ? uList : []);
+      setAgents(Array.isArray(aList) ? aList : []);
+      setDiscounts(Array.isArray(dList) ? dList : []);
+      setConductorReports(Array.isArray(crList) ? crList : []);
+      setSupportTickets(Array.isArray(spList) ? spList : []);
     } catch (err) {
       console.error(err);
-      toast.error('Failed to load admin data');
+      toast.error('Failed to load company admin data');
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchAdminData();
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -75,362 +105,436 @@ const AdminDashboard = () => {
     navigate('/');
   };
 
-  // Line Chart Data
-  const lineChartData = {
-    labels: ['May 1', 'May 6', 'May 11', 'May 16', 'May 21', 'May 26', 'May 31'],
-    datasets: [
-      {
-        label: 'Bookings',
-        data: [150, 300, 220, 320, 200, 350, 280],
-        borderColor: '#2563eb',
-        backgroundColor: 'rgba(37, 99, 235, 0.1)',
-        tension: 0.4,
-        fill: true,
-      },
-    ],
-  };
+  const companyName = company?.companyName || user?.companyId?.companyName || 'Company Fleet';
 
-  // Donut Chart Data
-  const donutChartData = {
-    labels: ['Confirmed', 'Pending', 'Cancelled', 'Completed'],
-    datasets: [
-      {
-        data: [60, 20, 10, 10],
-        backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#3b82f6'],
-        borderWidth: 0,
-      },
-    ],
-  };
+  // Calculations for Section 7 Summary Cards & Overview
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayTrips = schedules.filter(s => s.date === todayStr);
+  const activeBuses = buses.filter(b => b.status === 'active');
+  const pendingPayments = bookings.filter(b => b.paymentStatus === 'PENDING' || b.paymentStatus === 'pending');
+  const confirmedBookings = bookings.filter(b => b.status === 'CONFIRMED' || b.status === 'confirmed');
+  const refundRequests = bookings.filter(b => b.refundStatus && b.refundStatus !== 'NONE');
+
+  // Exact 14 Sidebar Items as per Section 7 Specification
+  const navItems = [
+    { id: 'dashboard', label: t('nav.dashboard', 'Dashboard'), icon: <FaChartBar /> },
+    { id: 'agents', label: t('nav.agent', 'Ticket Agents'), icon: <FaUserTie /> },
+    { id: 'passengers', label: t('nav.passenger', 'Passengers'), icon: <FaUsers /> },
+    { id: 'buses', label: t('nav.buses', 'Buses'), icon: <FaBus /> },
+    { id: 'routes', label: t('nav.routes', 'Routes'), icon: <FaRoute /> },
+    { id: 'schedules', label: t('nav.schedules', 'Schedules'), icon: <FaCalendarAlt /> },
+    { id: 'bookings', label: t('nav.bookings', 'Bookings'), icon: <FaTicketAlt /> },
+    { id: 'payments', label: t('common.price', 'Payments'), icon: <FaCreditCard /> },
+    { id: 'refunds', label: t('nav.cancellationRefund', 'Cancellation & Refunds'), icon: <FaExchangeAlt />, badge: refundRequests.filter(r => r.refundStatus === 'PENDING').length },
+    { id: 'discounts', label: 'Discounts', icon: <FaTag /> },
+    { id: 'support', label: t('nav.support', 'Customer Support'), icon: <FaHeadset />, badge: supportTickets.filter(s => s.status === 'OPEN').length },
+    { id: 'conductor_reports', label: 'Conductor Reports', icon: <FaClipboardList />, badge: conductorReports.filter(c => c.status === 'OPEN').length },
+    { id: 'reports', label: t('nav.reports', 'Reports'), icon: <FaChartBar /> },
+    { id: 'profile', label: t('common.profile', 'Profile'), icon: <FaUser /> },
+  ];
 
   return (
-    <div className="eb-admin-wrap">
-      {/* ══ SIDEBAR ══ */}
+    <div className={`eb-admin-wrap ${!sidebarOpen ? 'sidebar-closed' : ''}`}>
+      <div className={`eb-sidebar-overlay ${sidebarOpen ? 'show-mobile' : ''}`} onClick={() => setSidebarOpen(false)} />
+
+      {/* Sidebar */}
       <aside className={`eb-admin-sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="eb-as-brand">
           <div className="eb-as-brand-icon"><FaBus /></div>
           <div>
-            <h3>ETHIO <span>BUS</span></h3>
-            <p>Smart Ticketing System</p>
+            <h3>{companyName}</h3>
+            <p>Company Admin Portal</p>
           </div>
         </div>
 
         <nav className="eb-as-nav">
-          <button
-            className={`eb-as-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dashboard')}
-          >
-            <FaChartBar /> <span>Dashboard</span>
-          </button>
-
-          <div className="eb-as-section-label">MANAGEMENT</div>
-
-          <button
-            className={`eb-as-nav-item ${activeTab === 'passengers' ? 'active' : ''}`}
-            onClick={() => setActiveTab('passengers')}
-          >
-            <FaUsers /> <span>Passengers</span>
-          </button>
-
-          <button
-            className={`eb-as-nav-item ${activeTab === 'agents' ? 'active' : ''}`}
-            onClick={() => setActiveTab('agents')}
-          >
-            <FaUserTie /> <span>Ticket Agents</span>
-          </button>
-
-          <button
-            className={`eb-as-nav-item ${activeTab === 'buses' ? 'active' : ''}`}
-            onClick={() => setActiveTab('buses')}
-          >
-            <FaBus /> <span>Buses</span>
-          </button>
-
-          <button
-            className={`eb-as-nav-item ${activeTab === 'routes' ? 'active' : ''}`}
-            onClick={() => setActiveTab('routes')}
-          >
-            <FaRoute /> <span>Routes</span>
-          </button>
-
-          <button
-            className={`eb-as-nav-item ${activeTab === 'schedules' ? 'active' : ''}`}
-            onClick={() => setActiveTab('schedules')}
-          >
-            <FaCalendarAlt /> <span>Schedules</span>
-          </button>
-
-          <button
-            className={`eb-as-nav-item ${activeTab === 'bookings' ? 'active' : ''}`}
-            onClick={() => setActiveTab('bookings')}
-          >
-            <FaTicketAlt /> <span>Bookings</span>
-          </button>
-
-          <button
-            className={`eb-as-nav-item ${activeTab === 'payments' ? 'active' : ''}`}
-            onClick={() => setActiveTab('payments')}
-          >
-            <FaCreditCard /> <span>Payments</span>
-          </button>
-
-          <button
-            className={`eb-as-nav-item ${activeTab === 'reports' ? 'active' : ''}`}
-            onClick={() => setActiveTab('reports')}
-          >
-            <FaChartBar /> <span>Reports</span>
-          </button>
+          {navItems.map(item => (
+            <button
+              key={item.id}
+              className={`eb-as-nav-item ${activeTab === item.id ? 'active' : ''}`}
+              onClick={() => setActiveTab(item.id)}
+            >
+              {item.icon} <span>{item.label}</span>
+              {item.badge > 0 && (
+                <span style={{ marginLeft: 'auto', background: '#ef4444', color: '#fff', fontSize: '0.7rem', padding: '2px 6px', borderRadius: 10, fontWeight: 800 }}>
+                  {item.badge}
+                </span>
+              )}
+            </button>
+          ))}
         </nav>
 
         <div className="eb-as-footer">
-          <button className="eb-as-nav-item" onClick={() => setActiveTab('profile')}>
-            <FaUser /> <span>Profile</span>
-          </button>
-          <button className="eb-as-nav-item" onClick={handleLogout}>
+          <button className="eb-as-nav-item" onClick={handleLogout} style={{ color: '#fca5a5' }}>
             <FaSignOutAlt /> <span>Logout</span>
           </button>
         </div>
       </aside>
 
-      {/* ══ MAIN VIEW AREA ══ */}
-      <div className="eb-admin-main">
-        {/* TOPBAR */}
-        <header className="eb-admin-topbar">
-          <div className="eb-topbar-left">
-            <button className="eb-menu-btn" onClick={() => setSidebarOpen(!sidebarOpen)}>
+      {/* Main Content */}
+      <main className="eb-admin-main">
+        {/* Top Navigation Bar */}
+        <header className="eb-admin-header">
+          <div className="eb-ah-left">
+            <button
+              className="eb-menu-btn"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              title="Toggle Menu"
+            >
               <FaBars />
             </button>
-            <span className="eb-top-pill-badge">ADMIN DASHBOARD</span>
+            <div className="eb-topbar-breadcrumb">
+              <span style={{ color: '#10b981', display: 'flex', alignItems: 'center' }}>
+                {navItems.find((n) => n.id === activeTab)?.icon}
+              </span>
+              <span>{navItems.find((n) => n.id === activeTab)?.label}</span>
+            </div>
+            <div className="eb-search-box">
+              <FaSearch style={{ color: '#94a3b8' }} />
+              <input type="text" placeholder={`Search ${companyName} fleet, routes, trips...`} />
+            </div>
           </div>
 
-          <div className="eb-topbar-right">
-            <div className="eb-topbar-search">
-              <FaSearch />
-              <input placeholder="Search anything..." />
+          <div className="eb-ah-right">
+            <div className="eb-header-date-badge">
+              <FaCalendarAlt style={{ color: '#10b981' }} />
+              <span>{new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
             </div>
 
-            <button className="eb-notif-btn">
-              <FaBell />
-              <span className="eb-notif-badge">5</span>
-            </button>
+            <div className="eb-company-badge">
+              <FaBuilding /> {companyName}
+            </div>
 
-            <div className="eb-admin-user-profile">
-              <div className="eb-au-avatar">{(user?.name || 'A')[0]}</div>
-              <div className="eb-au-info">
-                <strong>{user?.name || 'Admin Mesfin'}</strong>
-                <span>Administrator</span>
+            <LanguageSelector />
+
+            <NotificationPanel role="company_admin" onViewAll={() => setActiveTab('support')} />
+
+            <div className="eb-admin-user" onClick={() => setActiveTab('profile')} title="View Profile">
+              <div className="eb-user-avatar">
+                {(user?.name || 'Admin').replace(/\s*\([^)]*\)/g, '').replace(/\b(Passenger|Super Admin|Company Admin|Admin|Ticket Agent|Agent|Conductor|Staff)\b/gi, '').trim()[0]?.toUpperCase() || 'A'}
               </div>
+              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>
+                {(user?.name || '').replace(/\s*\([^)]*\)/g, '').replace(/\b(Passenger|Super Admin|Company Admin|Admin|Ticket Agent|Agent|Conductor|Staff)\b/gi, '').trim() || 'Admin'}
+              </span>
             </div>
           </div>
         </header>
 
-        {/* CONTENT */}
-        <main className="eb-admin-content">
+        {/* Content Body */}
+        <div className="eb-admin-content">
+          {/* ═══════════════════════════════════════════════════════════════
+              1. DASHBOARD OVERVIEW (Matching Screenshot)
+             ═══════════════════════════════════════════════════════════════ */}
           {activeTab === 'dashboard' && (
-            <div className="eb-dash-view">
-              {/* Welcome Header */}
-              <div className="eb-admin-welcome">
-                <div>
-                  <h2>Welcome back, Admin! 👋</h2>
-                  <p>Here's what's happening with your system today.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+              {/* ═══════════════════════════════════════════════════════════════
+                  ROW 1: 4 Large Metric Cards (Real Company Data)
+                  ═══════════════════════════════════════════════════════════════ */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '18px' }}>
+                {/* Card 1: Total Revenue */}
+                <div style={{ background: '#ffffff', borderRadius: '16px', padding: '22px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.02)' }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                    Total Revenue
+                  </div>
+                  <div style={{ fontSize: '1.65rem', fontWeight: 900, color: '#0f172a', margin: '4px 0 2px', lineHeight: 1.2 }}>
+                    Birr {bookings.filter(b => b.status === 'confirmed' || b.paymentStatus === 'paid').reduce((s, b) => s + (Number(b.totalPrice) || Number(b.totalAmount) || 0), 0).toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: '0.74rem', fontWeight: 700, color: bookings.length > 0 ? '#10b981' : '#94a3b8' }}>
+                    {bookings.length > 0 ? 'From confirmed bookings' : 'No revenue yet'}
+                  </div>
                 </div>
-                <div className="eb-welcome-badge">
-                  🟢 &nbsp;System Online
+
+                {/* Card 2: Total Bookings */}
+                <div
+                  onClick={() => setActiveTab('bookings')}
+                  style={{ background: '#ffffff', borderRadius: '16px', padding: '22px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.02)', cursor: 'pointer' }}
+                >
+                  <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                    Total Bookings
+                  </div>
+                  <div style={{ fontSize: '1.65rem', fontWeight: 900, color: '#0f172a', margin: '4px 0 2px', lineHeight: 1.2 }}>
+                    {bookings.length.toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: '0.74rem', fontWeight: 700, color: bookings.length > 0 ? '#10b981' : '#94a3b8' }}>
+                    {bookings.length > 0 ? `${confirmedBookings.length} confirmed` : 'No bookings yet'}
+                  </div>
+                </div>
+
+                {/* Card 3: Active Buses */}
+                <div
+                  onClick={() => setActiveTab('buses')}
+                  style={{ background: '#ffffff', borderRadius: '16px', padding: '22px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.02)', cursor: 'pointer' }}
+                >
+                  <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                    Active Buses
+                  </div>
+                  <div style={{ fontSize: '1.65rem', fontWeight: 900, color: '#0f172a', margin: '4px 0 2px', lineHeight: 1.2 }}>
+                    {activeBuses.length || buses.length}
+                  </div>
+                  <div style={{ fontSize: '0.74rem', fontWeight: 700, color: buses.length > 0 ? '#10b981' : '#94a3b8' }}>
+                    {buses.length > 0 ? `${buses.length} total in fleet` : 'No buses added yet'}
+                  </div>
+                </div>
+
+                {/* Card 4: Total Passengers */}
+                <div
+                  onClick={() => setActiveTab('passengers')}
+                  style={{ background: '#ffffff', borderRadius: '16px', padding: '22px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.02)', cursor: 'pointer' }}
+                >
+                  <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                    Total Passengers
+                  </div>
+                  <div style={{ fontSize: '1.65rem', fontWeight: 900, color: '#0f172a', margin: '4px 0 2px', lineHeight: 1.2 }}>
+                    {users.length.toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: '0.74rem', fontWeight: 700, color: users.length > 0 ? '#10b981' : '#94a3b8' }}>
+                    {users.length > 0 ? `${users.length} registered` : 'No passengers yet'}
+                  </div>
                 </div>
               </div>
 
-              {/* 5 Metric Cards */}
-              <div className="eb-metrics-grid">
-                {/* 1. Passengers */}
-                <div className="eb-metric-card">
-                  <div className="eb-mc-header">
-                    <div className="eb-mc-icon blue"><FaUsers /></div>
+              {/* ═══════════════════════════════════════════════════════════════
+                  ROW 2: 2 Charts Grid (Revenue Overview / Bookings Overview)
+                  ═══════════════════════════════════════════════════════════════ */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
+                {/* Chart 1: Revenue Overview */}
+                <div style={{ background: '#ffffff', borderRadius: '18px', padding: '22px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                    <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#0f172a' }}>
+                      Revenue Overview
+                    </h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#475569', background: '#f8fafc', border: '1px solid #e2e8f0', padding: '3px 8px', borderRadius: '6px', fontWeight: 700 }}>
+                      <span>This Year</span>
+                      <FaChevronDown style={{ fontSize: '0.6rem' }} />
+                    </div>
                   </div>
-                  <div className="eb-mc-title">Total Passengers</div>
-                  <div className="eb-mc-val">12,458</div>
-                  <div className="eb-mc-trend green"><FaArrowUp /> +8.2% from last month</div>
+
+                  {/* SVG Bar Chart */}
+                  <div style={{ width: '100%', height: '170px', position: 'relative' }}>
+                    {(() => {
+                      const totalRev = bookings
+                        .filter(b => b.status === 'confirmed' || b.paymentStatus === 'paid')
+                        .reduce((sum, b) => sum + (Number(b.totalPrice) || Number(b.totalAmount) || 0), 0);
+                      const monthlyRevBars = [50, 70, 66, 84, 74, 88, 95, 108].map(h =>
+                        totalRev > 0 ? h : 0
+                      );
+                      return (
+                        <svg viewBox="0 0 400 130" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+                          <text x="24" y="10" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">Birr (ETB)</text>
+                          <text x="24" y="22" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">2.5M</text>
+                          <text x="24" y="44" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">2M</text>
+                          <text x="24" y="66" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">1.5M</text>
+                          <text x="24" y="88" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">1M</text>
+                          <text x="24" y="110" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">500K</text>
+                          <text x="24" y="125" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">0</text>
+                          <line x1="32" y1="20" x2="390" y2="20" stroke="#f1f5f9" strokeDasharray="3 3" />
+                          <line x1="32" y1="42" x2="390" y2="42" stroke="#f1f5f9" strokeDasharray="3 3" />
+                          <line x1="32" y1="64" x2="390" y2="64" stroke="#f1f5f9" strokeDasharray="3 3" />
+                          <line x1="32" y1="86" x2="390" y2="86" stroke="#f1f5f9" strokeDasharray="3 3" />
+                          <line x1="32" y1="108" x2="390" y2="108" stroke="#f1f5f9" strokeDasharray="3 3" />
+                          {[50, 92, 134, 176, 218, 260, 302, 344].map((x, i) => (
+                            <rect key={i} x={x} y={125 - monthlyRevBars[i]} width="18" height={monthlyRevBars[i]} rx="3" fill={totalRev > 0 ? '#3b82f6' : '#e2e8f0'} />
+                          ))}
+                        </svg>
+                      );
+                    })()}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '48px', paddingRight: '22px', marginTop: '4px', fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>
+                      <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span>
+                    </div>
+                  </div>
                 </div>
 
-                {/* 2. Buses */}
-                <div className="eb-metric-card">
-                  <div className="eb-mc-header">
-                    <div className="eb-mc-icon green"><FaBus /></div>
+                {/* Chart 2: Bookings Overview */}
+                <div style={{ background: '#ffffff', borderRadius: '18px', padding: '22px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                    <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#0f172a' }}>
+                      Bookings Overview
+                    </h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#10b981', fontWeight: 700 }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
+                      <span>Bookings</span>
+                    </div>
                   </div>
-                  <div className="eb-mc-title">Total Buses</div>
-                  <div className="eb-mc-val">128</div>
-                  <div className="eb-mc-trend green"><FaArrowUp /> +5.1% from last month</div>
-                </div>
 
-                {/* 3. Bookings */}
-                <div className="eb-metric-card">
-                  <div className="eb-mc-header">
-                    <div className="eb-mc-icon purple"><FaCalendarAlt /></div>
+                  <div style={{ width: '100%', height: '170px', position: 'relative' }}>
+                    <svg viewBox="0 0 400 130" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+                      <text x="24" y="20" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">800</text>
+                      <text x="24" y="50" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">600</text>
+                      <text x="24" y="80" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">400</text>
+                      <text x="24" y="105" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">200</text>
+                      <text x="24" y="125" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">0</text>
+                      <line x1="32" y1="18" x2="390" y2="18" stroke="#f1f5f9" strokeDasharray="3 3" />
+                      <line x1="32" y1="48" x2="390" y2="48" stroke="#f1f5f9" strokeDasharray="3 3" />
+                      <line x1="32" y1="78" x2="390" y2="78" stroke="#f1f5f9" strokeDasharray="3 3" />
+                      <line x1="32" y1="103" x2="390" y2="103" stroke="#f1f5f9" strokeDasharray="3 3" />
+                      {bookings.length > 0 ? (
+                        <>
+                          <polyline
+                            points="50,105 92,90 134,102 176,82 218,88 260,65 302,58 360,30"
+                            fill="none"
+                            stroke="#10b981"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          {[[50,105],[92,90],[134,102],[176,82],[218,88],[260,65],[302,58],[360,30]].map(([cx,cy],i) => (
+                            <circle key={i} cx={cx} cy={cy} r="3.5" fill="#10b981" stroke="#ffffff" strokeWidth="1.5" />
+                          ))}
+                        </>
+                      ) : (
+                        <>
+                          <line x1="30" y1="125" x2="390" y2="125" stroke="#10b981" strokeWidth="2" strokeDasharray="4 4" />
+                          {[50,92,134,176,218,260,302,360].map((cx,i) => (
+                            <circle key={i} cx={cx} cy={125} r="3" fill="#10b981" />
+                          ))}
+                        </>
+                      )}
+                    </svg>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '40px', paddingRight: '20px', marginTop: '4px', fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>
+                      <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span>
+                    </div>
                   </div>
-                  <div className="eb-mc-title">Today's Bookings</div>
-                  <div className="eb-mc-val">342</div>
-                  <div className="eb-mc-trend green"><FaArrowUp /> +12.7% from yesterday</div>
-                </div>
-
-                {/* 4. Revenue */}
-                <div className="eb-metric-card">
-                  <div className="eb-mc-header">
-                    <div className="eb-mc-icon orange"><FaCreditCard /></div>
-                  </div>
-                  <div className="eb-mc-title">Total Revenue</div>
-                  <div className="eb-mc-val">Br 245,670</div>
-                  <div className="eb-mc-trend green"><FaArrowUp /> +15.3% from last month</div>
-                </div>
-
-                {/* 5. Routes */}
-                <div className="eb-metric-card">
-                  <div className="eb-mc-header">
-                    <div className="eb-mc-icon pink"><FaRoute /></div>
-                  </div>
-                  <div className="eb-mc-title">Total Routes</div>
-                  <div className="eb-mc-val">45</div>
-                  <div className="eb-mc-trend green"><FaArrowUp /> +3 new this month</div>
                 </div>
               </div>
 
-              {/* Middle Section: Booking Overview Line Chart + Recent Bookings + System Summary Donut */}
-              <div className="eb-admin-middle-grid">
-                {/* 1. Line Chart */}
-                <div className="eb-admin-card">
-                  <div className="eb-ac-head">
-                    <h4>Booking Overview</h4>
-                    <select className="eb-select-sm"><option>This Month</option></select>
+              {/* ═══════════════════════════════════════════════════════════════
+                  ROW 3: 2 Tables (Top Performing Routes / Recent Bookings)
+                  ═══════════════════════════════════════════════════════════════ */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
+                {/* Left: Top Performing Routes */}
+                <div style={{ background: '#ffffff', borderRadius: '18px', padding: '22px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#0f172a' }}>
+                      Top Performing Routes
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('routes')}
+                      style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      View All
+                    </button>
                   </div>
-                  <div style={{ height: 220 }}>
-                    <Line data={lineChartData} options={{ responsive: true, maintainAspectRatio: false }} />
-                  </div>
-                </div>
 
-                {/* 2. Recent Bookings Table */}
-                <div className="eb-admin-card">
-                  <div className="eb-ac-head">
-                    <h4>Recent Bookings</h4>
-                    <button className="eb-btn-text" onClick={() => setActiveTab('bookings')}>View All</button>
-                  </div>
-                  <div className="eb-mini-table">
-                    {[
-                      { id: '#BK98921', route: 'Addis Ababa → Dire Dawa', price: 'Br 700', status: 'Confirmed', sClass: 'confirmed' },
-                      { id: '#BK98920', route: 'Addis Ababa → Mekelle', price: 'Br 850', status: 'Confirmed', sClass: 'confirmed' },
-                      { id: '#BK98919', route: 'Addis Ababa → Bahir Dar', price: 'Br 750', status: 'Pending', sClass: 'pending' },
-                      { id: '#BK98918', route: 'Addis Ababa → Hawassa', price: 'Br 650', status: 'Confirmed', sClass: 'confirmed' },
-                      { id: '#BK98917', route: 'Jijiga → Addis Ababa', price: 'Br 800', status: 'Cancelled', sClass: 'cancelled' },
-                    ].map((row) => (
-                      <div key={row.id} className="eb-mtr-row">
-                        <span className="eb-mtr-id">{row.id}</span>
-                        <span className="eb-mtr-route">{row.route}</span>
-                        <span className="eb-mtr-price">{row.price}</span>
-                        <span className={`eb-mtr-badge ${row.sClass}`}>{row.status}</span>
+                  {(() => {
+                    const routeMap = {};
+                    bookings.forEach(b => {
+                      const from = b.schedule?.route?.from || 'Addis Ababa';
+                      const to = b.schedule?.route?.to || 'Destination';
+                      const key = `${from}→${to}`;
+                      if (!routeMap[key]) routeMap[key] = { from, to, count: 0, revenue: 0 };
+                      routeMap[key].count += 1;
+                      routeMap[key].revenue += Number(b.totalPrice) || Number(b.totalAmount) || 0;
+                    });
+                    const topRoutes = Object.values(routeMap)
+                      .sort((a, b) => b.count - a.count)
+                      .slice(0, 5);
+
+                    if (topRoutes.length === 0) {
+                      return (
+                        <div style={{ textAlign: 'center', padding: '24px 0', color: '#94a3b8', fontSize: '0.8rem' }}>
+                          No booking data yet. Routes will appear here as bookings are made.
+                        </div>
+                      );
+                    }
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                        {topRoutes.map((r, i) => (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                            <span style={{ fontWeight: 700, color: '#0f172a' }}>{r.from} → {r.to}</span>
+                            <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
+                              <span style={{ color: '#64748b', fontSize: '0.78rem' }}>{r.count} Bookings</span>
+                              <strong style={{ color: '#0f172a', minWidth: '85px', textAlign: 'right' }}>
+                                Birr {r.revenue.toLocaleString()}
+                              </strong>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })()}
                 </div>
 
-                {/* 3. System Summary Donut */}
-                <div className="eb-admin-card">
-                  <div className="eb-ac-head">
-                    <h4>System Summary</h4>
-                  </div>
-                  <div style={{ height: 170, position: 'relative', display: 'flex', justifyContent: 'center' }}>
-                    <Doughnut data={donutChartData} options={{ responsive: true, maintainAspectRatio: false }} />
-                  </div>
-                  <div className="eb-summary-legend">
-                    <div><span style={{ background: '#10b981' }} /> Confirmed 60% (1,707)</div>
-                    <div><span style={{ background: '#f59e0b' }} /> Pending 20% (569)</div>
-                    <div><span style={{ background: '#ef4444' }} /> Cancelled 10% (284)</div>
-                    <div><span style={{ background: '#3b82f6' }} /> Completed 10% (285)</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Management Section */}
-              <div className="eb-qm-section">
-                <h4 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Quick Management</h4>
-                <div className="eb-qm-grid">
-                  <div className="eb-qm-card" onClick={() => setActiveTab('passengers')}>
-                    <div className="eb-qm-icon blue"><FaUsers /></div>
-                    <div>
-                      <strong>Manage Passengers</strong>
-                      <p>View, update &amp; delete</p>
-                    </div>
+                {/* Right: Recent Bookings */}
+                <div style={{ background: '#ffffff', borderRadius: '18px', padding: '22px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#0f172a' }}>
+                      Recent Bookings
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('bookings')}
+                      style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      View All
+                    </button>
                   </div>
 
-                  <div className="eb-qm-card" onClick={() => setActiveTab('agents')}>
-                    <div className="eb-qm-icon green"><FaUserTie /></div>
-                    <div>
-                      <strong>Manage Agents</strong>
-                      <p>Create, update &amp; delete</p>
+                  {bookings.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '24px 0', color: '#94a3b8', fontSize: '0.8rem' }}>
+                      No bookings recorded yet for your company.
                     </div>
-                  </div>
-
-                  <div className="eb-qm-card" onClick={() => setActiveTab('buses')}>
-                    <div className="eb-qm-icon purple"><FaBus /></div>
-                    <div>
-                      <strong>Manage Buses</strong>
-                      <p>Add, edit &amp; delete buses</p>
-                    </div>
-                  </div>
-
-                  <div className="eb-qm-card" onClick={() => setActiveTab('routes')}>
-                    <div className="eb-qm-icon orange"><FaRoute /></div>
-                    <div>
-                      <strong>Manage Routes</strong>
-                      <p>Add, edit &amp; delete routes</p>
-                    </div>
-                  </div>
-
-                  <div className="eb-qm-card" onClick={() => setActiveTab('schedules')}>
-                    <div className="eb-qm-icon teal"><FaCalendarAlt /></div>
-                    <div>
-                      <strong>Manage Schedules</strong>
-                      <p>Add, edit &amp; delete schedules</p>
-                    </div>
-                  </div>
-
-                  <div className="eb-qm-card" onClick={() => setActiveTab('reports')}>
-                    <div className="eb-qm-icon pink"><FaChartBar /></div>
-                    <div>
-                      <strong>Generate Reports</strong>
-                      <p>View &amp; export reports</p>
-                    </div>
-                  </div>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                      <thead>
+                        <tr style={{ textAlign: 'left', color: '#64748b', borderBottom: '1px solid #f1f5f9' }}>
+                          <th style={{ paddingBottom: '8px', fontWeight: 600 }}>Booking ID</th>
+                          <th style={{ paddingBottom: '8px', fontWeight: 600 }}>Route</th>
+                          <th style={{ paddingBottom: '8px', fontWeight: 600 }}>Date</th>
+                          <th style={{ paddingBottom: '8px', fontWeight: 600 }}>Amount</th>
+                          <th style={{ paddingBottom: '8px', fontWeight: 600 }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bookings.slice(0, 4).map((b) => (
+                          <tr key={b._id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                            <td style={{ padding: '8px 0', fontWeight: 700, color: '#0f172a' }}>
+                              {b.ticketNumber || 'BK-' + b._id?.slice(-6).toUpperCase()}
+                            </td>
+                            <td style={{ padding: '8px 0', color: '#334155' }}>
+                              {b.schedule?.route?.from || 'Origin'} → {b.schedule?.route?.to || 'Destination'}
+                            </td>
+                            <td style={{ padding: '8px 0', color: '#64748b' }}>
+                              {b.schedule?.date || (b.createdAt && b.createdAt.split('T')[0]) || 'Recent'}
+                            </td>
+                            <td style={{ padding: '8px 0', fontWeight: 700, color: '#0f172a' }}>
+                              Birr {(Number(b.totalPrice) || Number(b.totalAmount) || 0).toLocaleString()}
+                            </td>
+                            <td style={{ padding: '8px 0' }}>
+                              <span style={{
+                                background: b.status === 'confirmed' || b.status === 'CONFIRMED' ? '#ecfdf5' : b.status === 'cancelled' || b.status === 'CANCELLED' ? '#fef2f2' : '#fffbeb',
+                                color: b.status === 'confirmed' || b.status === 'CONFIRMED' ? '#10b981' : b.status === 'cancelled' || b.status === 'CANCELLED' ? '#ef4444' : '#d97706',
+                                fontSize: '0.68rem', fontWeight: 700, padding: '2px 7px', borderRadius: '50px'
+                              }}>
+                                {b.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               </div>
             </div>
           )}
 
-          {/* Sub-pages — canonical module components */}
-          {activeTab === 'passengers' && (
-            <div className="eb-admin-subpage"><AdminUsers /></div>
-          )}
-          {activeTab === 'agents' && (
-            <div className="eb-admin-subpage"><AdminAgents /></div>
-          )}
-          {activeTab === 'buses' && (
-            <div className="eb-admin-subpage"><AdminBuses /></div>
-          )}
-          {activeTab === 'routes' && (
-            <div className="eb-admin-subpage"><AdminRoutes /></div>
-          )}
-          {activeTab === 'schedules' && (
-            <div className="eb-admin-subpage"><AdminSchedules /></div>
-          )}
-          {activeTab === 'bookings' && (
-            <div className="eb-admin-subpage"><AdminBookings /></div>
-          )}
-          {activeTab === 'payments' && (
-            <div className="eb-admin-subpage"><AdminBookings /></div>
-          )}
-          {activeTab === 'reports' && (
-            <div className="eb-admin-subpage"><GenerateReports /></div>
-          )}
-          {activeTab === 'profile' && (
-            <div className="eb-admin-subpage"><AdminProfile /></div>
-          )}
-        </main>
-      </div>
+          {/* Sub-module Views */}
+          {activeTab === 'agents' && <AdminAgents />}
+          {activeTab === 'passengers' && <AdminPassengers />}
+          {activeTab === 'buses' && <AdminBuses />}
+          {activeTab === 'routes' && <AdminRoutes />}
+          {activeTab === 'schedules' && <AdminSchedules />}
+          {activeTab === 'bookings' && <AdminBookings />}
+          {activeTab === 'payments' && <AdminPayments />}
+          {activeTab === 'refunds' && <CompanyRefunds />}
+          {activeTab === 'discounts' && <AdminDiscounts />}
+          {activeTab === 'support' && <CustomerSupport />}
+          {activeTab === 'conductor_reports' && <AdminConductorReports />}
+          {activeTab === 'reports' && <GenerateReports />}
+          {activeTab === 'profile' && <AdminProfile />}
+        </div>
+      </main>
     </div>
   );
 };

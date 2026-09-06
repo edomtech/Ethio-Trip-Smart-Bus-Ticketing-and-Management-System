@@ -5,8 +5,15 @@ const userSchema = new mongoose.Schema({
   name:      { type: String, required: true, trim: true },
   email:     { type: String, required: true, unique: true, lowercase: true },
   phone:     { type: String, default: '' },
+  nationalId:{ type: String, default: '' },
+  isEmailVerified: { type: Boolean, default: false },
   password:  { type: String, required: true, minlength: 6 },
-  role:      { type: String, enum: ['passenger', 'agent', 'admin'], default: 'passenger' },
+  role:      { 
+    type: String, 
+    enum: ['super_admin', 'company_admin', 'company_staff', 'passenger', 'admin', 'agent', 'conductor'], 
+    default: 'passenger' 
+  },
+  companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', default: null },
   city:      { type: String, default: '' },
   isActive:  { type: Boolean, default: true },
 }, { timestamps: true });

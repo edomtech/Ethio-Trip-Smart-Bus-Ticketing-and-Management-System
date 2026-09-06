@@ -6,9 +6,10 @@ import {
   FaHeart, FaStar, FaCog, FaCrown, FaChair
 } from 'react-icons/fa';
 import MainLayout from '../layouts/MainLayout';
-import './AboutPage.css';
+import { useTranslation } from '../i18n.jsx';
 
 const AboutPage = () => {
+  const { t } = useTranslation();
   return (
     <MainLayout>
       <div className="eb-about-page">
@@ -18,11 +19,11 @@ const AboutPage = () => {
           <div className="eb-ab-hero-container">
             <div className="eb-ab-hero-left">
               <h1 className="eb-ab-hero-title">
-                About <span className="eb-text-green">Ethio Bus</span>
+                About <span className="eb-text-green">Ethio Trip</span>
               </h1>
               <h3 className="eb-ab-hero-subtitle">Moving Ethiopia Forward</h3>
               <p className="eb-ab-hero-desc">
-                Ethio Bus is dedicated to providing safe, reliable and comfortable travel across Ethiopia. We connect cities, communities and people with trust and commitment.
+                Ethio Trip is dedicated to providing safe, reliable and comfortable travel across Ethiopia. We connect cities, communities and people with trust and commitment.
               </p>
 
               {/* 3 Metric Pills */}
@@ -57,7 +58,7 @@ const AboutPage = () => {
               <div className="eb-ab-bus-frame">
                 <img
                   src="/images/hero_bus.jpg"
-                  alt="Ethio Bus Fleet"
+                  alt="Ethio Trip Fleet"
                   className="eb-ab-hero-img"
                   onError={(e) => {
                     e.target.onerror = null;
@@ -191,7 +192,7 @@ const AboutPage = () => {
               </div>
               <div className="eb-ab-cta-text">
                 <h2>Comfortable. Reliable. Always With You.</h2>
-                <p>Join thousands of happy passengers who trust Ethio Bus for their everyday travel.</p>
+                <p>Join thousands of happy passengers who trust Ethio Trip for their everyday travel.</p>
               </div>
               <Link to="/passenger/register" className="eb-ab-cta-btn">
                 Book Your Ticket Now <FaArrowRight />

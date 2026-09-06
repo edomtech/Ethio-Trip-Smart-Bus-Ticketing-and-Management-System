@@ -5,8 +5,7 @@ import {
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import jsPDF from 'jspdf';
-import '../../modules.css';
-
+import AdminPageHeader from '../../../components/AdminPageHeader';
 const KPI_CARDS = [
   { label: 'Daily Revenue', value: 'Br 34,500', icon: <FaMoneyBillWave />, trend: '+12%', color: '#6c2bd9', bg: '#f3e8ff', trendBg: '#ede9fe' },
   { label: 'Monthly Revenue', value: 'Br 245,670', icon: <FaChartLine />, trend: '+18%', color: '#078930', bg: '#dcfce7', trendBg: '#d1fae5' },
@@ -30,7 +29,7 @@ const GenerateReports = () => {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(22);
     doc.setFont('helvetica', 'bold');
-    doc.text('EthioBus Analytics Report', 105, 18, { align: 'center' });
+    doc.text('Ethio Trip Analytics Report', 105, 18, { align: 'center' });
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text(`${period.toUpperCase()} · ${category.toUpperCase()}`, 105, 29, { align: 'center' });
@@ -67,9 +66,9 @@ const GenerateReports = () => {
 
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
-    doc.text('EthioBus Smart Ticketing System — Confidential Report', 105, 280, { align: 'center' });
+    doc.text('Ethio Trip Smart Ticketing System — Confidential Report', 105, 280, { align: 'center' });
 
-    doc.save(`EthioBus_${period.replace(/\s+/g, '_')}_Report.pdf`);
+    doc.save(`EthioTrip_${period.replace(/\s+/g, '_')}_Report.pdf`);
     toast.success('PDF report exported successfully!');
   };
 
@@ -87,7 +86,7 @@ const GenerateReports = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `EthioBus_${period.replace(/\s+/g, '_')}_Report.csv`;
+    a.download = `EthioTrip_${period.replace(/\s+/g, '_')}_Report.csv`;
     a.click();
     URL.revokeObjectURL(url);
     toast.success('CSV report exported!');
@@ -95,24 +94,27 @@ const GenerateReports = () => {
 
   return (
     <div className="mod-wrapper">
-      {/* ── Header ── */}
-      <div className="gr-header">
-        <div className="gr-header-left">
-          <div className="gr-header-icon"><FaChartLine /></div>
-          <div>
-            <h2>Generate System Reports</h2>
-            <p>Analytical revenue &amp; ticketing performance reporting</p>
+      <AdminPageHeader
+        category="EXECUTIVE INTELLIGENCE"
+        title="Financial & Operations Reports"
+        icon={<FaChartLine />}
+        subtitle="Analytical revenue auditing, passenger volume trends, corridor occupancy, and formatted PDF/CSV data exports."
+        stats={[
+          { label: 'Daily Revenue', value: 'Br 34,500', color: '#16a34a' },
+          { label: 'Monthly Revenue', value: 'Br 245,670', color: '#0284c7' },
+          { label: 'Passengers Served', value: '12,458', color: '#7c3aed' },
+        ]}
+        actions={
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={handleExportPDF} className="eb-btn-primary-header">
+              <FaFilePdf /> Export PDF
+            </button>
+            <button onClick={handleExportCSV} className="eb-btn-secondary-header">
+              <FaFileExcel /> Export CSV
+            </button>
           </div>
-        </div>
-        <div className="gr-export-btns">
-          <button onClick={handleExportPDF} className="gr-btn gr-btn-pdf">
-            <FaFilePdf /> Export PDF
-          </button>
-          <button onClick={handleExportCSV} className="gr-btn gr-btn-csv">
-            <FaFileExcel /> Export CSV
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── KPI Cards ── */}
       <div className="gr-kpi-grid">

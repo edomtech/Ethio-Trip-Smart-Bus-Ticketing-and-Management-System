@@ -1,26 +1,30 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { FaBus, FaUser, FaUserPlus, FaBars, FaTimes, FaSignOutAlt, FaMoon, FaSun } from 'react-icons/fa';
+import { FaBus, FaUser, FaUserPlus, FaBars, FaTimes, FaSignOutAlt, FaMoon, FaSun, FaBuilding } from 'react-icons/fa';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import './Navbar.css';
-
-const NAV_LINKS = [
-  { label: 'Home',           to: '/' },
-  { label: 'Popular Routes', href: '/#popular-routes' },
-  { label: 'About Us',       to: '/about' },
-  { label: 'Contact Us',     to: '/contact' },
-];
+import { useTranslation } from '../i18n.jsx';
+import LanguageSelector from './LanguageSelector';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const dashRoute = user?.role === 'admin' ? '/admin/dashboard'
-    : user?.role === 'agent' ? '/agent/dashboard'
+  const NAV_LINKS = [
+    { label: t('nav.home', 'Home'),                     to: '/' },
+    { label: t('nav.buses', 'Buses'),                   to: '/buses' },
+    { label: t('nav.popularRoutes', 'Popular Routes'), href: '/#popular-routes' },
+    { label: t('nav.aboutUs', 'About Us'),             to: '/about' },
+    { label: t('nav.contactUs', 'Contact Us'),         to: '/contact' },
+  ];
+
+  const dashRoute = user?.role === 'super_admin' || (user?.role === 'admin' && !user?.companyId) ? '/super-admin/dashboard'
+    : user?.role === 'company_admin' || (user?.role === 'admin' && user?.companyId) ? '/company-admin/dashboard'
+    : user?.role === 'company_staff' || user?.role === 'agent' ? '/company-staff/dashboard'
     : '/passenger/dashboard';
 
   return (
@@ -30,8 +34,8 @@ const Navbar = () => {
         <Link to="/" className="eb-brand">
           <div className="eb-brand-icon"><FaBus /></div>
           <div className="eb-brand-text">
-            <div className="eb-brand-title">ETHIO<span className="eb-green-accent">BUS</span></div>
-            <div className="eb-brand-subtitle">Smart Ticketing System</div>
+            <div className="eb-brand-title">ETHIO<span className="eb-green-accent">TRIP</span></div>
+            <div className="eb-brand-subtitle">Smart Bus Travel Platform</div>
           </div>
         </Link>
 
@@ -48,20 +52,22 @@ const Navbar = () => {
             {theme === 'dark' ? <FaSun /> : <FaMoon />}
           </button>
 
+          <LanguageSelector />
+
           {user ? (
             <div className="eb-user-menu">
               <Link to={dashRoute} className="eb-btn-dashboard">
                 <div className="eb-avatar-circle">{(user.name || 'U')[0].toUpperCase()}</div>
                 <span>{user.name?.split(' ')[0]}</span>
               </Link>
-              <button onClick={() => { logout(); navigate('/'); }} className="eb-btn-logout-icon" title="Logout">
+              <button onClick={() => { logout(); navigate('/'); }} className="eb-btn-logout-icon" title={t('common.logout', 'Logout')}>
                 <FaSignOutAlt />
               </button>
             </div>
           ) : (
             <div className="eb-auth-btns">
-              <Link to="/login"    className="eb-btn-login"><FaUser /> Login</Link>
-              <Link to="/register" className="eb-btn-register"><FaUserPlus /> Register</Link>
+              <Link to="/login" className="eb-btn-login"><FaUser /> {t('nav.login', 'Login')}</Link>
+              <Link to="/register" className="eb-btn-register"><FaUserPlus /> {t('nav.register', 'Register')}</Link>
             </div>
           )}
 
@@ -81,15 +87,15 @@ const Navbar = () => {
           <hr />
           {user ? (
             <>
-              <Link to={dashRoute} onClick={() => setMobileOpen(false)} className="eb-mobile-link">My Dashboard</Link>
+              <Link to={dashRoute} onClick={() => setMobileOpen(false)} className="eb-mobile-link">{t('nav.dashboard', 'My Dashboard')}</Link>
               <button onClick={() => { logout(); navigate('/'); setMobileOpen(false); }} className="eb-mobile-logout">
-                <FaSignOutAlt /> Logout
+                <FaSignOutAlt /> {t('common.logout', 'Logout')}
               </button>
             </>
           ) : (
             <>
-              <Link to="/login"    onClick={() => setMobileOpen(false)} className="eb-mobile-link"><FaUser /> Login</Link>
-              <Link to="/register" onClick={() => setMobileOpen(false)} className="eb-mobile-link"><FaUserPlus /> Register</Link>
+              <Link to="/login" onClick={() => setMobileOpen(false)} className="eb-mobile-link"><FaUser /> {t('nav.login', 'Login')}</Link>
+              <Link to="/register" onClick={() => setMobileOpen(false)} className="eb-mobile-link"><FaUserPlus /> {t('nav.register', 'Register')}</Link>
             </>
           )}
         </div>

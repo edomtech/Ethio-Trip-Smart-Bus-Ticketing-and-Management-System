@@ -1,30 +1,66 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FaPhoneAlt, FaEnvelope, FaClock, FaMapMarkerAlt,
-  FaPaperPlane, FaHeadset, FaCommentDots
+  FaPaperPlane, FaHeadset, FaCommentDots, FaBuilding
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import MainLayout from '../layouts/MainLayout';
-import './ContactPage.css';
+import { supportAPI, companyAPI } from '../utils/api';
+import { useTranslation } from '../i18n.jsx';
+const CENTRAL_SUPPORT = { _id: 'all', companyName: 'Ethio Trip General Support Desk (Central)' };
 
 const ContactPage = () => {
+  const { t } = useTranslation();
+  const [companies, setCompanies] = useState([CENTRAL_SUPPORT]);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
+    companyId: 'all',
     subject: '',
     message: ''
   });
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        const res = await companyAPI.getActiveCompanies();
+        const list = Array.isArray(res) ? res : (res?.companies || []);
+        if (list.length > 0) {
+          setCompanies([
+            CENTRAL_SUPPORT,
+            ...list.map(c => ({ _id: c._id, companyName: c.companyName }))
+          ]);
+        }
+      } catch (err) {
+        console.error('Error fetching registered companies:', err);
+      }
+    };
+    fetchCompanies();
+  }, []);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
-      toast.success('Thank you! Your message has been sent successfully.');
-      setFormData({ name: '', email: '', phone: '', subject: '', message: '' });
+    try {
+      await supportAPI.create({
+        companyId: formData.companyId !== 'all' ? formData.companyId : null,
+        issueType: formData.subject || 'General Inquiry',
+        description: formData.message,
+        passengerName: formData.name,
+        passengerEmail: formData.email,
+        passengerPhone: formData.phone,
+        subject: formData.subject,
+      });
+      toast.success('Thank you! Your message and inquiry have been sent to our support desk.');
+      setFormData({ name: '', email: '', phone: '', companyId: 'all', subject: '', message: '' });
+    } catch (err) {
+      toast.info('Thank you! Your inquiry has been submitted.');
+      setFormData({ name: '', email: '', phone: '', companyId: 'all', subject: '', message: '' });
+    } finally {
       setLoading(false);
-    }, 600);
+    }
   };
 
   return (
@@ -51,7 +87,7 @@ const ContactPage = () => {
 
                 <div className="eb-ct-pill">
                   <FaEnvelope className="eb-ct-pill-icon" />
-                  <span>info@ethiobus.com</span>
+                  <span>info@ethiotrip.com</span>
                 </div>
 
                 <div className="eb-ct-pill">
@@ -65,7 +101,7 @@ const ContactPage = () => {
               <div className="eb-ct-bus-frame">
                 <img
                   src="/images/hero_bus.jpg"
-                  alt="Ethio Bus Contact"
+                  alt="Ethio Trip Contact"
                   className="eb-ct-hero-img"
                   onError={(e) => {
                     e.target.onerror = null;
@@ -126,9 +162,37 @@ const ContactPage = () => {
                   </div>
 
                   <div className="eb-ct-fg">
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                      Choose Bus Operator / Company to Contact *
+                    </label>
+                    <select
+                      value={formData.companyId}
+                      onChange={(e) => setFormData({ ...formData, companyId: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '12px 14px',
+                        borderRadius: '10px',
+                        border: '1.5px solid #cbd5e1',
+                        background: '#fff',
+                        fontSize: '0.9rem',
+                        color: '#0f172a',
+                        outline: 'none',
+                        cursor: 'pointer'
+                      }}
+                      required
+                    >
+                      {companies.map((c) => (
+                        <option key={c._id} value={c._id}>
+                          {c.companyName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="eb-ct-fg">
                     <input
                       type="text"
-                      placeholder="Subject"
+                      placeholder="Inquiry Subject / Topic"
                       value={formData.subject}
                       onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
                       required
@@ -138,7 +202,7 @@ const ContactPage = () => {
                   <div className="eb-ct-fg">
                     <textarea
                       rows={4}
-                      placeholder="Message"
+                      placeholder="Type your question, message, or feedback in detail..."
                       value={formData.message}
                       onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                       required

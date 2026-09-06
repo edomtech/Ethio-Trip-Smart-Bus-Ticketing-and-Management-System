@@ -1,19 +1,26 @@
 const router = require('express').Router();
 const {
   getAllUsers,
-  getAgents,
-  createAgent,
+  getStaff,
+  getConductors,
+  createStaff,
   getUserById,
   updateUser,
   deleteUser,
 } = require('../controllers/userController');
 const { protect, authorize } = require('../middleware/auth');
 
-router.get('/', protect, authorize('admin'), getAllUsers);
-router.get('/agents', protect, authorize('admin'), getAgents);
-router.post('/agents', protect, authorize('admin'), createAgent);
-router.get('/:id', protect, authorize('admin'), getUserById);
-router.put('/:id', protect, authorize('admin'), updateUser);
-router.delete('/:id', protect, authorize('admin'), deleteUser);
+router.use(protect);
+
+router.get('/staff', authorize('super_admin', 'company_admin', 'admin'), getStaff);
+router.post('/staff', authorize('super_admin', 'company_admin', 'admin'), createStaff);
+router.get('/conductors', authorize('super_admin', 'company_admin', 'admin'), getConductors);
+router.get('/agents', authorize('super_admin', 'company_admin', 'admin'), getStaff);
+router.post('/agents', authorize('super_admin', 'company_admin', 'admin'), createStaff);
+
+router.get('/', authorize('super_admin', 'company_admin', 'admin'), getAllUsers);
+router.get('/:id', authorize('super_admin', 'company_admin', 'admin'), getUserById);
+router.put('/:id', authorize('super_admin', 'company_admin', 'admin'), updateUser);
+router.delete('/:id', authorize('super_admin', 'company_admin', 'admin'), deleteUser);
 
 module.exports = router;

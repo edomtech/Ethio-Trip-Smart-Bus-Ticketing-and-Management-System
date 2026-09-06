@@ -4,7 +4,7 @@ import { ToastContainer } from 'react-toastify';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import AppRoutes from './routes/AppRoutes';
-import './styles/theme.css';
+import './styles/style.css';
 
 function App() {
   return (

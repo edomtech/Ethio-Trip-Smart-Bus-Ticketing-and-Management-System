@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FaUser, FaEnvelope, FaPhone, FaMapMarkerAlt, FaLock, FaCheckCircle, FaCamera } from 'react-icons/fa';
+import { FaUser, FaEnvelope, FaPhone, FaMapMarkerAlt, FaLock, FaCheckCircle } from 'react-icons/fa';
 import { authAPI } from '../../../utils/api';
 import { useAuth } from '../../../contexts/AuthContext';
 import { toast } from 'react-toastify';
@@ -36,28 +36,24 @@ const PassengerProfile = () => {
 
   return (
     <div>
-      {/* Header Card */}
-      <div style={{ background: 'linear-gradient(135deg, #078930 0%, #056325 100%)', borderRadius: 20, padding: '28px 32px', marginBottom: 24, color: '#fff', display: 'flex', alignItems: 'center', gap: 24 }}>
-        <div style={{ position: 'relative' }}>
-          <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'rgba(255,255,255,.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', fontWeight: 900, border: '3px solid rgba(255,255,255,.4)' }}>
-            {user?.name?.charAt(0).toUpperCase() || 'P'}
-          </div>
-          <div style={{ position: 'absolute', bottom: 0, right: 0, width: 26, height: 26, background: '#FCDD09', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#1F2937' }}>
-            <FaCamera style={{ fontSize: '0.7rem' }} />
-          </div>
+      {/* ── Clean Profile Header Card ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 24, padding: '18px 22px', background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0' }}>
+        <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg,#078930,#056325)', color: '#fff', fontSize: '1.4rem', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          {user?.name?.charAt(0).toUpperCase() || 'P'}
         </div>
         <div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 4px' }}>{user?.name || 'Passenger'}</h2>
-          <p style={{ opacity: 0.85, margin: '0 0 8px', fontSize: '0.88rem' }}>{user?.email}</p>
-          <span style={{ background: 'rgba(255,255,255,.25)', padding: '3px 12px', borderRadius: 20, fontSize: '0.72rem', fontWeight: 700 }}>Passenger</span>
+          <h2 style={{ margin: '0 0 4px', fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>{user?.name || 'Passenger'}</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.78rem', color: '#64748b' }}>{user?.email}</span>
+          </div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 24, background: '#f1f5f9', borderRadius: 12, padding: 4 }}>
-        {[{ id: 'info', label: 'Personal Info' }, { id: 'password', label: 'Change Password' }].map(t => (
+      {/* ── Tabs ── */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: '#f1f5f9', borderRadius: 12, padding: 4, maxWidth: 360 }}>
+        {[{ id: 'info', label: 'Profile Info' }, { id: 'password', label: 'Change Password' }].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: tab === t.id ? '#fff' : 'transparent', color: tab === t.id ? '#078930' : '#64748b', fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer', transition: 'all .2s', boxShadow: tab === t.id ? '0 1px 4px rgba(0,0,0,.08)' : 'none' }}>
+            style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: tab === t.id ? '#fff' : 'transparent', color: tab === t.id ? '#078930' : '#64748b', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', transition: 'all .2s', boxShadow: tab === t.id ? '0 1px 4px rgba(0,0,0,.08)' : 'none' }}>
             {t.label}
           </button>
         ))}

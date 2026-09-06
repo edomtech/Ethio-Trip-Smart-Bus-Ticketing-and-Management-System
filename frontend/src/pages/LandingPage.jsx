@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FaBus, FaMapMarkerAlt, FaCalendarAlt, FaUser, FaSearch, FaExchangeAlt,
@@ -9,11 +9,10 @@ import MainLayout from '../layouts/MainLayout';
 import SeatSelectorModal from '../components/SeatSelectorModal';
 import PaymentModal from '../components/PaymentModal';
 import TicketModal from '../components/TicketModal';
-import { scheduleAPI } from '../utils/api';
+import { scheduleAPI, busAPI } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
-import { toast } from 'react-toastify';
-import './LandingPage.css';
-
+import { useTranslation } from '../i18n.jsx';
+import { toast } from 'react-toastify';
 const CITIES = [
   'Addis Ababa', 'Dire Dawa', 'Mekelle', 'Hawassa', 'Bahir Dar',
   'Gondar', 'Jimma', 'Jijiga', 'Adama', 'Dessie', 'Arba Minch', 'Harar'
@@ -37,18 +36,49 @@ const ALL_ROUTES = [
 const LandingPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t } = useTranslation();
+
+  const getFutureDateString = (days) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return d.toISOString().split('T')[0];
+  };
 
   const [tripType, setTripType] = useState('oneway');
   const [fromCity, setFromCity] = useState('Addis Ababa');
   const [toCity, setToCity] = useState('Dire Dawa');
   const [travelDate, setTravelDate] = useState(new Date().toISOString().split('T')[0]);
+  const [returnDate, setReturnDate] = useState(getFutureDateString(3));
   const [passengers, setPassengers] = useState(1);
+
+  const travelDateTime = new Date(travelDate).getTime();
+  const returnDateTime = new Date(returnDate).getTime();
+  const stayDays = Math.max(1, Math.round((returnDateTime - travelDateTime) / (1000 * 60 * 60 * 24)));
+  const discountPercent = stayDays >= 14 ? 15 : stayDays >= 7 ? 12 : stayDays >= 3 ? 10 : 5;
+
   const [showAll, setShowAll] = useState(false);
   const [loading, setLoading] = useState(false);
   const [searchResults, setSearchResults] = useState(null);
   const [selectedSchedule, setSelectedSchedule] = useState(null);
   const [pendingBooking, setPendingBooking] = useState(null);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
+  const [buses, setBuses] = useState([]);
+  const [busesLoading, setBusesLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchBuses = async () => {
+      setBusesLoading(true);
+      try {
+        const data = await busAPI.getPublic();
+        setBuses(data || []);
+      } catch (err) {
+        console.error('Error fetching buses:', err);
+      } finally {
+        setBusesLoading(false);
+      }
+    };
+    fetchBuses();
+  }, []);
 
   const visibleRoutes = showAll ? ALL_ROUTES : ALL_ROUTES.slice(0, 6);
 
@@ -110,14 +140,13 @@ const LandingPage = () => {
             <div className="eb-hero-content">
               <div className="eb-hero-pill">
                 <span className="eb-pill-icon"><FaBus /></span>
-                <span>Smart Bus Travel Platform</span>
+                <span>{t('home.pill', 'Ethio Trip — Smart Bus Ticketing Platform')}</span>
               </div>
               <h1 className="eb-hero-title">
-                Travel Across Ethiopia<br />
-                with <span className="eb-text-highlight">Comfort &amp; Safety</span>
+                {t('home.heroTitle', 'Travel Across Ethiopia with Comfort & Safety')}
               </h1>
               <p className="eb-hero-desc">
-                Book bus tickets online easily and securely. Fast booking, transparent fares, and 24/7 service.
+                {t('home.heroDesc', 'Welcome to Ethio Trip. Search, compare, and book tickets instantly from premium operators across Ethiopia.')}
               </p>
 
               {/* Compact Metrics */}
@@ -140,10 +169,10 @@ const LandingPage = () => {
             <div className="eb-hero-visual">
               <div className="eb-hero-bus-card">
                 <img
-                  src="/images/hero_bus.jpg"
-                  alt="EthioBus Luxury Coach"
+                  src="/images/hero_bus_clean.jpg"
+                  alt="Luxury Coach Bus"
                   className="eb-hero-img"
-                  onError={(e) => { e.target.src = '/ethiobus-hero.jpg'; }}
+                  onError={(e) => { e.target.src = '/images/hero_bus.jpg'; }}
                 />
               </div>
             </div>
@@ -159,19 +188,19 @@ const LandingPage = () => {
                   className={`eb-tab-btn ${tripType === 'oneway' ? 'active' : ''}`}
                   onClick={() => setTripType('oneway')}
                 >
-                  <FaBus /> One Way
+                  <FaBus /> {t('home.tripTypeOneWay', 'One Way')}
                 </button>
                 <button
                   type="button"
                   className={`eb-tab-btn ${tripType === 'round' ? 'active' : ''}`}
                   onClick={() => setTripType('round')}
                 >
-                  <FaExchangeAlt /> Round Trip
+                  <FaExchangeAlt /> {t('home.tripTypeRound', 'Round Trip')}
                 </button>
               </div>
               <form onSubmit={handleSearch} className="eb-search-grid">
                 <div className="eb-input-group">
-                  <label>Departure City</label>
+                  <label>{t('home.from', 'Departure City')}</label>
                   <div className="eb-input-field">
                     <FaMapMarkerAlt className="eb-field-icon" />
                     <select value={fromCity} onChange={(e) => setFromCity(e.target.value)}>
@@ -185,7 +214,7 @@ const LandingPage = () => {
                 </button>
 
                 <div className="eb-input-group">
-                  <label>Destination City</label>
+                  <label>{t('home.to', 'Destination City')}</label>
                   <div className="eb-input-field">
                     <FaMapMarkerAlt className="eb-field-icon" />
                     <select value={toCity} onChange={(e) => setToCity(e.target.value)}>
@@ -193,36 +222,47 @@ const LandingPage = () => {
                     </select>
                   </div>
                 </div>
-
                 <div className="eb-input-group">
-                  <label>Travel Date</label>
+                  <label>{t('home.departureDate', 'Travel Date')}</label>
                   <div className="eb-input-field">
                     <FaCalendarAlt className="eb-field-icon" />
-                    <input
-                      type="date"
-                      value={travelDate}
-                      onChange={(e) => setTravelDate(e.target.value)}
-                      min={new Date().toISOString().split('T')[0]}
-                    />
+                    <input type="date" value={travelDate} min={new Date().toISOString().split('T')[0]} onChange={(e) => setTravelDate(e.target.value)} />
                   </div>
                 </div>
-
+                {tripType === 'round' && (
+                  <div className="eb-input-group">
+                    <label>{t('home.returnDate', 'Return Date')}</label>
+                    <div className="eb-input-field">
+                      <FaCalendarAlt className="eb-field-icon" style={{ color: '#059669' }} />
+                      <input type="date" value={returnDate} min={travelDate} onChange={(e) => setReturnDate(e.target.value)} />
+                    </div>
+                  </div>
+                )}
                 <div className="eb-input-group">
-                  <label>Passengers</label>
+                  <label>{t('home.passengers', 'Passengers')}</label>
                   <div className="eb-input-field">
                     <FaUser className="eb-field-icon" />
                     <select value={passengers} onChange={(e) => setPassengers(Number(e.target.value))}>
-                      {[1, 2, 3, 4, 5].map((n) => (
-                        <option key={n} value={n}>{n} Passenger{n > 1 ? 's' : ''}</option>
-                      ))}
+                      {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} {n === 1 ? 'Passenger' : 'Passengers'}</option>)}
                     </select>
                   </div>
                 </div>
-
-                <button type="submit" className="eb-search-submit-btn" disabled={loading}>
-                  <FaSearch /> {loading ? 'Searching...' : 'Search Buses'}
-                </button>
+                <div className="eb-search-action">
+                  <button type="submit" className="eb-search-submit-btn" disabled={loading}><FaSearch /> {loading ? t('common.loading', 'Searching...') : t('home.searchBuses', 'Search Buses')}</button>
+                </div>
               </form>
+
+              {tripType === 'round' && (
+                <div style={{ marginTop: '0.85rem', padding: '0.6rem 1rem', background: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.25))', border: '1px solid rgba(16,185,129,0.4)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#34d399', fontWeight: 700, fontSize: '0.82rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ background: '#059669', color: '#fff', padding: '0.15rem 0.5rem', borderRadius: 6, fontSize: '0.75rem' }}>🎉 Round Trip Bonus</span>
+                    <span>Stay Duration: {stayDays} {stayDays === 1 ? 'Day' : 'Days'}</span>
+                  </div>
+                  <div style={{ background: '#fbbf24', color: '#0f172a', padding: '0.2rem 0.6rem', borderRadius: 8, fontSize: '0.75rem', fontWeight: 800 }}>
+                    {discountPercent}% STAY DISCOUNT APPLIED!
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -270,7 +310,122 @@ const LandingPage = () => {
           </div>
         </section>
 
-        {/* ══ FEATURES STRIP ══ */}
+        {/* ══ FEATURED BUS FLEET (PROMINENT BUS IMAGES & LOGOS) ══ */}
+        <section className="eb-popular-section" id="bus-fleet" style={{ background: '#f8fafc', padding: '3.5rem 0' }}>
+          <div className="eb-section-container">
+            <div className="eb-section-header">
+              <div>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  Premium Fleet
+                </span>
+                <h2 className="eb-section-title" style={{ margin: '4px 0 0' }}>{t('home.modernFleet', 'Modern Buses & Operators')}</h2>
+                <p style={{ color: '#64748b', fontSize: '0.9rem', margin: '4px 0 0' }}>
+                  {t('home.fleetSub', 'Explore luxury coaches equipped with verified amenities and high safety standards across Ethiopia.')}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="eb-view-all-link"
+                onClick={() => navigate('/buses')}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
+              >
+                {t('home.viewAllFleet', 'View All Fleet')} <FaArrowRight />
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem', marginTop: '1.5rem' }}>
+              {(buses && buses.length > 0 ? buses.slice(0, 6) : [
+                { _id: 'b1', busNumber: 'Selam Luxury VIP Coach', plateNumber: '3-A10101-ET', type: 'VIP', capacity: 45, image: '/images/selam_bus.png', companyId: { companyName: 'Selam Bus Line', logo: '/logos/selam_bus.png' }, amenities: ['WiFi', 'Air Conditioning', 'Leather Recliners'] },
+                { _id: 'b2', busNumber: 'Ethio Express Liner', plateNumber: '3-B20202-ET', type: 'Luxury', capacity: 45, image: '/images/ethio_bus.png', companyId: { companyName: 'Ethio Bus', logo: '/logos/ethio_bus.png' }, amenities: ['Air Conditioning', 'WiFi', 'Water'] },
+                { _id: 'b3', busNumber: 'Zemen Star Executive', plateNumber: '3-C30303-ET', type: 'VIP', capacity: 45, image: '/images/zemen_bus.png', companyId: { companyName: 'Zemen Bus', logo: '/logos/zemen_bus.png' }, amenities: ['WiFi', 'Coffee/Tea', 'Extra Legroom'] },
+                { _id: 'b4', busNumber: 'Abay Standard Express', plateNumber: '3-D40404-ET', type: 'Standard', capacity: 45, image: '/images/abay_bus.png', companyId: { companyName: 'Abay Bus', logo: '/logos/abay_bus.png' }, amenities: ['Air Conditioning', 'Water'] },
+                { _id: 'b5', busNumber: 'Habesha Southern Liner', plateNumber: '3-E50505-ET', type: 'Luxury', capacity: 45, image: '/images/habesha_bus.png', companyId: { companyName: 'Habesha Bus', logo: '/logos/habesha_bus.png' }, amenities: ['Air Conditioning', 'TV', 'USB Charging'] },
+              ]).map((b) => {
+                const busImg = (b.image && b.image.trim()) ? b.image : (
+                  (b.companyId?.companyName || '').toLowerCase().includes('selam') ? '/images/selam_bus.png' :
+                  (b.companyId?.companyName || '').toLowerCase().includes('ethio') ? '/images/ethio_bus.png' :
+                  (b.companyId?.companyName || '').toLowerCase().includes('zemen') ? '/images/zemen_bus.png' :
+                  (b.companyId?.companyName || '').toLowerCase().includes('abay') ? '/images/abay_bus.png' :
+                  (b.companyId?.companyName || '').toLowerCase().includes('habesha') ? '/images/habesha_bus.png' : '/images/selam_bus.png'
+                );
+
+                return (
+                  <div
+                    key={b._id}
+                    style={{
+                      background: '#ffffff', borderRadius: 18, overflow: 'hidden',
+                      border: '1px solid #e2e8f0', boxShadow: '0 4px 15px rgba(0,0,0,0.04)',
+                      display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                      transition: 'transform 0.2s, box-shadow 0.2s'
+                    }}
+                  >
+                    <div style={{ position: 'relative', width: '100%', height: 190, background: '#0f172a' }}>
+                      <img
+                        src={busImg}
+                        alt={b.busNumber}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={(e) => { e.target.src = '/images/selam_bus.png'; }}
+                      />
+                      <span style={{
+                        position: 'absolute', top: 12, right: 12,
+                        background: b.type === 'VIP' ? '#d97706' : b.type === 'Luxury' ? '#7c3aed' : '#2563eb',
+                        color: '#fff', fontSize: '0.72rem', fontWeight: 700, padding: '0.2rem 0.65rem', borderRadius: 999
+                      }}>
+                        {b.type}
+                      </span>
+                      {b.companyId && (
+                        <div style={{
+                          position: 'absolute', bottom: 12, left: 12,
+                          background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(4px)',
+                          padding: '4px 10px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 6,
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                        }}>
+                          {b.companyId.logo && (
+                            <img src={b.companyId.logo} alt="logo" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover' }} />
+                          )}
+                          <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#0f172a' }}>{b.companyId.companyName}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ padding: '1.25rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.4rem' }}>
+                        <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>{b.busNumber}</h3>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>{b.plateNumber}</span>
+                      </div>
+
+                      <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.75rem' }}>
+                        <span>Capacity: <strong>{b.capacity} Seats</strong></span>
+                      </div>
+
+                      {b.amenities && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: '1rem' }}>
+                          {(Array.isArray(b.amenities) ? b.amenities : String(b.amenities).split(',')).slice(0, 3).map((am, i) => (
+                            <span key={i} style={{ background: '#f1f5f9', color: '#475569', fontSize: '0.68rem', padding: '2px 8px', borderRadius: 6, fontWeight: 500 }}>
+                              {am.trim()}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => navigate('/buses')}
+                        style={{
+                          width: '100%', background: '#059669', color: '#fff', border: 'none',
+                          padding: '0.65rem', borderRadius: 10, fontWeight: 700, fontSize: '0.85rem',
+                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+                        }}
+                      >
+                        {t('home.bookSeat', 'Book Seat on Bus')} <FaArrowRight style={{ fontSize: '0.75rem' }} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
         <section className="eb-features-strip">
           <div className="eb-features-container">
             {[

@@ -5,13 +5,16 @@ const {
   createBus,
   updateBus,
   deleteBus,
+  getPublicBuses,
 } = require('../controllers/busController');
 const { protect, authorize } = require('../middleware/auth');
 
-router.get('/', getBuses);
-router.get('/:id', getBusById);
-router.post('/', protect, authorize('admin'), createBus);
-router.put('/:id', protect, authorize('admin'), updateBus);
-router.delete('/:id', protect, authorize('admin'), deleteBus);
+router.get('/public', getPublicBuses);
+
+router.get('/', protect, getBuses);
+router.get('/:id', protect, getBusById);
+router.post('/', protect, authorize('company_admin', 'super_admin', 'admin'), createBus);
+router.put('/:id', protect, authorize('company_admin', 'super_admin', 'admin'), updateBus);
+router.delete('/:id', protect, authorize('company_admin', 'super_admin', 'admin'), deleteBus);
 
 module.exports = router;

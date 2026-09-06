@@ -6,14 +6,18 @@ const {
   getDailyBookings,
   getBookingById,
   cancelBooking,
+  processRefundDecision,
 } = require('../controllers/bookingController');
 const { protect, authorize } = require('../middleware/auth');
 
-router.post('/', protect, createBooking);
-router.get('/my', protect, getMyBookings);
-router.get('/daily', protect, authorize('admin', 'agent'), getDailyBookings);
-router.get('/', protect, authorize('admin', 'agent'), getAllBookings);
-router.get('/:id', protect, getBookingById);
-router.put('/:id/cancel', protect, cancelBooking);
+router.use(protect);
+
+router.post('/', createBooking);
+router.get('/my', getMyBookings);
+router.get('/daily', authorize('super_admin', 'company_admin', 'company_staff', 'admin', 'agent', 'conductor'), getDailyBookings);
+router.get('/', authorize('super_admin', 'company_admin', 'company_staff', 'admin', 'agent', 'conductor'), getAllBookings);
+router.get('/:id', getBookingById);
+router.put('/:id/cancel', cancelBooking);
+router.put('/:id/refund-decision', authorize('super_admin', 'company_admin', 'admin'), processRefundDecision);
 
 module.exports = router;
