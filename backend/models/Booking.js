@@ -1,13 +1,16 @@
 const mongoose = require('mongoose');
+const { BOOKING_STATUS_LIST, PAYMENT_STATUS_LIST, BOOKING_STATUS, PAYMENT_STATUS } = require('../constants/statuses');
 
 const bookingSchema = new mongoose.Schema({
   companyId:          { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true },
   ticketNumber:       { type: String, unique: true, sparse: true, default: undefined },
-  schedule:           { type: mongoose.Schema.Types.ObjectId, ref: 'Schedule' }, // Primary / Outbound schedule
+  schedule:           { type: mongoose.Schema.Types.ObjectId, ref: 'Schedule' },  
   passenger:          {
-    name:  { type: String, required: true },
-    phone: { type: String, required: true },
-    email: { type: String, required: true },
+    name:   { type: String, required: true },
+    phone:  { type: String, required: true },
+    email:  { type: String, required: true },
+    gender: { type: String, default: 'Male' },
+    age:    { type: String, default: '' },
   },
   user:               { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   selectedSeats:      [{ type: String }],
@@ -16,8 +19,7 @@ const bookingSchema = new mongoose.Schema({
   discountAmount:     { type: Number, default: 0 },
   discountCode:       { type: String, default: '' },
   tripType:           { type: String, enum: ['oneway', 'round'], default: 'oneway' },
-  
-  // Structured Journey Legs for One-Way & Round-Trip bookings
+
   outboundLeg: {
     schedule:      { type: mongoose.Schema.Types.ObjectId, ref: 'Schedule' },
     bus:           { type: mongoose.Schema.Types.ObjectId, ref: 'Bus' },
@@ -39,31 +41,47 @@ const bookingSchema = new mongoose.Schema({
     status:        { type: String, default: 'CONFIRMED' },
   },
 
-  // 5-Hour Payment Expiration Timestamp
   expiresAt:          { type: Date },
 
-  // Status Fields
   status:             { 
     type: String, 
-    enum: ['pending', 'confirmed', 'cancelled', 'completed', 'PENDING_PAYMENT', 'CONFIRMED', 'CANCELLED', 'COMPLETED'], 
-    default: 'PENDING_PAYMENT' 
+    enum: BOOKING_STATUS_LIST, 
+    default: BOOKING_STATUS.PENDING_PAYMENT,
   },
   paymentStatus:      { 
     type: String, 
-    enum: ['pending', 'completed', 'failed', 'refunded', 'PENDING', 'PAID', 'FAILED', 'REFUNDED'], 
-    default: 'PENDING' 
+    enum: PAYMENT_STATUS_LIST, 
+    default: PAYMENT_STATUS.PENDING,
   },
 
-  // Cancellation & Refund Management
+  paymentMethod:      { type: String, default: 'chapa' },
+  receiptImage:       { type: String, default: '' },
+  receiptUploadedAt:  { type: Date },
+  receiptStatus:      { 
+    type: String, 
+    enum: ['NONE', 'PENDING', 'APPROVED', 'REJECTED'], 
+    default: 'NONE',
+  },
+  receiptNote:        { type: String, default: '' },
+  approvedBy:         { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  approvedAt:         { type: Date },
+
   cancellationReason: { type: String, default: '' },
   cancelledAt:        { type: Date },
   refundAmount:       { type: Number, default: 0 },
   refundStatus:       { 
     type: String, 
-    enum: ['NONE', 'PENDING', 'APPROVED', 'REJECTED', 'PROCESSED'], 
-    default: 'NONE' 
+    enum: ['NONE', 'PENDING', 'APPROVED', 'REJECTED', 'PROCESSED', 'REFUNDED'], 
+    default: 'NONE',
   },
   refundReason:       { type: String, default: '' },
+  refundDecision:     { 
+    type: String, 
+    enum: ['APPROVED', 'REJECTED'], 
+    default: undefined,
+  },
+  refundDecidedBy:    { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  refundDecidedAt:    { type: Date },
   refundProcessedAt:  { type: Date },
 
   bookingDate:        { type: Date, default: Date.now },
@@ -73,23 +91,31 @@ bookingSchema.index({ companyId: 1, status: 1 });
 bookingSchema.index({ user: 1, bookingDate: -1 });
 bookingSchema.index({ status: 1, expiresAt: 1 });
 
-bookingSchema.pre('save', function (next) {
-  const isPaidOrConfirmed =
-    this.status === 'confirmed' ||
-    this.status === 'CONFIRMED' ||
-    this.status === 'completed' ||
-    this.status === 'COMPLETED' ||
-    this.paymentStatus === 'paid' ||
-    this.paymentStatus === 'PAID';
+bookingSchema.pre('validate', function (next) {
+  if (this.status) {
+    const s = String(this.status).toUpperCase();
+    if (s === 'PENDING') this.status = BOOKING_STATUS.PENDING_PAYMENT;
+    else if (BOOKING_STATUS_LIST.includes(s)) this.status = s;
+  }
+  if (this.paymentStatus) {
+    const ps = String(this.paymentStatus).toUpperCase();
+    if (ps === 'COMPLETED') this.paymentStatus = PAYMENT_STATUS.PAID;
+    else if (ps === 'UNPAID') this.paymentStatus = PAYMENT_STATUS.PENDING;
+    else if (PAYMENT_STATUS_LIST.includes(ps)) this.paymentStatus = ps;
+  }
+  next();
+});
 
-  if (isPaidOrConfirmed && !this.ticketNumber) {
-    const ts = Date.now().toString().slice(-6);
-    const rand = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+bookingSchema.pre('save', function (next) {
+  if (!this.ticketNumber) {
+    const crypto = require('crypto');
+    const ts = Date.now().toString(36).toUpperCase();
+    const rand = crypto.randomBytes(3).toString('hex').toUpperCase();
     this.ticketNumber = `ETH-${ts}-${rand}`;
   }
-  // Auto calculate 5 hours expiration if not set
-  if (!this.expiresAt) {
-    this.expiresAt = new Date(Date.now() + 5 * 60 * 60 * 1000);
+  if (!this.expiresAt && this.status === BOOKING_STATUS.PENDING_PAYMENT) {
+    const holdMinutes = parseInt(process.env.SEAT_HOLD_MINUTES || '15', 10);
+    this.expiresAt = new Date(Date.now() + holdMinutes * 60 * 1000);
   }
   next();
 });

@@ -7,16 +7,16 @@ import {
 import { paymentAPI } from '../../../utils/api';
 import { toast } from 'react-toastify';
 import DataTable from '../../../components/DataTable';
-import AdminPageHeader from '../../../components/AdminPageHeader';
+import { useTranslation } from '../../../i18n';
 
 const AdminPayments = () => {
+  const { t } = useTranslation();
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [methodFilter, setMethodFilter] = useState('all');
 
-  // Modals
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -46,7 +46,7 @@ const AdminPayments = () => {
     setUpdating(true);
     try {
       const res = await paymentAPI.updateStatus(selectedPayment._id, newStatus);
-      toast.success('Payment status updated successfully!');
+      toast.success(t('payment status updated successfully', 'Payment status updated successfully!'));
       setPayments((prev) => prev.map((p) => (p._id === selectedPayment._id ? res.payment : p)));
       setIsEditModalOpen(false);
     } catch (err) {
@@ -56,221 +56,183 @@ const AdminPayments = () => {
     }
   };
 
-  const handleGenerateReport = () => {
-    const reportWindow = window.open('', '_blank');
-    if (!reportWindow) {
-      toast.error('Pop-up blocked. Please allow pop-ups to view the report.');
-      return;
-    }
-
-    const filtered = filteredPayments;
-    const totalRev = filtered.filter((p) => p.status === 'completed').reduce((sum, p) => sum + (p.amount || 0), 0);
-    const chapaRev = filtered.filter((p) => p.method === 'Chapa' && p.status === 'completed').reduce((sum, p) => sum + (p.amount || 0), 0);
-
-    const reportHTML = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Ethio Trip Payment & Financial Report</title>
-        <style>
-          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; color: #1e293b; background: #fff; }
-          .header { text-align: center; border-bottom: 2px solid #078930; padding-bottom: 16px; margin-bottom: 24px; }
-          .header h1 { margin: 0; color: #078930; font-size: 24px; }
-          .header p { margin: 4px 0 0; color: #64748b; font-size: 13px; }
-          .metrics { display: flex; gap: 16px; margin-bottom: 24px; }
-          .card { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; }
-          .card-title { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700; }
-          .card-value { font-size: 20px; font-weight: 800; color: #0f172a; margin-top: 4px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 12px; }
-          th { background: #078930; color: #fff; padding: 10px; text-align: left; }
-          td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
-          tr:nth-child(even) { background: #f8fafc; }
-          .status { font-weight: bold; text-transform: uppercase; font-size: 10px; padding: 2px 6px; border-radius: 4px; display: inline-block; }
-          .completed { background: #dcfce7; color: #15803d; }
-          .pending { background: #fef3c7; color: #b45309; }
-          .failed { background: #fee2e2; color: #b91c1c; }
-          .footer { margin-top: 30px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>BUS COMPANY - PAYMENT TRANSACTIONS REPORT</h1>
-          <p>Generated on: ${new Date().toLocaleString()} | Financial Summary</p>
-        </div>
-        <div class="metrics">
-          <div class="card"><div class="card-title">Total Records</div><div class="card-value">${filtered.length}</div></div>
-          <div class="card"><div class="card-title">Total Revenue</div><div class="card-value">ETB ${totalRev.toLocaleString()}</div></div>
-          <div class="card"><div class="card-title">Chapa Revenue</div><div class="card-value">ETB ${chapaRev.toLocaleString()}</div></div>
-          <div class="card"><div class="card-title">Success Rate</div><div class="card-value">${filtered.length ? Math.round((filtered.filter((p) => p.status === 'completed').length / filtered.length) * 100) : 0}%</div></div>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Tx Reference</th>
-              <th>Passenger</th>
-              <th>Route</th>
-              <th>Amount</th>
-              <th>Method</th>
-              <th>Date</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${filtered.map((p) => `
-              <tr>
-                <td><strong>${p.transactionId || 'N/A'}</strong></td>
-                <td>${p.user?.name || 'Passenger'} (${p.user?.email || 'N/A'})</td>
-                <td>${p.booking?.schedule?.route ? `${p.booking.schedule.route.from} → ${p.booking.schedule.route.to}` : 'N/A'}</td>
-                <td><strong>ETB ${p.amount}</strong></td>
-                <td>${p.method || 'Chapa'}</td>
-                <td>${new Date(p.createdAt).toLocaleDateString()}</td>
-                <td><span class="status ${p.status}">${p.status}</span></td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-        <div class="footer">
-          Ethio Trip Smart Ticketing & Administration System · Official Financial Statement
-        </div>
-        <script>window.print();</script>
-      </body>
-      </html>
-    `;
-
-    reportWindow.document.write(reportHTML);
-    reportWindow.document.close();
+  const isPaidStatus = (status) => {
+    const s = String(status || '').toUpperCase();
+    return s === 'PAID' || s === 'COMPLETED' || s === 'SUCCESSFUL';
   };
 
-  // Filtered Payments
+  const isPendingStatus = (status) => {
+    const s = String(status || '').toUpperCase();
+    return s === 'PENDING';
+  };
+
   const filteredPayments = payments.filter((p) => {
-    const matchesSearch =
-      (p.transactionId || '').toLowerCase().includes(search.toLowerCase()) ||
-      (p.user?.name || '').toLowerCase().includes(search.toLowerCase()) ||
-      (p.user?.email || '').toLowerCase().includes(search.toLowerCase()) ||
-      (p.booking?.schedule?.route?.from || '').toLowerCase().includes(search.toLowerCase()) ||
-      (p.booking?.schedule?.route?.to || '').toLowerCase().includes(search.toLowerCase());
+    if (statusFilter !== 'all') {
+      const ps = String(p.status || '').toLowerCase();
+      if (statusFilter === 'completed' && !isPaidStatus(p.status)) return false;
+      if (statusFilter === 'pending' && !isPendingStatus(p.status)) return false;
+      if (statusFilter === 'failed' && ps !== 'failed') return false;
+      if (statusFilter === 'refunded' && ps !== 'refunded') return false;
+    }
 
-    const matchesStatus =
-      statusFilter === 'all'
-        ? true
-        : statusFilter === 'completed'
-        ? p.status === 'completed' || p.status === 'successful'
-        : p.status === statusFilter;
+    if (methodFilter !== 'all') {
+      const pm = String(p.method || '').toLowerCase();
+      if (!pm.includes(methodFilter.toLowerCase())) return false;
+    }
 
-    const matchesMethod = methodFilter === 'all' ? true : p.method?.toLowerCase() === methodFilter.toLowerCase();
-
-    return matchesSearch && matchesStatus && matchesMethod;
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      (p.transactionId || '').toLowerCase().includes(q) ||
+      (p.user?.name || '').toLowerCase().includes(q) ||
+      (p.user?.email || '').toLowerCase().includes(q) ||
+      (p.booking?.schedule?.route?.from || '').toLowerCase().includes(q) ||
+      (p.booking?.schedule?.route?.to || '').toLowerCase().includes(q)
+    );
   });
 
-  // Calculate Metrics
-  const totalRevenue = payments.filter((p) => p.status === 'completed').reduce((sum, p) => sum + (p.amount || 0), 0);
-  const chapaPayments = payments.filter((p) => p.method === 'Chapa');
-  const chapaRevenue = chapaPayments.filter((p) => p.status === 'completed').reduce((sum, p) => sum + (p.amount || 0), 0);
-  const successCount = payments.filter((p) => p.status === 'completed').length;
-  const pendingCount = payments.filter((p) => p.status === 'pending').length;
+  const totalRevenue = payments
+    .filter((p) => isPaidStatus(p.status))
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+  const chapaRevenue = payments
+    .filter((p) => p.method === 'Chapa' && isPaidStatus(p.status))
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+  const successCount = payments.filter((p) => isPaidStatus(p.status)).length;
+  const pendingCount = payments.filter((p) => isPendingStatus(p.status)).length;
 
   const columns = [
     {
-      header: 'Transaction ID',
+      header: t('transaction ref', 'Transaction Ref'),
       render: (p) => (
         <div>
-          <span style={{ fontWeight: 800, fontFamily: 'monospace', color: '#0f172a' }}>
-            {p.transactionId || 'N/A'}
+          <span className="font-mono font-bold text-slate-900 block text-xs">
+            {p.transactionId || 'TXN-' + p._id?.slice(-8).toUpperCase()}
           </span>
-          {p.chapaRef && (
-            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
-              Ref: {p.chapaRef}
-            </div>
-          )}
+          <span className="text-[11px] text-slate-400 font-mono">
+            ID: {p._id?.slice(-6).toUpperCase()}
+          </span>
         </div>
       ),
     },
     {
-      header: 'Passenger',
+      header: t('passenger', 'Passenger'),
       render: (p) => (
         <div>
-          <div style={{ fontWeight: 700, color: '#0f172a' }}>{p.user?.name || 'Passenger'}</div>
-          <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{p.user?.email || p.user?.phone || 'N/A'}</div>
+          <div className="font-bold text-slate-900">{p.user?.name || t('passenger', 'Passenger')}</div>
+          <div className="text-[0.75rem] text-slate-500">{p.user?.email || p.user?.phone || '—'}</div>
         </div>
       ),
     },
     {
-      header: 'Booking / Route',
+      header: t('booking / route', 'Booking / Route'),
       render: (p) => (
         <div>
           {p.booking?.schedule?.route ? (
             <>
-              <div style={{ fontWeight: 700, color: '#334155' }}>
-                {p.booking.schedule.route.from} → {p.booking.schedule.route.to}
+              <div className="font-bold text-slate-700">
+                {t(p.booking.schedule.route.from, p.booking.schedule.route.from)} → {t(p.booking.schedule.route.to, p.booking.schedule.route.to)}
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                Seat(s): {Array.isArray(p.booking.selectedSeats) ? p.booking.selectedSeats.join(', ') : p.booking.selectedSeats || 'N/A'}
+              <div className="text-[0.75rem] text-slate-500">
+                {t('seats', 'Seat(s)')}: {Array.isArray(p.booking.selectedSeats) ? p.booking.selectedSeats.join(', ') : p.booking.selectedSeats || '—'}
               </div>
             </>
           ) : (
-            <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Direct payment</span>
+            <span className="text-slate-400 italic">{t('direct payment', 'Direct payment')}</span>
           )}
         </div>
       ),
     },
     {
-      header: 'Amount',
+      header: t('amount', 'Amount'),
       render: (p) => (
-        <span style={{ fontWeight: 900, color: '#078930' }}>
+        <span className="font-black text-emerald-700">
           ETB {Number(p.amount || 0).toLocaleString()}
         </span>
       ),
     },
     {
-      header: 'Method',
-      render: (p) => (
-        <span
-          className="eb-badge"
-          style={{
-            background: p.method === 'Chapa' ? '#f3e8ff' : '#f1f5f9',
-            color: p.method === 'Chapa' ? '#7e22ce' : '#334155',
-            border: '1px solid #e2e8f0',
-          }}
-        >
-          {p.method === 'Chapa' ? <FaCreditCard /> : <FaMobileAlt />} {p.method || 'Chapa'}
-        </span>
-      ),
-    },
-    {
-      header: 'Date',
-      render: (p) => (
-        <span style={{ color: '#64748b', fontSize: '0.8rem' }}>
-          {new Date(p.createdAt).toLocaleDateString()}
-        </span>
-      ),
-    },
-    {
-      header: 'Status',
+      header: t('payment method', 'Method'),
       render: (p) => {
-        const isSuccess = p.status === 'completed' || p.status === 'successful';
-        const isPending = p.status === 'pending';
+        const rawMethod = p.booking?.paymentMethod || p.booking?.payment?.method || p.method || p.paymentMethod || 'Telebirr';
+        const methodLower = String(rawMethod).toLowerCase();
+        const isChapa = methodLower.includes('chapa') || methodLower.includes('card');
+        const isTelebirr = methodLower.includes('telebirr');
+        const isCbe = methodLower.includes('cbe');
+        const isCash = methodLower.includes('cash') || methodLower.includes('counter');
+
+        let badgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
+        let icon = <FaMobileAlt />;
+        let label = 'Telebirr';
+
+        if (isChapa) {
+          badgeClass = 'bg-blue-100 text-blue-800 border-blue-200';
+          icon = <FaCreditCard />;
+          label = 'Chapa';
+        } else if (isCbe) {
+          badgeClass = 'bg-purple-100 text-purple-800 border-purple-200';
+          icon = <FaUniversity />;
+          label = 'CBE Birr';
+        } else if (isCash) {
+          badgeClass = 'bg-amber-100 text-amber-800 border-amber-200';
+          icon = <FaMoneyBillWave />;
+          label = 'Cash Counter';
+        } else if (isTelebirr) {
+          badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+          icon = <FaMobileAlt />;
+          label = 'Telebirr';
+        }
+
         return (
-          <span className={`eb-badge ${isSuccess ? 'eb-badge-active' : isPending ? 'eb-badge-pending' : 'eb-badge-inactive'}`}>
-            {isSuccess ? 'Completed' : p.status}
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[0.72rem] font-bold border ${badgeClass}`}>
+            {icon} {t(label, label)}
           </span>
         );
       },
     },
     {
-      header: 'Actions',
+      header: t('date', 'Date'),
       render: (p) => (
-        <div className="eb-action-group">
+        <span className="text-slate-500 text-[0.8rem]">
+          {new Date(p.createdAt).toLocaleDateString()}
+        </span>
+      ),
+    },
+    {
+      header: t('common.status', 'Status'),
+      render: (p) => {
+        const isSuccess = isPaidStatus(p.status);
+        const isPending = isPendingStatus(p.status);
+        const isRefunded = String(p.status || '').toUpperCase() === 'REFUNDED';
+        const displayLabel = isSuccess ? t('paid / completed', 'Paid / Completed') : t(p.status, p.status);
+        return (
+          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[0.72rem] font-extrabold capitalize border ${
+            isSuccess ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+            isPending ? 'bg-amber-50 text-amber-700 border-amber-200' :
+            isRefunded ? 'bg-purple-50 text-purple-700 border-purple-200' :
+            'bg-red-50 text-red-600 border-red-200'
+          }`}>
+            {displayLabel}
+          </span>
+        );
+      },
+    },
+    {
+      header: t('common.actions', 'Actions'),
+      render: (p) => (
+        <div className="flex items-center gap-1.5 flex-wrap">
           <button
             onClick={() => { setSelectedPayment(p); setIsDetailModalOpen(true); }}
-            className="eb-btn-action eb-btn-view"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[0.76rem] font-bold cursor-pointer border-none transition-colors"
           >
-            <FaEye /> View
+            <FaEye /> {t('common.details', 'View')}
           </button>
           <button
             onClick={() => { setSelectedPayment(p); setNewStatus(p.status); setIsEditModalOpen(true); }}
-            className="eb-btn-action eb-btn-edit"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 text-[0.76rem] font-bold cursor-pointer border-none transition-colors"
           >
-            <FaEdit /> Edit
+            <FaEdit /> {t('common.edit', 'Edit')}
           </button>
         </div>
       ),
@@ -279,104 +241,94 @@ const AdminPayments = () => {
 
   return (
     <div>
-      <AdminPageHeader
-        category="FINANCIAL & REVENUE MANAGEMENT"
-        title="Chapa & Online Payments"
-        icon={<FaCreditCard />}
-        subtitle="Monitor digital transactions, CBE Birr / Telebirr / Chapa gateways, passenger receipts, and financial statements."
-        stats={[
-          { label: 'Total Revenue', value: `ETB ${totalRevenue.toLocaleString()}`, color: '#16a34a' },
-          { label: 'Completed', value: successCount, color: '#0284c7' },
-          { label: 'Pending', value: pendingCount, color: '#d97706' },
-          { label: 'Chapa Revenue', value: `ETB ${chapaRevenue.toLocaleString()}`, color: '#7c3aed' },
-        ]}
-        actions={
-          <button onClick={handleGenerateReport} className="eb-btn-primary-header">
-            <FaFileDownload /> Export Statement
-          </button>
-        }
-      />
-
-      {/* Metric Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '18px 20px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#64748b', fontSize: '0.8rem', fontWeight: 700 }}>
-            <span>TOTAL REVENUE</span>
-            <div style={{ width: 32, height: 32, borderRadius: '8px', background: '#dcfce7', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white border border-slate-200 rounded-2xl py-[18px] px-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <div className="flex justify-between items-center text-slate-500 text-[0.8rem] font-bold">
+            <span>{t('admin.totalRevenue', 'TOTAL REVENUE')}</span>
+            <div className="w-8 h-8 rounded-lg bg-green-100 text-green-600 flex items-center justify-center">
               <FaMoneyBillWave />
             </div>
           </div>
-          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#0f172a', marginTop: '10px' }}>
+          <div className="text-[1.4rem] font-black text-slate-900 mt-2.5">
             ETB {totalRevenue.toLocaleString()}
           </div>
         </div>
 
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '18px 20px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#64748b', fontSize: '0.8rem', fontWeight: 700 }}>
-            <span>CHAPA REVENUE</span>
-            <div style={{ width: 32, height: 32, borderRadius: '8px', background: '#f3e8ff', color: '#9333ea', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="bg-white border border-slate-200 rounded-2xl py-[18px] px-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <div className="flex justify-between items-center text-slate-500 text-[0.8rem] font-bold">
+            <span>{t('chapa revenue', 'CHAPA REVENUE')}</span>
+            <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
               <FaCreditCard />
             </div>
           </div>
-          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#0f172a', marginTop: '10px' }}>
+          <div className="text-[1.4rem] font-black text-slate-900 mt-2.5">
             ETB {chapaRevenue.toLocaleString()}
           </div>
         </div>
 
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '18px 20px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#64748b', fontSize: '0.8rem', fontWeight: 700 }}>
-            <span>COMPLETED</span>
-            <div style={{ width: 32, height: 32, borderRadius: '8px', background: '#dcfce7', color: '#15803d', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="bg-white border border-slate-200 rounded-2xl py-[18px] px-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <div className="flex justify-between items-center text-slate-500 text-[0.8rem] font-bold">
+            <span>{t('common.completed', 'COMPLETED')}</span>
+            <div className="w-8 h-8 rounded-lg bg-green-100 text-green-700 flex items-center justify-center">
               <FaCheckCircle />
             </div>
           </div>
-          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#15803d', marginTop: '10px' }}>
+          <div className="text-[1.4rem] font-black text-green-700 mt-2.5">
             {successCount}
           </div>
         </div>
 
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '18px 20px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#64748b', fontSize: '0.8rem', fontWeight: 700 }}>
-            <span>PENDING</span>
-            <div style={{ width: 32, height: 32, borderRadius: '8px', background: '#fef3c7', color: '#b45309', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="bg-white border border-slate-200 rounded-2xl py-[18px] px-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <div className="flex justify-between items-center text-slate-500 text-[0.8rem] font-bold">
+            <span>{t('common.pending', 'PENDING')}</span>
+            <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
               <FaHourglassHalf />
             </div>
           </div>
-          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#b45309', marginTop: '10px' }}>
+          <div className="text-[1.4rem] font-black text-amber-700 mt-2.5">
             {pendingCount}
           </div>
         </div>
       </div>
 
-      {/* Filters Toolbar & DataTable */}
       <DataTable
         columns={columns}
         data={filteredPayments}
         loading={loading}
         searchTerm={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search payments by TxRef, passenger name, email, or route..."
-        emptyMessage="No payment transactions found matching the selected criteria."
+        searchPlaceholder={t('search payments by txref, passenger name, email, or route...', 'Search payments by TxRef, passenger name, email, or route...')}
+        emptyMessage={t('no payment transactions found matching criteria', 'No payment transactions found matching the selected criteria.')}
         actions={
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <div className="flex gap-2 flex-wrap items-center">
+            <a
+              href="https://dashboard.chapa.co"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-[10px] bg-blue-600 hover:bg-blue-700 text-white text-[0.85rem] font-bold shadow-xs transition-colors cursor-pointer"
+              title="Open official Chapa Merchant Dashboard"
+            >
+              <FaCreditCard className="text-xs" /> {t('chapa dashboard', 'Chapa Dashboard')} ↗
+            </a>
+
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              style={{ padding: '8px 12px', border: '1.5px solid #e2e8f0', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 600, color: '#334155' }}
+              className="py-2 px-3 border-[1.5px] border-slate-200 rounded-[10px] text-[0.85rem] font-semibold text-slate-700 outline-none focus:border-emerald-600"
             >
-              <option value="all">All Statuses</option>
-              <option value="completed">Completed</option>
-              <option value="pending">Pending</option>
-              <option value="failed">Failed</option>
-              <option value="refunded">Refunded</option>
+              <option value="all">{t('all statuses', 'All Statuses')}</option>
+              <option value="completed">{t('common.completed', 'Completed')}</option>
+              <option value="pending">{t('common.pending', 'Pending')}</option>
+              <option value="failed">{t('common.failed', 'Failed')}</option>
+              <option value="refunded">{t('refunded', 'Refunded')}</option>
             </select>
 
             <select
               value={methodFilter}
               onChange={(e) => setMethodFilter(e.target.value)}
-              style={{ padding: '8px 12px', border: '1.5px solid #e2e8f0', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 600, color: '#334155' }}
+              className="py-2 px-3 border-[1.5px] border-slate-200 rounded-[10px] text-[0.85rem] font-semibold text-slate-700 outline-none focus:border-emerald-600"
             >
-              <option value="all">All Methods</option>
+              <option value="all">{t('all methods', 'All Methods')}</option>
               <option value="chapa">Chapa</option>
               <option value="telebirr">Telebirr</option>
               <option value="cbe birr">CBE Birr</option>
@@ -384,132 +336,126 @@ const AdminPayments = () => {
 
             <button
               onClick={fetchPayments}
-              style={{
-                padding: '8px 14px',
-                background: '#f1f5f9',
-                color: '#334155',
-                border: '1px solid #cbd5e1',
-                borderRadius: '10px',
-                fontWeight: 700,
-                fontSize: '0.85rem',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
+              className="py-2 px-3.5 bg-slate-100 text-slate-700 border border-slate-300 rounded-[10px] font-bold text-[0.85rem] cursor-pointer flex items-center gap-1.5 hover:bg-slate-200 transition-colors"
             >
-              <FaSync /> Refresh
+              <FaSync /> {t('common.refresh', 'Refresh')}
             </button>
           </div>
         }
       />
 
-      {/* ══ VIEW DETAILS MODAL ══ */}
       {isDetailModalOpen && selectedPayment && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '16px' }}>
-          <div style={{ background: '#ffffff', width: '100%', maxWidth: '520px', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 25px 50px rgba(0,0,0,0.3)' }}>
-            <div style={{ background: 'linear-gradient(135deg,#078930,#045a1f)', padding: '20px 24px', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center z-[1100] p-4">
+          <div className="bg-white w-full max-w-[520px] rounded-3xl overflow-hidden shadow-2xl">
+            <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 py-5 px-6 text-white flex justify-between items-center">
               <div>
-                <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#FCDD09', textTransform: 'uppercase' }}>Transaction Receipt</div>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Payment Details</h3>
+                <div className="text-[0.7rem] font-extrabold text-amber-300 uppercase">{t('transaction receipt', 'Transaction Receipt')}</div>
+                <h3 className="m-0 text-[1.2rem] font-extrabold">{t('payment details', 'Payment Details')}</h3>
               </div>
-              <button onClick={() => setIsDetailModalOpen(false)} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: '50%', cursor: 'pointer' }}>
+              <button
+                onClick={() => setIsDetailModalOpen(false)}
+                className="bg-white/20 border-none text-white w-8 h-8 rounded-full flex items-center justify-center cursor-pointer hover:bg-white/30"
+              >
                 <FaTimes />
               </button>
             </div>
 
-            <div style={{ padding: '24px' }}>
-              <div style={{ background: '#f8fafc', borderRadius: '16px', padding: '16px', marginBottom: '20px', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Total Paid</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#078930' }}>ETB {Number(selectedPayment.amount).toLocaleString()}</div>
-                <div style={{ fontSize: '0.8rem', color: '#334155', marginTop: '4px' }}>
-                  Method: <strong>{selectedPayment.method}</strong> · Ref: <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{selectedPayment.transactionId}</span>
+            <div className="p-6">
+              <div className="bg-slate-50 rounded-2xl p-4 mb-5 border border-slate-200">
+                <div className="text-[0.75rem] text-slate-500 uppercase font-bold">{t('total paid', 'Total Paid')}</div>
+                <div className="text-[1.6rem] font-black text-emerald-700">ETB {Number(selectedPayment.amount).toLocaleString()}</div>
+                <div className="text-[0.8rem] text-slate-700 mt-1">
+                  {t('payment method', 'Method')}: <strong>{selectedPayment.method}</strong> · {t('ref', 'Ref')}: <span className="font-mono font-bold">{selectedPayment.transactionId}</span>
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.85rem', marginBottom: '20px' }}>
-                <div style={{ background: '#ffffff', border: '1px solid #f1f5f9', padding: '12px', borderRadius: '12px' }}>
-                  <div style={{ color: '#64748b', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}><FaUser /> Passenger</div>
-                  <div style={{ fontWeight: 800, color: '#0f172a', marginTop: '2px' }}>{selectedPayment.user?.name || 'Passenger'}</div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{selectedPayment.user?.email || 'N/A'}</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[0.85rem] mb-5">
+                <div className="bg-white border border-slate-100 p-3 rounded-xl">
+                  <div className="text-slate-500 text-[0.75rem] flex items-center gap-1"><FaUser /> {t('passenger', 'Passenger')}</div>
+                  <div className="font-extrabold text-slate-900 mt-0.5">{selectedPayment.user?.name || t('passenger', 'Passenger')}</div>
+                  <div className="text-[0.75rem] text-slate-500">{selectedPayment.user?.email || '—'}</div>
                 </div>
 
-                <div style={{ background: '#ffffff', border: '1px solid #f1f5f9', padding: '12px', borderRadius: '12px' }}>
-                  <div style={{ color: '#64748b', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}><FaRoute /> Route</div>
-                  <div style={{ fontWeight: 800, color: '#0f172a', marginTop: '2px' }}>
-                    {selectedPayment.booking?.schedule?.route ? `${selectedPayment.booking.schedule.route.from} → ${selectedPayment.booking.schedule.route.to}` : 'N/A'}
+                <div className="bg-white border border-slate-100 p-3 rounded-xl">
+                  <div className="text-slate-500 text-[0.75rem] flex items-center gap-1"><FaRoute /> {t('route', 'Route')}</div>
+                  <div className="font-extrabold text-slate-900 mt-0.5">
+                    {selectedPayment.booking?.schedule?.route ? `${selectedPayment.booking.schedule.route.from} → ${selectedPayment.booking.schedule.route.to}` : '—'}
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                    Seats: {Array.isArray(selectedPayment.booking?.selectedSeats) ? selectedPayment.booking.selectedSeats.join(', ') : selectedPayment.booking?.selectedSeats || 'N/A'}
+                  <div className="text-[0.75rem] text-slate-500">
+                    {t('seats', 'Seats')}: {Array.isArray(selectedPayment.booking?.selectedSeats) ? selectedPayment.booking.selectedSeats.join(', ') : selectedPayment.booking?.selectedSeats || '—'}
                   </div>
                 </div>
               </div>
 
               <button
                 onClick={() => setIsDetailModalOpen(false)}
-                style={{ width: '100%', padding: '12px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: 800, cursor: 'pointer' }}
+                className="w-full p-3 bg-slate-900 text-white border-none rounded-xl font-extrabold cursor-pointer hover:bg-slate-800 transition-colors"
               >
-                Close Details
+                {t('common.close', 'Close Details')}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ══ EDIT STATUS MODAL ══ */}
       {isEditModalOpen && selectedPayment && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '16px' }}>
-          <div style={{ background: '#ffffff', width: '100%', maxWidth: '440px', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 25px 50px rgba(0,0,0,0.3)' }}>
-            <div style={{ background: '#0f172a', padding: '18px 24px', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>Update Payment Status</h3>
-              <button onClick={() => setIsEditModalOpen(false)} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', width: 30, height: 30, borderRadius: '50%', cursor: 'pointer' }}>
+        <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center z-[1100] p-4">
+          <div className="bg-white w-full max-w-[440px] rounded-3xl overflow-hidden shadow-2xl">
+            <div className="bg-slate-900 py-[18px] px-6 text-white flex justify-between items-center">
+              <h3 className="m-0 text-[1.1rem] font-extrabold">{t('update payment status', 'Update Payment Status')}</h3>
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                className="bg-white/20 border-none text-white w-[30px] h-[30px] rounded-full flex items-center justify-center cursor-pointer hover:bg-white/30"
+              >
                 <FaTimes />
               </button>
             </div>
 
-            <form onSubmit={handleUpdateStatus} style={{ padding: '24px' }}>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '6px' }}>
-                  Transaction Reference
+            <form onSubmit={handleUpdateStatus} className="p-6">
+              <div className="mb-4">
+                <label className="text-[0.8rem] font-bold text-slate-600 block mb-1.5">
+                  {t('transaction reference', 'Transaction Reference')}
                 </label>
                 <input
                   type="text"
                   disabled
                   value={selectedPayment.transactionId || ''}
-                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', fontWeight: 700, fontFamily: 'monospace' }}
+                  className="w-full p-2.5 rounded-lg border border-slate-300 bg-slate-50 font-bold font-mono text-slate-800"
                 />
               </div>
 
-              <div style={{ marginBottom: '24px' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '6px' }}>
-                  Select Status
+              <div className="mb-6">
+                <label className="text-[0.8rem] font-bold text-slate-600 block mb-1.5">
+                  {t('select status', 'Select Status')}
                 </label>
+                <div className="text-[0.75rem] text-slate-500 mb-2">
+                  {t('completed payments verified automatically', 'Note: Completed payments are verified automatically by Chapa webhook and gateway API.')}
+                </div>
                 <select
                   value={newStatus}
                   onChange={(e) => setNewStatus(e.target.value)}
-                  style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1.5px solid #078930', fontSize: '0.9rem', fontWeight: 700, outline: 'none' }}
+                  className="w-full p-3 rounded-[10px] border-[1.5px] border-emerald-600 text-[0.9rem] font-bold outline-none"
                 >
-                  <option value="completed">Completed / Successful</option>
-                  <option value="pending">Pending</option>
-                  <option value="failed">Failed</option>
-                  <option value="refunded">Refunded</option>
+                  <option value="pending">{t('common.pending', 'PENDING')}</option>
+                  <option value="failed">{t('common.failed', 'FAILED')}</option>
+                  <option value="refunded">{t('refunded', 'REFUNDED')}</option>
                 </select>
               </div>
 
-              <div style={{ display: 'flex', gap: '10px' }}>
+              <div className="flex gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIsEditModalOpen(false)}
-                  style={{ flex: 1, padding: '12px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '10px', fontWeight: 700, cursor: 'pointer' }}
+                  className="flex-1 p-3 bg-slate-100 text-slate-500 border-none rounded-[10px] font-bold cursor-pointer hover:bg-slate-200 transition-colors"
                 >
-                  Cancel
+                  {t('common.cancel', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={updating}
-                  style={{ flex: 1.5, padding: '12px', background: '#078930', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 800, cursor: 'pointer' }}
+                  className="flex-[1.5] p-3 bg-emerald-600 text-white border-none rounded-[10px] font-extrabold cursor-pointer hover:bg-emerald-700 transition-colors disabled:opacity-50"
                 >
-                  {updating ? 'Saving...' : 'Update Status'}
+                  {updating ? t('common.saving', 'Saving...') : t('update status', 'Update Status')}
                 </button>
               </div>
             </form>

@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import {
-  FaBus, FaSearch, FaUser, FaCalendarAlt, FaArrowRight, FaTimes,
-  FaCheckCircle, FaPrint, FaArrowLeft, FaMapMarkerAlt, FaClock, FaCouch,
-  FaQrcode, FaTag, FaPhone, FaEnvelope, FaCreditCard
+  FaBus, FaSearch, FaUser, FaCalendarAlt,
+  FaCheckCircle, FaPrint, FaArrowLeft, FaClock, FaCouch,
+  FaQrcode, FaEnvelope
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
-import { scheduleAPI } from '../../../utils/api';
+import { scheduleAPI, notificationAPI } from '../../../utils/api';
 import { useAuth } from '../../../contexts/AuthContext';
 import SeatSelectorModal from '../../../components/SeatSelectorModal';
 import TicketModal from '../../../components/TicketModal';
+import { useTranslation } from '../../../i18n';
 
 const CITIES = [
   'Addis Ababa', 'Dire Dawa', 'Mekelle', 'Hawassa', 'Bahir Dar',
@@ -16,20 +17,19 @@ const CITIES = [
 ];
 const TODAY = new Date().toISOString().split('T')[0];
 
-const STEPS = [
-  { id: 1, label: 'Passenger Info' },
-  { id: 2, label: 'Find Bus' },
-  { id: 3, label: 'Select Seat' },
-  { id: 4, label: 'Ticket' },
-];
-
 const CounterBooking = () => {
   const { user } = useAuth();
+  const { t } = useTranslation();
 
-  // Wizard step: 'form' | 'results' | 'seat_modal' | 'ticket'
+  const STEPS = [
+    { id: 1, label: t('booking.passengerInfo', 'Passenger Info') },
+    { id: 2, label: t('booking.findBus', 'Find Bus') },
+    { id: 3, label: t('booking.selectSeat', 'Select Seat') },
+    { id: 4, label: t('booking.ticket', 'Ticket') },
+  ];
+
   const [step, setStep] = useState('form');
 
-  // Passenger state
   const [pax, setPax] = useState({
     fullName: '',
     phone: '',
@@ -38,43 +38,40 @@ const CounterBooking = () => {
     age: '',
   });
 
-  // Search parameters
   const [tripType, setTripType] = useState('oneway');
   const [from, setFrom] = useState('Addis Ababa');
   const [to, setTo] = useState('Bahir Dar');
   const [date, setDate] = useState(TODAY);
   const [returnDate, setReturnDate] = useState('');
 
-  // Search results
   const [schedules, setSchedules] = useState([]);
   const [searching, setSearching] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState(null);
   const [issuedBooking, setIssuedBooking] = useState(null);
 
-  // QR Code Ticket Modal trigger
   const [showTicketModalBooking, setShowTicketModalBooking] = useState(null);
 
   const companyId = user?.companyId?._id || user?.companyId;
 
   const handleSearch = async () => {
     if (!from || !to || from === to) {
-      toast.warn('Please select different origin and destination cities.');
+      toast.warn(t('forms.selectDifferentCities', 'Please select different origin and destination cities.'));
       return;
     }
     if (!date) {
-      toast.warn('Please select a departure date.');
+      toast.warn(t('forms.selectDepartureDate', 'Please select a departure date.'));
       return;
     }
     if (tripType === 'round' && !returnDate) {
-      toast.warn('Please select a return date for round trip.');
+      toast.warn(t('forms.selectReturnDate', 'Please select a return date for round trip.'));
       return;
     }
     if (!pax.fullName.trim()) {
-      toast.warn('Please enter passenger full name.');
+      toast.warn(t('forms.enterPassengerName', 'Please enter passenger full name.'));
       return;
     }
     if (!pax.phone.trim()) {
-      toast.warn('Please enter passenger phone number.');
+      toast.warn(t('forms.enterPassengerPhone', 'Please enter passenger phone number.'));
       return;
     }
 
@@ -88,10 +85,10 @@ const CounterBooking = () => {
       setSchedules(filtered);
       setStep('results');
       if (filtered.length === 0) {
-        toast.info('No scheduled trips found for your company on this route and date.');
+        toast.info(t('agent.noScheduledTrips', 'No scheduled trips found for your company on this route and date.'));
       }
     } catch (err) {
-      toast.error('Search failed: ' + err.message);
+      toast.error(err.message || t('agent.searchFailed', 'Search failed'));
     } finally {
       setSearching(false);
     }
@@ -100,7 +97,7 @@ const CounterBooking = () => {
   const handleAgentBookingComplete = (booking) => {
     setIssuedBooking(booking);
     setSelectedSchedule(null);
-    setShowTicketModalBooking(booking); // Open new E-Ticket modal with QR code
+    setShowTicketModalBooking(booking);
     setStep('ticket');
   };
 
@@ -114,213 +111,179 @@ const CounterBooking = () => {
 
   const stepNum = { form: 1, results: 2, seat_modal: 3, ticket: 4 }[step] || 1;
 
-  const labelStyle = {
-    display: 'block', fontSize: '0.72rem', fontWeight: 800,
-    color: '#475569', marginBottom: 4,
-  };
-  const inputStyle = {
-    width: '100%', padding: '9px 12px', borderRadius: 8,
-    border: '1.5px solid #cbd5e1', fontSize: '0.87rem',
-    outline: 'none', boxSizing: 'border-box', background: '#ffffff', color: '#0f172a'
-  };
+  const labelClass = "block text-[0.72rem] font-extrabold text-slate-600 mb-1";
+  const inputClass = "w-full px-3 py-[9px] rounded-lg border-[1.5px] border-slate-300 text-[0.87rem] outline-none bg-white text-slate-900 focus:border-eb-green transition-colors";
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-      {/* ── Progress Bar ── */}
-      <div style={{
-        background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0',
-        padding: '14px 22px', display: 'flex', alignItems: 'center',
-        overflowX: 'auto', boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-      }}>
+    <div className="flex flex-col gap-5">
+      <div className="bg-white rounded-[14px] border border-slate-200 py-3.5 px-[22px] flex items-center overflow-x-auto shadow-sm">
         {STEPS.map((s, i) => {
           const done = stepNum > s.id;
           const active = stepNum === s.id;
           return (
             <React.Fragment key={s.id}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
-                <div style={{
-                  width: 28, height: 28, borderRadius: '50%',
-                  background: done ? '#22c55e' : active ? '#078930' : '#e2e8f0',
-                  color: done || active ? '#fff' : '#94a3b8',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '0.73rem', fontWeight: 900,
-                }}>
+              <div className="flex items-center gap-[7px] shrink-0">
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[0.73rem] font-black ${
+                  done ? 'bg-green-500 text-white' : active ? 'bg-eb-green text-white' : 'bg-slate-200 text-slate-400'
+                }`}>
                   {done ? '✓' : s.id}
                 </div>
-                <span style={{
-                  fontSize: '0.78rem', whiteSpace: 'nowrap',
-                  fontWeight: active ? 800 : 600,
-                  color: active ? '#0f172a' : done ? '#16a34a' : '#94a3b8',
-                }}>
+                <span className={`text-[0.78rem] whitespace-nowrap ${
+                  active ? 'font-extrabold text-slate-900' : done ? 'font-semibold text-green-600' : 'font-semibold text-slate-400'
+                }`}>
                   {s.label}
                 </span>
               </div>
               {i < STEPS.length - 1 && (
-                <div style={{
-                  flex: 1, minWidth: 20, height: 2, margin: '0 8px',
-                  background: done ? '#22c55e' : '#e2e8f0',
-                }} />
+                <div className={`flex-1 min-w-5 h-0.5 mx-2 ${done ? 'bg-green-500' : 'bg-slate-200'}`} />
               )}
             </React.Fragment>
           );
         })}
       </div>
 
-      {/* ── STEP 1 & 2: Passenger Form & Bus Search ── */}
       {step === 'form' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Passenger Information */}
-          <div style={{
-            background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0',
-            padding: 22, boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          }}>
-            <h3 style={{
-              margin: '0 0 16px', fontSize: '1rem', fontWeight: 900, color: '#0f172a',
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}>
-              <FaUser style={{ color: '#078930' }} /> Passenger Details
+        <div className="flex flex-col gap-5">
+          <div className="bg-white rounded-2xl border border-slate-200 p-[22px] shadow-sm">
+            <h3 className="m-0 mb-4 text-base font-black text-slate-900 flex items-center gap-2">
+              <FaUser className="text-eb-green" /> {t('booking.passengerDetails', 'Passenger Details')}
             </h3>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(195px, 1fr))', gap: 14 }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
               <div>
-                <label style={labelStyle}>Full Name *</label>
+                <label className={labelClass}>{t('forms.fullName', 'Full Name')} *</label>
                 <input
                   type="text"
-                  placeholder="e.g. Abebe Kebede"
+                  placeholder=""
                   value={pax.fullName}
                   onChange={(e) => {
                     const val = e.target.value;
                     setPax(prev => ({ ...prev, fullName: val }));
                   }}
-                  style={inputStyle}
+                  className={inputClass}
                 />
               </div>
 
               <div>
-                <label style={labelStyle}>Phone Number *</label>
+                <label className={labelClass}>{t('forms.phone', 'Phone Number')} *</label>
                 <input
-                  type="text"
-                  placeholder="+251 9__ __ __ __"
+                  type="tel"
+                  placeholder=""
+                  maxLength={10}
                   value={pax.phone}
                   onChange={(e) => {
-                    const val = e.target.value;
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
                     setPax(prev => ({ ...prev, phone: val }));
                   }}
-                  style={inputStyle}
+                  onKeyDown={e => {
+                    if (!/[\d]/.test(e.key) && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) {
+                      e.preventDefault();
+                    }
+                  }}
+                  className={inputClass}
                 />
               </div>
 
               <div>
-                <label style={labelStyle}>Email Address</label>
+                <label className={labelClass}>{t('forms.email', 'Email Address')}</label>
                 <input
                   type="email"
-                  placeholder="passenger@email.com"
+                  placeholder=""
                   value={pax.email}
                   onChange={(e) => {
                     const val = e.target.value;
                     setPax(prev => ({ ...prev, email: val }));
                   }}
-                  style={inputStyle}
+                  className={inputClass}
                 />
               </div>
 
               <div>
-                <label style={labelStyle}>Gender</label>
+                <label className={labelClass}>{t('forms.gender', 'Gender')}</label>
                 <select
                   value={pax.gender}
                   onChange={(e) => {
                     const val = e.target.value;
                     setPax(prev => ({ ...prev, gender: val }));
                   }}
-                  style={inputStyle}
+                  className={inputClass}
                 >
-                  <option>Male</option>
-                  <option>Female</option>
-                  <option>Other</option>
+                  <option value="Male">{t('forms.male', 'Male')}</option>
+                  <option value="Female">{t('forms.female', 'Female')}</option>
+                  <option value="Other">{t('forms.other', 'Other')}</option>
                 </select>
               </div>
 
               <div>
-                <label style={labelStyle}>Age</label>
+                <label className={labelClass}>{t('forms.age', 'Age')}</label>
                 <input
                   type="number"
-                  placeholder="e.g. 28"
+                  placeholder=""
                   min="1" max="120"
                   value={pax.age}
                   onChange={(e) => {
                     const val = e.target.value;
                     setPax(prev => ({ ...prev, age: val }));
                   }}
-                  style={inputStyle}
+                  className={inputClass}
                 />
               </div>
             </div>
           </div>
 
-          {/* Bus Search */}
-          <div style={{
-            background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0',
-            padding: 22, boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          }}>
-            <h3 style={{
-              margin: '0 0 16px', fontSize: '1rem', fontWeight: 900, color: '#0f172a',
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}>
-              <FaBus style={{ color: '#078930' }} /> Search Available Bus
+          <div className="bg-white rounded-2xl border border-slate-200 p-[22px] shadow-sm">
+            <h3 className="m-0 mb-4 text-base font-black text-slate-900 flex items-center gap-2">
+              <FaBus className="text-eb-green" /> {t('booking.searchAvailableBus', 'Search Available Bus')}
             </h3>
 
-            {/* Trip Type Toggle */}
-            <div style={{
-              display: 'flex', gap: 6, marginBottom: 18,
-              background: '#f8fafc', borderRadius: 10, padding: 4, width: 'fit-content',
-            }}>
-              {['oneway', 'round'].map(t => (
+            <div className="flex gap-1.5 mb-[18px] bg-slate-50 rounded-xl p-1 w-fit border border-slate-200">
+              {['oneway', 'round'].map(tType => (
                 <button
-                  key={t}
+                  key={tType}
                   type="button"
-                  onClick={() => setTripType(t)}
-                  style={{
-                    padding: '7px 18px', borderRadius: 7, border: 'none',
-                    background: tripType === t ? '#078930' : 'transparent',
-                    color: tripType === t ? '#fff' : '#64748b',
-                    fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer',
-                  }}
+                  onClick={() => setTripType(tType)}
+                  className={`px-[18px] py-[7px] rounded-lg border-0 font-extrabold text-[0.82rem] cursor-pointer transition-colors ${
+                    tripType === tType ? 'bg-eb-green text-white shadow-sm' : 'bg-transparent text-slate-500 hover:text-slate-700'
+                  }`}
                 >
-                  {t === 'oneway' ? 'One-Way' : 'Round Trip (10% Discount)'}
+                  {tType === 'oneway' ? t('booking.oneWay', 'One-Way') : t('booking.roundTripDiscount', 'Round Trip (10% Discount)')}
                 </button>
               ))}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(185px, 1fr))', gap: 14 }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
-                <label style={labelStyle}>From (Origin)</label>
-                <select value={from} onChange={e => setFrom(e.target.value)} style={inputStyle}>
-                  {CITIES.map(c => <option key={c}>{c}</option>)}
+                <label className={labelClass}>{t('booking.fromOrigin', 'From (Origin)')}</label>
+                <select value={from} onChange={e => setFrom(e.target.value)} className={inputClass}>
+                  {CITIES.map(c => <option key={c} value={c}>{t(c, c)}</option>)}
                 </select>
               </div>
               <div>
-                <label style={labelStyle}>To (Destination)</label>
-                <select value={to} onChange={e => setTo(e.target.value)} style={inputStyle}>
-                  {CITIES.map(c => <option key={c}>{c}</option>)}
+                <label className={labelClass}>{t('booking.toDestination', 'To (Destination)')}</label>
+                <select value={to} onChange={e => setTo(e.target.value)} className={inputClass}>
+                  {CITIES.map(c => <option key={c} value={c}>{t(c, c)}</option>)}
                 </select>
               </div>
               <div>
-                <label style={labelStyle}>Departure Date</label>
+                <label className={labelClass}>{t('booking.departureDate', 'Departure Date')}</label>
                 <input
                   type="date" value={date} min={TODAY}
                   onChange={e => setDate(e.target.value)}
-                  style={inputStyle}
+                  className={inputClass}
                 />
               </div>
-              {tripType === 'round' && (
+              {tripType === 'round' ? (
                 <div>
-                  <label style={labelStyle}>Return Date *</label>
+                  <label className={labelClass}>{t('booking.returnDate', 'Return Date')} *</label>
                   <input
                     type="date" value={returnDate} min={date || TODAY}
                     onChange={e => setReturnDate(e.target.value)}
-                    style={inputStyle}
+                    className={inputClass}
                   />
+                </div>
+              ) : (
+                <div className="flex items-end">
+                  <div className="text-[0.75rem] text-slate-400 py-2">{t('booking.standardOneWay', 'Standard One-Way Trip')}</div>
                 </div>
               )}
             </div>
@@ -329,65 +292,53 @@ const CounterBooking = () => {
               type="button"
               onClick={handleSearch}
               disabled={searching || !pax.fullName.trim() || !pax.phone.trim()}
-              style={{
-                marginTop: 18, padding: '11px 26px',
-                background: !pax.fullName.trim() || !pax.phone.trim() ? '#94a3b8' : '#078930',
-                color: '#fff', border: 'none', borderRadius: 10,
-                fontWeight: 900, fontSize: '0.9rem',
-                cursor: !pax.fullName.trim() || !pax.phone.trim() ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', gap: 8,
-                boxShadow: !pax.fullName.trim() || !pax.phone.trim() ? 'none' : '0 2px 8px rgba(7,137,48,0.25)',
-              }}
+              className={`mt-[18px] px-[26px] py-[11px] text-white border-0 rounded-xl font-black text-[0.9rem] flex items-center gap-2 transition-all ${
+                !pax.fullName.trim() || !pax.phone.trim()
+                  ? 'bg-slate-400 cursor-not-allowed shadow-none'
+                  : 'bg-eb-green hover:bg-[#067328] cursor-pointer shadow-[0_2px_8px_rgba(7,137,48,0.25)]'
+              }`}
             >
-              <FaSearch /> {searching ? 'Searching...' : 'Search Buses'}
+              <FaSearch /> {searching ? t('common.loading', 'Searching...') : t('booking.searchBuses', 'Search Buses')}
             </button>
             {(!pax.fullName.trim() || !pax.phone.trim()) && (
-              <p style={{ margin: '8px 0 0', fontSize: '0.74rem', color: '#f59e0b', fontWeight: 700 }}>
-                Fill passenger name and phone above before searching.
+              <p className="mt-2 mb-0 text-[0.74rem] text-amber-600 font-bold">
+                {t('agent.fillPaxNotice', 'Fill passenger name and phone above before searching.')}
               </p>
             )}
           </div>
         </div>
       )}
 
-      {/* ── STEP 2: Schedules List ── */}
       {step === 'results' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        <div className="flex flex-col gap-4">
+          <div className="flex justify-between items-center flex-wrap gap-2.5">
             <div>
-              <h3 style={{ margin: 0, fontWeight: 900, color: '#0f172a' }}>
-                {from} → {to} · {date} {tripType === 'round' ? `· Return: ${returnDate}` : ''}
+              <h3 className="m-0 font-black text-slate-900 text-lg">
+                {t(from, from)} → {t(to, to)} · {date} {tripType === 'round' ? `· ${t('booking.returnDate', 'Return')}: ${returnDate}` : ''}
               </h3>
-              <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: '#64748b' }}>
-                Passenger: <strong>{pax.fullName}</strong> · {pax.phone} {tripType === 'round' ? '· Round-Trip (10% Discount)' : ''}
+              <p className="mt-[3px] mb-0 text-[0.8rem] text-slate-500">
+                {t('passenger.passenger', 'Passenger')}: <strong>{pax.fullName}</strong> · {pax.phone} {tripType === 'round' ? `· ${t('booking.roundTripDiscount', 'Round-Trip (10% Discount)')}` : ''}
               </p>
             </div>
             <button
               type="button"
               onClick={() => setStep('form')}
-              style={{
-                padding: '7px 14px', borderRadius: 8, border: '1.5px solid #cbd5e1',
-                background: '#fff', color: '#334155', fontWeight: 700, fontSize: '0.8rem',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-              }}
+              className="px-3.5 py-[7px] rounded-lg border-[1.5px] border-slate-300 bg-white text-slate-700 font-bold text-[0.8rem] cursor-pointer flex items-center gap-1.5 hover:bg-slate-50 transition-colors"
             >
-              <FaArrowLeft /> Modify Search
+              <FaArrowLeft /> {t('booking.modifySearch', 'Modify Search')}
             </button>
           </div>
 
           {schedules.length === 0 ? (
-            <div style={{
-              textAlign: 'center', padding: '50px 20px',
-              background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', color: '#64748b',
-            }}>
-              <FaBus style={{ fontSize: '2.5rem', color: '#cbd5e1', marginBottom: 12 }} />
-              <h4 style={{ margin: '0 0 4px', color: '#334155' }}>No trips found</h4>
-              <p style={{ margin: 0, fontSize: '0.82rem' }}>
-                Your company has no schedules on this route and date.
+            <div className="text-center py-[50px] px-5 bg-white rounded-2xl border border-slate-200 text-slate-500 shadow-sm">
+              <FaBus className="text-[2.5rem] text-slate-300 mb-3 mx-auto" />
+              <h4 className="m-0 mb-1 text-slate-700 font-bold">{t('booking.noTripsFound', 'No trips found')}</h4>
+              <p className="m-0 text-[0.82rem]">
+                {t('agent.noSchedulesNotice', 'Your company has no schedules on this route and date.')}
               </p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="grid grid-cols-1 gap-4">
               {schedules.map(sch => {
                 const cap = sch.bus?.totalSeats || 45;
                 const booked = (sch.bookedSeats || []).length;
@@ -403,87 +354,75 @@ const CounterBooking = () => {
                 return (
                   <div
                     key={sch._id}
-                    style={{
-                      background: '#fff', borderRadius: 14, border: '1.5px solid #e2e8f0',
-                      padding: 18, display: 'flex', justifyContent: 'space-between',
-                      alignItems: 'center', flexWrap: 'wrap', gap: 14,
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-                    }}
+                    className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-all flex flex-col md:flex-row md:items-center justify-between gap-5"
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 1 }}>
+                    <div className="flex items-start sm:items-center gap-4 flex-1 min-w-[260px]">
                       {sch.companyId?.logo || sch.company?.logo ? (
                         <img
                           src={sch.companyId?.logo || sch.company?.logo}
                           alt={sch.companyId?.companyName || 'Company Logo'}
-                          style={{
-                            width: 48, height: 48, borderRadius: 12, objectFit: 'cover',
-                            border: '1.5px solid #e2e8f0', flexShrink: 0
-                          }}
+                          className="w-14 h-14 rounded-2xl object-cover border border-slate-200 shrink-0"
                         />
                       ) : (
-                        <div style={{
-                          width: 48, height: 48, borderRadius: 12,
-                          background: 'linear-gradient(135deg, #078930, #065f46)', color: '#ffffff',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: '1.2rem', fontWeight: 900, flexShrink: 0,
-                          boxShadow: '0 2px 8px rgba(7,137,48,0.2)'
-                        }}>
+                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-eb-green to-emerald-800 text-white flex items-center justify-center text-2xl font-black shrink-0 shadow-sm">
                           <FaBus />
                         </div>
                       )}
 
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '0.73rem', color: '#078930', fontWeight: 800, marginBottom: 2 }}>
-                          {sch.companyId?.companyName || sch.company?.companyName || user?.companyId?.companyName || 'Ethio Trip'}
-                        </div>
-                        <div style={{ fontWeight: 900, color: '#0f172a', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span>Bus {sch.bus?.busNumber} — {sch.bus?.type || 'Luxury'}</span>
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-black text-eb-green">
+                            {sch.companyId?.companyName || sch.company?.companyName || user?.companyId?.companyName || 'Ethio Trip'}
+                          </span>
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                            {t('admin.bus', 'Bus')} {sch.bus?.busNumber} · {sch.bus?.type || 'Standard'}
+                          </span>
                           {isRound && (
-                            <span style={{ background: '#fef3c7', color: '#92400e', fontSize: '0.68rem', fontWeight: 800, padding: '2px 6px', borderRadius: 4 }}>
-                              Round-Trip Saver
+                            <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-full">
+                              {t('booking.roundTripDiscount', 'Round-Trip (10% Off)')}
                             </span>
                           )}
                         </div>
-                        <div style={{
-                          fontSize: '0.78rem', color: '#64748b',
-                          display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 8,
-                        }}>
-                          <span><FaCalendarAlt style={{ color: '#078930', marginRight: 3 }} />{sch.date}</span>
-                          <span><FaClock style={{ color: '#078930', marginRight: 3 }} />{sch.departureTime} → {sch.arrivalTime || '—'}</span>
+
+                        <div className="text-sm font-black text-slate-900 flex items-center gap-2">
+                          <span>{t(from, from)}</span>
+                          <span className="text-eb-green">→</span>
+                          <span>{t(to, to)}</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: '#64748b', marginBottom: 3 }}>
-                          <span>{booked} Reserved</span>
-                          <span style={{ color: left > 0 ? '#16a34a' : '#dc2626', fontWeight: 800 }}>
-                            {left} Available
-                          </span>
-                        </div>
-                        <div style={{ height: 5, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden' }}>
-                          <div style={{
-                            height: '100%', width: pct + '%',
-                            background: pct > 80 ? '#ef4444' : '#10b981', borderRadius: 4,
-                          }} />
+
+                        <div className="text-xs text-slate-500 flex items-center gap-4 flex-wrap">
+                          <span><FaCalendarAlt className="text-eb-green mr-1 inline" />{sch.date}</span>
+                          <span><FaClock className="text-eb-green mr-1 inline" />{sch.departureTime} → {sch.arrivalTime || '—'}</span>
                         </div>
                       </div>
                     </div>
 
-                    <div style={{ textAlign: 'right' }}>
-                      {isRound ? (
-                        <div>
-                          <div style={{ fontSize: '1.3rem', fontWeight: 900, color: '#078930' }}>
-                            ETB {finalRate}
-                          </div>
-                          <div style={{ fontSize: '0.72rem', color: '#64748b', textDecoration: 'line-through' }}>
-                            ETB {grossRate} (2 Legs)
-                          </div>
-                          <div style={{ fontSize: '0.68rem', color: '#16a34a', fontWeight: 800 }}>
-                            10% Round-Trip Discount
-                          </div>
+                    <div className="w-full md:w-48 bg-slate-50 rounded-xl p-3 border border-slate-100 flex flex-col justify-center">
+                      <div className="flex justify-between text-xs font-bold text-slate-600 mb-1">
+                        <span>{booked} {t('booking.booked', 'Booked')}</span>
+                        <span className={left > 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                          {left} {t('booking.seatsLeft', 'Seats Left')}
+                        </span>
+                      </div>
+                      <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                        <div
+                          style={{ width: `${pct}%` }}
+                          className={`h-full rounded-full transition-all ${pct > 80 ? 'bg-rose-500' : 'bg-emerald-500'}`}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex sm:flex-row md:flex-col items-center sm:justify-between md:items-end md:justify-center gap-3 shrink-0 border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
+                      <div className="text-left md:text-right">
+                        <div className="text-xl font-black text-slate-900">
+                          ETB {finalRate.toLocaleString()}
                         </div>
-                      ) : (
-                        <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#078930', marginBottom: 8 }}>
-                          ETB {baseRate}
-                        </div>
-                      )}
+                        {isRound && (
+                          <div className="text-[11px] text-slate-400 line-through">
+                            ETB {grossRate.toLocaleString()}
+                          </div>
+                        )}
+                      </div>
 
                       <button
                         type="button"
@@ -492,17 +431,11 @@ const CounterBooking = () => {
                           setSelectedSchedule({ ...sch, tripType, returnDate });
                           setStep('seat_modal');
                         }}
-                        style={{
-                          marginTop: 8,
-                          padding: '9px 18px',
-                          background: left > 0 ? '#078930' : '#94a3b8',
-                          color: '#fff', border: 'none', borderRadius: 8,
-                          fontWeight: 800, fontSize: '0.83rem',
-                          cursor: left > 0 ? 'pointer' : 'not-allowed',
-                          display: 'flex', alignItems: 'center', gap: 6,
-                        }}
+                        className={`px-5 py-2.5 text-white border-0 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-sm ${
+                          left > 0 ? 'bg-eb-green hover:bg-[#067328]' : 'bg-slate-300 cursor-not-allowed'
+                        }`}
                       >
-                        <FaCouch /> {left > 0 ? 'Select Seats' : 'Fully Booked'}
+                        <FaCouch /> {left > 0 ? t('booking.selectSeat', 'Select Seats') : t('booking.soldOut', 'Sold Out')}
                       </button>
                     </div>
                   </div>
@@ -513,112 +446,104 @@ const CounterBooking = () => {
         </div>
       )}
 
-      {/* ── STEP 4: Success Ticket Card ── */}
       {step === 'ticket' && (
-        <div style={{
-          background: '#f0fdf4', border: '2px solid #86efac',
-          borderRadius: 20, padding: 28, textAlign: 'center',
-        }}>
-          <div style={{
-            width: 64, height: 64, borderRadius: '50%', background: '#22c55e',
-            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '1.8rem', margin: '0 auto 16px',
-          }}>
+        <div className="bg-green-50 border-2 border-green-300 rounded-[20px] p-7 text-center">
+          <div className="w-16 h-16 rounded-full bg-green-500 text-white flex items-center justify-center text-[1.8rem] mx-auto mb-4">
             <FaCheckCircle />
           </div>
-          <h2 style={{ margin: '0 0 6px', color: '#166534', fontWeight: 900, fontSize: '1.35rem' }}>
-            Ticket Successfully Issued!
+          <h2 className="m-0 mb-1.5 text-green-800 font-black text-[1.35rem]">
+            {t('ticket.issuedSuccess', 'Ticket Successfully Issued!')}
           </h2>
-          <p style={{ margin: '0 0 20px', color: '#15803d', fontSize: '0.88rem' }}>
-            Reference: <strong>{issuedBooking?.ticketNumber || issuedBooking?._id}</strong>
+          <p className="m-0 mb-5 text-green-700 text-[0.88rem]">
+            {t('ticket.reference', 'Reference')}: <strong>{issuedBooking?.ticketNumber || issuedBooking?._id}</strong>
           </p>
 
-          <div style={{
-            background: '#fff', border: '1px solid #bbf7d0', borderRadius: 14, padding: 18,
-            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))',
-            gap: 14, textAlign: 'left', marginBottom: 20,
-          }}>
+          <div className="bg-white border border-green-200 rounded-2xl p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-left mb-5 shadow-sm">
             <div>
-              <div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 700 }}>PASSENGER</div>
-              <div style={{ fontWeight: 800, color: '#0f172a' }}>{issuedBooking?.passenger?.name}</div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{issuedBooking?.passenger?.phone}</div>
+              <div className="text-[0.68rem] text-slate-500 font-bold uppercase">{t('passenger.passenger', 'Passenger')}</div>
+              <div className="font-extrabold text-slate-900">{issuedBooking?.passenger?.name}</div>
+              <div className="text-[0.75rem] text-slate-500">{issuedBooking?.passenger?.phone}</div>
             </div>
             <div>
-              <div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 700 }}>ROUTE</div>
-              <div style={{ fontWeight: 800, color: '#0f172a' }}>
+              <div className="text-[0.68rem] text-slate-500 font-bold uppercase">{t('admin.route', 'Route')}</div>
+              <div className="font-extrabold text-slate-900">
                 {issuedBooking?.schedule?.route?.from} ➔ {issuedBooking?.schedule?.route?.to}
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+              <div className="text-[0.75rem] text-slate-500">
                 {issuedBooking?.schedule?.date} · {issuedBooking?.schedule?.departureTime}
               </div>
             </div>
             <div>
-              <div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 700 }}>SEATS</div>
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+              <div className="text-[0.68rem] text-slate-500 font-bold uppercase">{t('booking.seats', 'Seats')}</div>
+              <div className="flex gap-1 flex-wrap mt-1">
                 {(issuedBooking?.selectedSeats || []).map(s => (
                   <span
                     key={s}
-                    style={{
-                      background: '#22c55e', color: '#fff',
-                      padding: '2px 8px', borderRadius: 5,
-                      fontWeight: 900, fontSize: '0.8rem',
-                    }}
+                    className="bg-green-500 text-white px-2 py-0.5 rounded font-black text-[0.8rem]"
                   >
-                    Seat {s}
+                    {t('booking.seat', 'Seat')} {s}
                   </span>
                 ))}
               </div>
             </div>
             <div>
-              <div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 700 }}>FARE / STATUS</div>
-              <div style={{ fontWeight: 900, color: '#166534', fontSize: '1.05rem' }}>
+              <div className="text-[0.68rem] text-slate-500 font-bold uppercase">{t('ticket.fareStatus', 'Fare / Status')}</div>
+              <div className="font-black text-green-800 text-[1.05rem]">
                 ETB {issuedBooking?.totalPrice || issuedBooking?.baseFare}
               </div>
-              <div style={{ fontSize: '0.72rem', color: '#15803d', fontWeight: 700 }}>
+              <div className="text-[0.72rem] text-green-700 font-bold">
                 {issuedBooking?.paymentStatus || 'PAID'}
               </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <div className="flex gap-2.5 justify-center flex-wrap">
             <button
               type="button"
               onClick={() => setShowTicketModalBooking(issuedBooking)}
-              style={{
-                padding: '10px 22px', background: '#078930', color: '#fff',
-                border: 'none', borderRadius: 9, fontWeight: 800, fontSize: '0.85rem',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7
-              }}
+              className="px-[22px] py-2.5 bg-eb-green hover:bg-[#067328] text-white border-0 rounded-lg font-extrabold text-[0.85rem] cursor-pointer flex items-center gap-[7px] transition-colors"
             >
-              <FaQrcode /> View Digital Ticket with QR Code
+              <FaQrcode /> {t('ticket.viewDigitalTicket', 'View Digital Ticket with QR Code')}
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const targetEmail = pax.email || issuedBooking?.passenger?.email || issuedBooking?.contactEmail;
+                  if (!targetEmail) {
+                    const entered = window.prompt(t('agent.enterPassengerEmail', "Enter passenger's email address:"));
+                    if (!entered) return;
+                    await notificationAPI.sendTicketEmail({ bookingId: issuedBooking._id, email: entered });
+                  } else {
+                    await notificationAPI.sendTicketEmail({ bookingId: issuedBooking._id, email: targetEmail });
+                  }
+                  toast.success(t('ticket.sentSuccess', 'Ticket sent to passenger email successfully!'));
+                } catch (err) {
+                  toast.error(err.message || t('ticket.sendFailed', 'Failed to send ticket email'));
+                }
+              }}
+              className="px-[22px] py-2.5 bg-blue-600 hover:bg-blue-700 text-white border-0 rounded-lg font-extrabold text-[0.85rem] cursor-pointer flex items-center gap-[7px] transition-colors"
+            >
+              <FaEnvelope /> {t('ticket.sendToEmail', 'Send Ticket to Email')}
             </button>
             <button
               type="button"
               onClick={() => window.print()}
-              style={{
-                padding: '10px 22px', background: '#166534', color: '#fff',
-                border: 'none', borderRadius: 9, fontWeight: 800, fontSize: '0.85rem',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7,
-              }}
+              className="px-[22px] py-2.5 bg-green-800 hover:bg-green-900 text-white border-0 rounded-lg font-extrabold text-[0.85rem] cursor-pointer flex items-center gap-[7px] transition-colors"
             >
-              <FaPrint /> Print Boarding Pass
+              <FaPrint /> {t('ticket.printBoardingPass', 'Print Boarding Pass')}
             </button>
             <button
               type="button"
               onClick={resetAll}
-              style={{
-                padding: '10px 22px', background: '#fff', color: '#334155',
-                border: '1.5px solid #cbd5e1', borderRadius: 9, fontWeight: 700,
-                fontSize: '0.85rem', cursor: 'pointer',
-              }}
+              className="px-[22px] py-2.5 bg-white hover:bg-slate-50 text-slate-700 border-[1.5px] border-slate-300 rounded-lg font-bold text-[0.85rem] cursor-pointer transition-colors"
             >
-              Book Another Ticket
+              {t('booking.bookAnother', 'Book Another Ticket')}
             </button>
           </div>
         </div>
       )}
 
-      {/* ── Seat Selection Modal ── */}
       {step === 'seat_modal' && selectedSchedule && (
         <SeatSelectorModal
           schedule={selectedSchedule}
@@ -629,7 +554,6 @@ const CounterBooking = () => {
         />
       )}
 
-      {/* ── QR Code Ticket Modal (Exact Match with Reference Image) ── */}
       {showTicketModalBooking && (
         <TicketModal
           booking={showTicketModalBooking}

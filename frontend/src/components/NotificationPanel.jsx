@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaBell, FaCheckCircle, FaInfoCircle, FaTimesCircle, FaTimes, FaCheckDouble } from 'react-icons/fa';
+import { FaBell, FaCheckCircle, FaInfoCircle, FaTimesCircle, FaTimes, FaCheckDouble, FaCalendarAlt } from 'react-icons/fa';
 import { notificationAPI } from '../utils/api';
 
 const NotificationPanel = ({ role = 'user', onViewAll = null }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedNotif, setSelectedNotif] = useState(null);
   const panelRef = useRef(null);
 
   const fetchNotifs = async () => {
@@ -25,7 +26,6 @@ const NotificationPanel = ({ role = 'user', onViewAll = null }) => {
     fetchNotifs();
   }, []);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (panelRef.current && !panelRef.current.contains(e.target)) {
@@ -52,198 +52,225 @@ const NotificationPanel = ({ role = 'user', onViewAll = null }) => {
     } catch {}
   };
 
+  const handleNotifClick = (n) => {
+    setSelectedNotif(n);
+    if (!n.read && !n.isRead) markRead(n._id);
+  };
+
   const unreadCount = notifications.filter(n => !n.read && !n.isRead).length;
 
   const iconFor = (type) => {
-    if (type === 'success' || type === 'payment') return <FaCheckCircle style={{ color: '#16a34a' }} />;
-    if (type === 'error' || type === 'cancellation') return <FaTimesCircle style={{ color: '#dc2626' }} />;
-    return <FaInfoCircle style={{ color: '#0284c7' }} />;
+    if (type === 'success' || type === 'payment') return <FaCheckCircle className="text-emerald-600" />;
+    if (type === 'error' || type === 'cancellation') return <FaTimesCircle className="text-red-600" />;
+    return <FaInfoCircle className="text-sky-600" />;
+  };
+
+  const colorFor = (type) => {
+    if (type === 'success' || type === 'payment') return 'bg-emerald-50 border-emerald-200';
+    if (type === 'error' || type === 'cancellation') return 'bg-red-50 border-red-200';
+    return 'bg-sky-50 border-sky-200';
+  };
+
+  const formatDate = (ts) => {
+    if (!ts) return '';
+    return new Date(ts).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   return (
-    <div style={{ position: 'relative' }} ref={panelRef}>
-      {/* Clickable Bell Trigger Button */}
-      <button
-        type="button"
-        onClick={() => {
-          if (!isOpen) fetchNotifs();
-          setIsOpen(prev => !prev);
-        }}
-        title="Notifications"
-        style={{
-          position: 'relative',
-          width: 38,
-          height: 38,
-          borderRadius: '10px',
-          background: isOpen ? '#f0fdf4' : '#f8fafc',
-          border: isOpen ? '1.5px solid #10b981' : '1px solid #e2e8f0',
-          color: isOpen ? '#10b981' : '#475569',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '1.05rem',
-          cursor: 'pointer',
-          transition: 'all 0.15s ease',
-        }}
-      >
-        <FaBell />
-        {unreadCount > 0 && (
-          <span
-            style={{
-              position: 'absolute',
-              top: -3,
-              right: -3,
-              background: '#ef4444',
-              color: '#ffffff',
-              fontSize: '0.62rem',
-              fontWeight: 900,
-              width: 17,
-              height: 17,
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '2px solid #ffffff',
-            }}
-          >
-            {unreadCount}
-          </span>
-        )}
-      </button>
-
-      {/* Popover Dropdown */}
-      {isOpen && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '48px',
-            right: 0,
-            width: '350px',
-            maxWidth: '90vw',
-            background: '#ffffff',
-            borderRadius: '16px',
-            boxShadow: '0 15px 40px rgba(0,0,0,0.15)',
-            border: '1px solid #e2e8f0',
-            zIndex: 1100,
-            overflow: 'hidden',
+    <>
+      <div className="relative" ref={panelRef}>
+        {}
+        <button
+          type="button"
+          onClick={() => {
+            if (!isOpen) fetchNotifs();
+            setIsOpen(prev => !prev);
           }}
+          title="Notifications"
+          className={`relative w-9 h-9 rounded-xl border flex items-center justify-center text-base cursor-pointer transition-all ${
+            isOpen
+              ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 text-emerald-600 dark:text-emerald-400'
+              : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+          }`}
         >
-          {/* Header */}
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '12px 16px',
-              borderBottom: '1px solid #f1f5f9',
-              background: '#f8fafc',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <FaBell style={{ color: '#10b981' }} />
-              <strong style={{ fontSize: '0.88rem', color: '#0f172a' }}>Notifications</strong>
-              {unreadCount > 0 && (
-                <span style={{ background: '#ef4444', color: '#fff', fontSize: '0.62rem', fontWeight: 800, padding: '2px 6px', borderRadius: '50px' }}>
-                  {unreadCount}
-                </span>
-              )}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {unreadCount > 0 && (
+          <FaBell />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-slate-900">
+              {unreadCount}
+            </span>
+          )}
+        </button>
+
+        {}
+        {isOpen && (
+          <div className="absolute top-12 right-0 w-[350px] max-w-[90vw] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 z-[1100] overflow-hidden">
+            {}
+            <div className="flex justify-between items-center px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/50">
+              <div className="flex items-center gap-2">
+                <FaBell className="text-emerald-500" />
+                <strong className="text-xs font-bold text-slate-900 dark:text-slate-100">Notifications</strong>
+                {unreadCount > 0 && (
+                  <span className="bg-rose-500 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">
+                    {unreadCount}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2.5">
+                {unreadCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={markAllRead}
+                    className="bg-transparent border-0 text-emerald-600 dark:text-emerald-400 text-xs font-bold cursor-pointer flex items-center gap-1 hover:underline"
+                  >
+                    <FaCheckDouble /> Mark all
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={markAllRead}
-                  style={{ background: 'none', border: 'none', color: '#10b981', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                  onClick={() => setIsOpen(false)}
+                  title="Close"
+                  className="bg-transparent border-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer text-sm p-0.5"
                 >
-                  <FaCheckDouble /> Mark all
+                  <FaTimes />
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                title="Close"
-                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '0.9rem', display: 'flex', alignItems: 'center', padding: 2 }}
-              >
-                <FaTimes />
-              </button>
-            </div>
-          </div>
-
-          {/* List */}
-          <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
-            {loading ? (
-              <div style={{ textAlign: 'center', padding: 24, color: '#94a3b8', fontSize: '0.8rem' }}>Loading notifications...</div>
-            ) : notifications.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '32px 16px', color: '#94a3b8' }}>
-                <FaBell style={{ fontSize: '1.8rem', opacity: 0.25, display: 'block', margin: '0 auto 8px' }} />
-                <p style={{ fontSize: '0.82rem', margin: 0, fontWeight: 600 }}>No notifications</p>
               </div>
-            ) : (
-              notifications.map(n => (
-                <div
-                  key={n._id}
-                  onClick={() => (!n.read && !n.isRead) && markRead(n._id)}
-                  style={{
-                    display: 'flex',
-                    gap: 10,
-                    padding: '11px 16px',
-                    background: (n.read || n.isRead) ? '#ffffff' : '#f0fdf4',
-                    borderBottom: '1px solid #f8fafc',
-                    cursor: (n.read || n.isRead) ? 'default' : 'pointer',
-                    transition: 'background 0.15s ease',
-                  }}
-                >
-                  <div style={{ flexShrink: 0, marginTop: 2 }}>{iconFor(n.type)}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: '0.8rem', color: '#0f172a', margin: '0 0 2px', fontWeight: (n.read || n.isRead) ? 500 : 700, lineHeight: 1.3 }}>
-                      {n.message || n.title}
-                    </p>
-                    <p style={{ fontSize: '0.68rem', color: '#94a3b8', margin: 0 }}>
-                      {n.createdAt ? new Date(n.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
-                    </p>
-                  </div>
-                  {(!n.read && !n.isRead) && (
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', flexShrink: 0, marginTop: 6 }} />
-                  )}
+            </div>
+
+            {}
+            <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+              {loading ? (
+                <div className="text-center py-6 text-slate-400 text-xs">Loading notifications...</div>
+              ) : notifications.length === 0 ? (
+                <div className="text-center py-8 px-4 text-slate-400">
+                  <FaBell className="text-2xl opacity-30 mx-auto mb-2" />
+                  <p className="text-xs font-semibold m-0">No notifications</p>
                 </div>
-              ))
+              ) : (
+                notifications.map(n => {
+                  const isRead = n.read || n.isRead;
+                  return (
+                    <div
+                      key={n._id}
+                      onClick={() => handleNotifClick(n)}
+                      className={`flex gap-3 px-4 py-3 transition-colors cursor-pointer ${
+                        isRead
+                          ? 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                          : 'bg-emerald-50/40 dark:bg-emerald-950/20 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                      }`}
+                    >
+                      <div className="shrink-0 mt-0.5">{iconFor(n.type)}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-xs text-slate-900 dark:text-slate-100 m-0 mb-0.5 leading-snug truncate ${isRead ? 'font-medium' : 'font-bold'}`}>
+                          {n.title || n.message}
+                        </p>
+                        {n.message && n.title && n.message !== n.title && (
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 m-0 mb-0.5 line-clamp-1">
+                            {n.message}
+                          </p>
+                        )}
+                        <p className="text-[10px] text-slate-400 m-0">
+                          {n.createdAt ? new Date(n.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                        </p>
+                      </div>
+                      {!isRead && (
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {}
+            {onViewAll && (
+              <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/50 text-center">
+                <button
+                  type="button"
+                  onClick={() => { setIsOpen(false); onViewAll(); }}
+                  className="bg-transparent border-0 text-emerald-600 dark:text-emerald-400 text-xs font-bold cursor-pointer hover:underline"
+                >
+                  View all notifications →
+                </button>
+              </div>
             )}
           </div>
+        )}
+      </div>
 
-          {/* Footer view all link */}
-          {onViewAll && (
-            <div
-              style={{
-                padding: '10px 16px',
-                borderTop: '1px solid #f1f5f9',
-                background: '#f8fafc',
-                textAlign: 'center',
-              }}
-            >
+      {}
+      {selectedNotif && (
+        <div
+          className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setSelectedNotif(null)}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-6"
+            onClick={e => e.stopPropagation()}
+          >
+            {}
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0 border ${
+                colorFor(selectedNotif.type)
+              }`}>
+                {iconFor(selectedNotif.type)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-black text-slate-900 dark:text-white m-0 leading-snug">
+                  {selectedNotif.title || 'Notification'}
+                </h3>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <FaCalendarAlt className="text-slate-400 text-[10px]" />
+                  <span className="text-[10px] text-slate-400">
+                    {formatDate(selectedNotif.createdAt)}
+                  </span>
+                </div>
+              </div>
               <button
                 type="button"
-                onClick={() => {
-                  setIsOpen(false);
-                  onViewAll();
-                }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#078930',
-                  fontSize: '0.8rem',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                }}
+                onClick={() => setSelectedNotif(null)}
+                className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center cursor-pointer transition shrink-0"
               >
-                View all notifications →
+                <FaTimes className="text-xs" />
               </button>
             </div>
-          )}
+
+            {}
+            <div className="bg-slate-50 dark:bg-slate-800/60 rounded-xl p-4">
+              <p className="text-sm text-slate-700 dark:text-slate-300 m-0 leading-relaxed">
+                {selectedNotif.message || selectedNotif.title || 'No message content.'}
+              </p>
+            </div>
+
+            {}
+            {selectedNotif.type && (
+              <div className="mt-3 flex items-center gap-2">
+                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide ${
+                  selectedNotif.type === 'success' || selectedNotif.type === 'payment'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : selectedNotif.type === 'error' || selectedNotif.type === 'cancellation'
+                    ? 'bg-red-100 text-red-800'
+                    : 'bg-sky-100 text-sky-800'
+                }`}>
+                  {selectedNotif.type}
+                </span>
+                {(selectedNotif.read || selectedNotif.isRead) && (
+                  <span className="text-[10px] font-semibold text-slate-400">• Read</span>
+                )}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setSelectedNotif(null)}
+              className="mt-4 w-full py-2.5 bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 dark:hover:bg-slate-600 text-white text-xs font-bold rounded-xl cursor-pointer transition"
+            >
+              Close
+            </button>
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 
 export default NotificationPanel;
-

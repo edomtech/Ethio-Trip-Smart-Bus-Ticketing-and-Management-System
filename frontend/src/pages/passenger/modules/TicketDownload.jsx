@@ -4,7 +4,9 @@ import { QRCodeSVG } from 'qrcode.react';
 import jsPDF from 'jspdf';
 import { bookingAPI } from '../../../utils/api';
 import { useAuth } from '../../../contexts/AuthContext';
-import { toast } from 'react-toastify';
+import { useTranslation } from '../../../i18n';
+import { useNotification } from '../../../contexts/NotificationContext';
+import { MESSAGES } from '../../../constants/messages';
 
 const convertSvgToPng = (svgEl) => {
   return new Promise((resolve) => {
@@ -53,16 +55,17 @@ const normalizeTicketBooking = (bk) => {
 
 const TicketDownload = ({ bookings: initialBookings = null, onViewTicket = null, onBookNow = null, onViewHistory = null }) => {
   const { user } = useAuth();
+  const { t } = useTranslation();
+  const notify = useNotification();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
-  const [activeLeg, setActiveLeg] = useState('outbound'); // 'outbound' | 'return'
+  const [activeLeg, setActiveLeg] = useState('outbound');  
 
   useEffect(() => {
     let isMounted = true;
 
     const loadTickets = async () => {
-      // 1. If initialBookings provided and non-empty, use immediately
       if (initialBookings && Array.isArray(initialBookings) && initialBookings.length > 0) {
         const paid = initialBookings.filter(isConfirmedOrPaid).map(normalizeTicketBooking);
         if (isMounted) {
@@ -72,7 +75,6 @@ const TicketDownload = ({ bookings: initialBookings = null, onViewTicket = null,
         }
       }
 
-      // 2. Fetch fresh bookings from API
       try {
         const res = await bookingAPI.getMyBookings();
         const list = Array.isArray(res) ? res : (res?.bookings || res?.data || []);
@@ -97,77 +99,50 @@ const TicketDownload = ({ bookings: initialBookings = null, onViewTicket = null,
     return () => { isMounted = false; };
   }, [initialBookings]);
 
-  const handleDeleteTicket = (id, tktNo) => {
-    if (!window.confirm(`Are you sure you want to delete ticket ${tktNo || ''} from your history?`)) return;
+  const handleDeleteTicket = async (id, tktNo) => {
+    const confirmed = await notify.confirm({
+      title: 'Remove Ticket From View?',
+      message: `Are you sure you want to remove ticket ${tktNo || ''} from your history?`,
+      description: 'This only hides the ticket from this device. Your booking and ticket remain available in your booking history.',
+      confirmLabel: 'Remove',
+      cancelLabel: 'Cancel',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     setBookings(prev => {
       const updated = prev.filter(b => b._id !== id);
       if (selected?._id === id) setSelected(updated[0] || null);
       return updated;
     });
-    toast.success(`Ticket ${tktNo || ''} removed from view`);
   };
 
   if (loading) {
     return (
-      <div style={{ textAlign:'center', padding:'60px 0', color:'#64748b' }}>
-        <div style={{ width: 36, height: 36, border: '3px solid #e2e8f0', borderTopColor: '#078930', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
-        <p style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>Loading your E-Tickets...</p>
+      <div className="text-center py-[60px] px-0 text-slate-500">
+        <div className="w-9 h-9 border-[3px] border-slate-200 border-t-[#078930] rounded-full animate-spin mx-auto mb-4" />
+        <p className="font-bold text-[0.9rem] text-slate-900">Loading your E-Tickets...</p>
       </div>
     );
   }
 
   if (!bookings.length) {
     return (
-      <div style={{
-        background: '#ffffff',
-        borderRadius: '16px',
-        padding: '48px 24px',
-        textAlign: 'center',
-        border: '1px solid #e2e8f0',
-        maxWidth: '560px',
-        margin: '20px auto',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.03)'
-      }}>
-        <div style={{
-          width: 64,
-          height: 64,
-          borderRadius: '50%',
-          background: '#f0fdf4',
-          color: '#078930',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '1.8rem',
-          margin: '0 auto 16px',
-          border: '1px solid #bbf7d0'
-        }}>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl p-12 text-center border border-slate-200 dark:border-slate-800 max-w-[560px] mx-auto my-5 shadow-xs">
+        <div className="w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-[#078930] dark:text-emerald-400 flex items-center justify-center text-3xl mx-auto mb-4 border border-emerald-200 dark:border-emerald-800">
           <FaTicketAlt />
         </div>
-        <h3 style={{ margin: '0 0 8px', fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>
+        <h3 className="m-0 mb-2 text-[1.2rem] font-extrabold text-slate-900 dark:text-white">
           No Confirmed E-Tickets Yet
         </h3>
-        <p style={{ color: '#64748b', fontSize: '0.88rem', margin: '0 0 24px', lineHeight: 1.5 }}>
+        <p className="text-slate-500 dark:text-slate-400 text-[0.88rem] m-0 mb-6 leading-relaxed">
           Your digital E-Tickets and scannable QR verification codes appear here automatically once you book and pay for your trip.
         </p>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        <div className="flex justify-center gap-3 flex-wrap">
           {onBookNow && (
             <button
               type="button"
               onClick={onBookNow}
-              style={{
-                padding: '10px 20px',
-                background: '#078930',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '8px',
-                fontWeight: 800,
-                fontSize: '0.85rem',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                boxShadow: '0 2px 8px rgba(7,137,48,0.25)'
-              }}
+              className="py-2.5 px-5 bg-[#078930] hover:bg-emerald-700 text-white border-none rounded-lg font-extrabold text-[0.85rem] cursor-pointer inline-flex items-center gap-2 shadow-md shadow-emerald-700/20 transition"
             >
               <FaBus /> Book a Bus Ticket
             </button>
@@ -176,16 +151,7 @@ const TicketDownload = ({ bookings: initialBookings = null, onViewTicket = null,
             <button
               type="button"
               onClick={onViewHistory}
-              style={{
-                padding: '10px 18px',
-                background: '#f8fafc',
-                color: '#334155',
-                border: '1.5px solid #cbd5e1',
-                borderRadius: '8px',
-                fontWeight: 700,
-                fontSize: '0.85rem',
-                cursor: 'pointer'
-              }}
+              className="py-2.5 px-4.5 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-[0.85rem] cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition"
             >
               View Booking History
             </button>
@@ -260,7 +226,6 @@ const TicketDownload = ({ bookings: initialBookings = null, onViewTicket = null,
   const returnPrice = selected?.returnLeg?.price || Math.round(totalPrice / 2);
   const currentPrice = isOutbound ? outboundPrice : returnPrice;
 
-  // Format date with day of week (e.g. 2026-08-09 (Saturday))
   const formattedDate = (() => {
     try {
       const d = new Date(depDate);
@@ -269,7 +234,6 @@ const TicketDownload = ({ bookings: initialBookings = null, onViewTicket = null,
         return `${depDate} (${days[d.getDay()]})`;
       }
     } catch {
-      // fallback
     }
     return depDate;
   })();
@@ -282,7 +246,6 @@ const TicketDownload = ({ bookings: initialBookings = null, onViewTicket = null,
     user?.name ||
     'Passenger';
 
-  // Real scan-identifiable QR verification string
   const qrVerificationData = [
     `TICKET: ${currentTicketNo}`,
     `LEG: ${isOutbound ? 'OUTBOUND' : 'RETURN'}`,
@@ -299,17 +262,15 @@ const TicketDownload = ({ bookings: initialBookings = null, onViewTicket = null,
   ].join('\n');
 
   const renderTicketPage = async (doc, ticketData) => {
-    // Top Red & Yellow Stripe
     doc.setFillColor(220, 38, 38);
     doc.rect(0, 0, 90, 3, 'F');
     doc.setFillColor(234, 179, 8);
     doc.rect(0, 3, 90, 1.5, 'F');
 
-    // Title
     doc.setTextColor(15, 23, 42);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(15);
-    doc.text('E-TICKET', 45, 13, { align: 'center' });
+    doc.setFontSize(13);
+    doc.text('ETHIO TRIP E-TICKET', 45, 13, { align: 'center' });
 
     doc.setFontSize(7.5);
     doc.setFont('helvetica', 'normal');
@@ -345,14 +306,12 @@ const TicketDownload = ({ bookings: initialBookings = null, onViewTicket = null,
       y += 7;
     });
 
-    // Capture QR Code SVG as PNG image
     let qrDataUrl = null;
     const svgEl = document.querySelector(`#qr-dl-svg-${ticketData.ticketNo}`) || document.querySelector('.ticket-download-qr svg');
     if (svgEl) {
       qrDataUrl = await convertSvgToPng(svgEl);
     }
 
-    // Bottom QR Box
     doc.setFillColor(241, 245, 249);
     doc.roundedRect(18, y + 2, 54, 44, 3, 3, 'F');
 
@@ -365,7 +324,6 @@ const TicketDownload = ({ bookings: initialBookings = null, onViewTicket = null,
     doc.setTextColor(100, 116, 139);
     doc.text('Scan to Verify Ticket', 45, y + 38, { align: 'center' });
 
-    // Dark Green Footer
     doc.setFillColor(6, 47, 34);
     doc.rect(0, 198, 90, 12, 'F');
     doc.setFont('helvetica', 'normal');
@@ -373,7 +331,6 @@ const TicketDownload = ({ bookings: initialBookings = null, onViewTicket = null,
     doc.text('www.ethiotrip.com', 82, 205, { align: 'right' });
   };
 
-  // PDF Ticket Generation
   const handleDownloadPDF = async () => {
     try {
       const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: [90, 210] });
@@ -414,11 +371,11 @@ const TicketDownload = ({ bookings: initialBookings = null, onViewTicket = null,
         };
         await renderTicketPage(doc, returnData);
         doc.save(`ETickets_${selected?.ticketNumber || currentTicketNo}_RoundTrip.pdf`);
-        toast.success('Both Outbound & Return E-Tickets downloaded successfully!');
+        notify.success(MESSAGES.ticket.downloaded);
       } else {
         await renderTicketPage(doc, outboundData);
         doc.save(`ETicket_${currentTicketNo}.pdf`);
-        toast.success('E-Ticket PDF downloaded with QR Code!');
+        notify.success(MESSAGES.ticket.downloaded);
       }
     } catch (err) {
       console.error('PDF generation error, falling back to print:', err);
@@ -427,174 +384,137 @@ const TicketDownload = ({ bookings: initialBookings = null, onViewTicket = null,
   };
 
   const ticketRows = [
-    { label: 'Ticket No', value: currentTicketNo },
-    { label: 'Passenger Name', value: passengerName },
-    { label: 'Bus Company', value: operatorName },
-    { label: 'Bus', value: busType },
-    { label: 'Bus Number', value: busNumber },
-    { label: 'Route', value: `${routeFrom} -> ${routeTo}` },
-    { label: 'Date', value: formattedDate },
-    { label: 'Departure Time', value: depTime },
-    { label: 'Arrival Time', value: arrTime },
-    { label: 'Seat No', value: seat },
-    { label: 'Price', value: `${totalPrice} ETB` },
-    { label: 'Payment Status', value: (paymentStatus || 'PAID').toString().toUpperCase() },
+    { label: t('ticket no', 'Ticket No'), value: currentTicketNo },
+    { label: t('passenger name', 'Passenger Name'), value: passengerName },
+    { label: t('bus company', 'Bus Company'), value: operatorName },
+    { label: t('buses', 'Bus'), value: busType },
+    { label: t('bus number', 'Bus Number'), value: busNumber },
+    { label: t('trip route', 'Route'), value: `${routeFrom} -> ${routeTo}` },
+    { label: t('date', 'Date'), value: formattedDate },
+    { label: t('departure time', 'Departure Time'), value: depTime },
+    { label: t('arrival time', 'Arrival Time'), value: arrTime },
+    { label: t('seat no', 'Seat No'), value: seat },
+    { label: t('price', 'Price'), value: `${totalPrice} ETB` },
+    { label: t('payment status', 'Payment Status'), value: (paymentStatus || 'PAID').toString().toUpperCase() },
   ];
 
   return (
-    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))', gap:24, alignItems: 'flex-start' }}>
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-6 items-start">
 
-      {/* Left — ticket selector list with Delete button */}
-      <div style={{ background: '#fff', padding: 18, borderRadius: 16, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-        <h4 style={{ fontWeight:800, color:'#0f172a', margin: '0 0 12px', fontSize:'0.9rem' }}>
-          My Confirmed Tickets ({bookings.length})
+      {}
+      <div className="bg-white p-[18px] rounded-2xl border border-slate-200 shadow-sm">
+        <h4 className="font-extrabold text-slate-900 mb-3 text-[0.9rem]">
+          {t('confirmed tickets', 'My Confirmed Tickets')} ({bookings.length})
         </h4>
-        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {bookings.map(bk => {
-            const isSelected = selected?._id === bk._id;
-            return (
-              <div key={bk._id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <button
-                  onClick={() => { setSelected(bk); setActiveLeg('outbound'); }}
-                  style={{
-                    flex: 1, padding:'12px 14px', borderRadius:10,
-                    border: `2px solid ${isSelected ? '#078930' : '#e2e8f0'}`,
-                    background: isSelected ? '#f0fdf4' : '#fff',
-                    textAlign:'left', cursor:'pointer', transition:'all .15s'
-                  }}
-                >
-                  <div style={{ fontWeight:800, fontSize:'0.85rem', color:'#0f172a', marginBottom:2, display: 'flex', justifyContent: 'space-between' }}>
-                    <span>{bk.schedule?.route?.from || 'Origin'} ➔ {bk.schedule?.route?.to || 'Destination'}</span>
-                    {bk.tripType === 'round' && <span style={{ fontSize: '0.68rem', color: '#d97706', fontWeight: 800 }}>🔁 Round</span>}
-                  </div>
-                  <div style={{ fontSize:'0.74rem', color:'#078930', fontWeight: 700, fontFamily: 'monospace' }}>{bk.ticketNumber}</div>
-                  <div style={{ fontSize:'0.7rem', color:'#64748b', marginTop:2 }}>
-                    {bk.schedule?.date} · {bk.companyId?.companyName || 'Ethio Trip'}
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  title="Delete ticket from history"
-                  onClick={() => handleDeleteTicket(bk._id, bk.ticketNumber)}
-                  style={{
-                    padding: '12px 10px', borderRadius: 10,
-                    border: '1.5px solid #fecaca', background: '#fef2f2',
-                    color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0
-                  }}
-                >
-                  <FaTrash />
-                </button>
-              </div>
-            );
-          })}
+        <div className="flex flex-col gap-2">
+          {bookings.length === 0 ? (
+            <div className="text-slate-400 text-[0.8rem] py-3 text-center">
+              {t('no tickets found', 'No tickets found')}
+            </div>
+          ) : (
+            bookings.map(bk => {
+              const isSelected = selected?._id === bk._id;
+              return (
+                <div key={bk._id} className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => { setSelected(bk); setActiveLeg('outbound'); }}
+                    className={`flex-1 px-[14px] py-[12px] rounded-[10px] text-left cursor-pointer transition-all duration-150 ${
+                      isSelected
+                        ? 'border-2 border-[#078930] bg-green-50'
+                        : 'border-2 border-slate-200 bg-white'
+                    }`}
+                  >
+                    <div className="font-extrabold text-[0.85rem] text-slate-900 mb-0.5 flex justify-between">
+                      <span>{bk.schedule?.route?.from || 'Origin'} ➔ {bk.schedule?.route?.to || 'Destination'}</span>
+                      {bk.tripType === 'round' && <span className="text-[0.68rem] text-amber-600 font-extrabold">🔁 {t('round', 'Round')}</span>}
+                    </div>
+                    <div className="text-[0.74rem] text-[#078930] font-bold font-mono">{bk.ticketNumber}</div>
+                    <div className="text-[0.7rem] text-slate-500 mt-0.5">
+                      {bk.schedule?.date} · {bk.companyId?.companyName || 'Ethio Trip'}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    title={t('delete', 'Delete')}
+                    onClick={() => handleDeleteTicket(bk._id, bk.ticketNumber)}
+                    className="py-3 px-2.5 rounded-[10px] border border-[1.5px] border-red-200 bg-red-50 text-red-600 cursor-pointer flex items-center justify-center shrink-0 hover:bg-red-100 transition-colors"
+                  >
+                    <FaTrash />
+                  </button>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 
-      {/* Right — exact matching E-Ticket card */}
+      {}
       {selected && (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{
-            background:'#fff', borderRadius:16, overflow:'hidden',
-            boxShadow:'0 10px 30px rgba(0,0,0,.12)', border:'1px solid #e2e8f0',
-            width: '100%', maxWidth: 420
-          }}>
+        <div className="flex flex-col items-center">
+          <div className="bg-white rounded-2xl overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.12)] border border-slate-200 w-full max-w-[420px]">
 
-            {/* Top Red & Yellow Accent Stripe */}
-            <div style={{ height: 5, background: '#dc2626', width: '100%' }} />
-            <div style={{ height: 2.5, background: '#eab308', width: '100%' }} />
+            {}
+            <div className="h-[5px] bg-red-600 w-full" />
+            <div className="h-[2.5px] bg-yellow-400 w-full" />
 
-            {/* Round trip tab switcher */}
+            {}
             {isRoundTrip && (
-              <div style={{ display: 'flex', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+              <div className="flex bg-slate-50 border-b border-slate-200">
                 <button
                   type="button"
                   onClick={() => setActiveLeg('outbound')}
-                  style={{
-                    flex: 1, padding: '9px 0', border: 'none',
-                    borderBottom: activeLeg === 'outbound' ? '3px solid #078930' : 'none',
-                    background: activeLeg === 'outbound' ? '#ffffff' : 'transparent',
-                    fontWeight: 800, color: activeLeg === 'outbound' ? '#078930' : '#64748b',
-                    fontSize: '0.78rem', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5
-                  }}
+                  className={`flex-1 py-[9px] border-none text-[0.78rem] font-extrabold cursor-pointer flex items-center justify-center gap-1.5 transition-colors ${
+                    activeLeg === 'outbound'
+                      ? 'bg-white text-[#078930] border-b-[3px] border-b-[#078930]'
+                      : 'bg-transparent text-slate-500'
+                  }`}
                 >
-                  <FaTicketAlt /> Outbound Ticket
+                  <FaTicketAlt /> {t('outbound ticket', 'Outbound Ticket')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveLeg('return')}
-                  style={{
-                    flex: 1, padding: '9px 0', border: 'none',
-                    borderBottom: activeLeg === 'return' ? '3px solid #d97706' : 'none',
-                    background: activeLeg === 'return' ? '#ffffff' : 'transparent',
-                    fontWeight: 800, color: activeLeg === 'return' ? '#d97706' : '#64748b',
-                    fontSize: '0.78rem', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5
-                  }}
+                  className={`flex-1 py-[9px] border-none text-[0.78rem] font-extrabold cursor-pointer flex items-center justify-center gap-1.5 transition-colors ${
+                    activeLeg === 'return'
+                      ? 'bg-white text-amber-600 border-b-[3px] border-b-amber-600'
+                      : 'bg-transparent text-slate-500'
+                  }`}
                 >
-                  <FaTicketAlt /> Return Ticket
+                  <FaTicketAlt /> {t('return ticket', 'Return Ticket')}
                 </button>
               </div>
             )}
 
-            {/* Ticket Body */}
-            <div style={{ padding: '20px 24px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* Title Header */}
-              <div style={{ textAlign: 'center', marginBottom: 6 }}>
-                <h1 style={{ margin: '0 0 4px', fontSize: '1.65rem', fontWeight: 900, color: '#0f172a', letterSpacing: '0.5px' }}>
-                  E-TICKET
+            {}
+            <div className="px-6 pt-5 pb-4 flex flex-col gap-3.5">
+              {}
+              <div className="text-center mb-1.5">
+                <h1 className="m-0 mb-1 text-[1.65rem] font-black text-slate-900 tracking-[0.5px]">
+                  {t('e-ticket', 'E-TICKET')}
                 </h1>
-                <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b', fontWeight: 500 }}>
-                  Thank you for choosing {operatorName}!
+                <p className="m-0 text-[0.82rem] text-slate-500 font-medium">
+                  {operatorName}
                 </p>
               </div>
 
-              {/* Key-Value Rows */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid #f1f5f9', paddingTop: 14 }}>
+              {}
+              <div className="flex flex-col gap-2.5 border-t border-slate-100 pt-3.5">
                 {ticketRows.map((row) => (
                   <div
                     key={row.label}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      fontSize: '0.84rem'
-                    }}
+                    className="flex justify-between items-center text-[0.84rem]"
                   >
-                    <span style={{ color: '#64748b', fontWeight: 500 }}>{row.label}</span>
-                    <span style={{
-                      color: '#0f172a',
-                      fontWeight: 800,
-                      textAlign: 'right',
-                      fontFamily: row.label === 'Ticket No' ? 'monospace' : 'inherit'
-                    }}>
+                    <span className="text-slate-500 font-medium">{row.label}</span>
+                    <span className={`text-slate-900 font-extrabold text-right ${row.label === t('ticket no', 'Ticket No') ? 'font-mono' : 'font-[inherit]'}`}>
                       {row.value}
                     </span>
                   </div>
                 ))}
               </div>
 
-              {/* QR Code Container */}
-              <div className="ticket-download-qr" style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                marginTop: 6,
-                padding: '16px',
-                background: '#f8fafc',
-                borderRadius: 14,
-                border: '1px solid #e2e8f0'
-              }}>
-                <div style={{
-                  background: '#ffffff',
-                  padding: 10,
-                  borderRadius: 10,
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
+              {}
+              <div className="ticket-download-qr flex flex-col items-center mt-1.5 p-4 bg-slate-50 rounded-[14px] border border-slate-200">
+                <div className="bg-white p-2.5 rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] flex items-center justify-center">
                   <QRCodeSVG
                     id={`qr-dl-svg-${currentTicketNo}`}
                     value={qrVerificationData}
@@ -603,71 +523,44 @@ const TicketDownload = ({ bookings: initialBookings = null, onViewTicket = null,
                     includeMargin={false}
                   />
                 </div>
-                <span style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600, marginTop: 8 }}>
-                  Scan to Verify Ticket
+                <span className="text-[0.74rem] text-slate-500 font-semibold mt-2">
+                  {t('scan to verify ticket', 'Scan to Verify Ticket')}
                 </span>
               </div>
 
-              {/* Action Buttons */}
-              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              {}
+              <div className="flex gap-2 mt-1">
                 <button
                   type="button"
                   onClick={handleDownloadPDF}
-                  style={{
-                    flex: 1, padding: '10px',
-                    background: '#078930',
-                    color: '#ffffff', border: 'none', borderRadius: 8,
-                    fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    boxShadow: '0 2px 8px rgba(7,137,48,0.25)'
-                  }}
+                  className="flex-1 py-2.5 px-3 bg-[#078930] text-white border-none rounded-lg font-extrabold text-[0.82rem] cursor-pointer flex items-center justify-center gap-1.5 shadow-[0_2px_8px_rgba(7,137,48,0.25)] hover:bg-[#056325] transition-colors"
                 >
-                  <FaDownload /> {isRoundTrip ? 'Download Both Tickets (PDF)' : 'Download E-Ticket'}
+                  <FaDownload /> {isRoundTrip ? t('download both tickets (pdf)', 'Download Both Tickets (PDF)') : t('download e-ticket', 'Download E-Ticket')}
                 </button>
                 {onViewTicket && (
                   <button
                     type="button"
                     onClick={() => onViewTicket(selected)}
-                    style={{
-                      padding: '10px 14px',
-                      background: '#ecfdf5',
-                      color: '#078930', border: '1.5px solid #a7f3d0', borderRadius: 8,
-                      fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5
-                    }}
+                    className="py-2.5 px-3.5 bg-green-50 text-[#078930] border border-[1.5px] border-green-200 rounded-lg font-extrabold text-[0.82rem] cursor-pointer flex items-center justify-center gap-1.5 hover:bg-green-100 transition-colors"
                     title="Open full E-Ticket modal"
                   >
-                    <FaTicketAlt /> Full View
+                    <FaTicketAlt /> {t('full view', 'Full View')}
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  style={{
-                    padding: '10px 16px',
-                    background: '#ffffff',
-                    color: '#334155', border: '1.5px solid #cbd5e1', borderRadius: 8,
-                    fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5
-                  }}
+                  className="py-2.5 px-4 bg-white text-slate-700 border border-[1.5px] border-slate-300 rounded-lg font-bold text-[0.82rem] cursor-pointer flex items-center justify-center gap-1.5 hover:bg-slate-50 transition-colors"
                 >
-                  <FaPrint /> Print
+                  <FaPrint /> {t('print', 'Print')}
                 </button>
               </div>
             </div>
 
-            {/* Dark Green Footer Bar */}
-            <div style={{
-              background: '#062f22',
-              padding: '12px 20px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              color: '#ffffff',
-              fontSize: '0.78rem'
-            }}>
-              <span style={{ fontWeight: 800 }}>Safe Journey!</span>
-              <span style={{ opacity: 0.85, fontSize: '0.74rem' }}>www.ethiotrip.com</span>
+            {}
+            <div className="bg-[#062f22] px-5 py-3 flex justify-between items-center text-white text-[0.78rem]">
+              <span className="font-extrabold">{t('safe journey!', 'Safe Journey!')}</span>
+              <span className="opacity-85 text-[0.74rem]">www.ethiotrip.com</span>
             </div>
           </div>
         </div>

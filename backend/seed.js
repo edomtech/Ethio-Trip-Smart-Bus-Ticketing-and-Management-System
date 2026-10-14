@@ -2,7 +2,6 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 
-// Models
 const Company = require('./models/Company');
 const User = require('./models/User');
 const Bus = require('./models/Bus');
@@ -17,6 +16,9 @@ const Notification = require('./models/Notification');
 const SupportTicket = require('./models/SupportTicket');
 const ConductorReport = require('./models/ConductorReport');
 
+const { ROLES } = require('./constants/roles');
+const { BOOKING_STATUS, PAYMENT_STATUS, TICKET_STATUS, BOARDING_STATUS } = require('./constants/statuses');
+
 dotenv.config();
 
 const getFutureDate = (daysAhead) => {
@@ -28,9 +30,8 @@ const getFutureDate = (daysAhead) => {
 const seed = async () => {
   try {
     await connectDB();
-    console.log('🌱 Starting comprehensive database seed for Smart Bus Ticketing System...');
+    console.log('🌱 Starting database seed for Ethio Trip — Smart Multi-Operator Bus Ticketing System...');
 
-    // Clear existing collections
     await Promise.all([
       Company.deleteMany({}),
       User.deleteMany({}),
@@ -48,7 +49,6 @@ const seed = async () => {
     ]);
     console.log('🧹 Cleaned existing database collections');
 
-    // 1. Create Transport Companies
     const companies = await Company.insertMany([
       {
         companyName: 'Selam Bus Line',
@@ -60,27 +60,38 @@ const seed = async () => {
         address: 'Meskel Square, Addis Ababa',
         city: 'Addis Ababa',
         logo: '/logos/selam_bus.png',
-        description: 'Ethiopia’s premier luxury intercity coach transportation service with high-speed WiFi and AC.',
+        description: 'Ethiopia premier luxury intercity coach transportation service with high-speed WiFi and AC.',
         status: 'active',
         rating: 4.9,
         totalReviews: 54,
-        cancellationPolicy: { allowed: true, deadlineHours: 24, refundPercentage: 90 },
+        paymentMethods: {
+          telebirr: { enabled: true, accountNumber: '0911223344' },
+          cbe: { enabled: true, accountNumber: '1000123456789' },
+          chapa: { enabled: true, accountNumber: 'CHAPA-ET-2026-LIVE' },
+        },
+        payment: { provider: 'CHAPA', enabled: true, mode: 'LIVE', splitType: 'percentage', splitValue: 90 },
       },
       {
-        companyName: 'Ethio Bus',
+        companyName: 'Sky Bus Line',
         licenseNumber: 'ETH-BUS-002',
         registrationNumber: 'REG-10022',
         tinNumber: '0087654321',
         phone: '0911778899',
-        email: 'info@ethiobus.com',
+        email: 'info@skybus.com',
         address: 'Kality Terminal, Addis Ababa',
         city: 'Addis Ababa',
-        logo: '/logos/ethio_bus.png',
+        logo: '/logos/sky_bus.png',
         description: 'National intercity express transport serving core routes with modern luxury fleet.',
         status: 'active',
         rating: 4.7,
         totalReviews: 41,
         cancellationPolicy: { allowed: true, deadlineHours: 12, refundPercentage: 85 },
+        paymentMethods: {
+          telebirr: { enabled: true, accountNumber: '0911778899' },
+          cbe: { enabled: true, accountNumber: '1000987654321' },
+          chapa: { enabled: true, accountNumber: 'CHAPA-ET-2026-LIVE' },
+        },
+        payment: { provider: 'CHAPA', enabled: true, mode: 'LIVE', splitType: 'percentage', splitValue: 90 },
       },
       {
         companyName: 'Zemen Bus',
@@ -97,6 +108,12 @@ const seed = async () => {
         rating: 4.8,
         totalReviews: 38,
         cancellationPolicy: { allowed: true, deadlineHours: 24, refundPercentage: 80 },
+        paymentMethods: {
+          telebirr: { enabled: true, accountNumber: '0922334455' },
+          cbe: { enabled: true, accountNumber: '1000345678901' },
+          chapa: { enabled: true, accountNumber: 'CHAPA-ET-2026-LIVE' },
+        },
+        payment: { provider: 'CHAPA', enabled: true, mode: 'LIVE', splitType: 'percentage', splitValue: 90 },
       },
       {
         companyName: 'Abay Bus',
@@ -113,6 +130,12 @@ const seed = async () => {
         rating: 4.5,
         totalReviews: 29,
         cancellationPolicy: { allowed: true, deadlineHours: 48, refundPercentage: 75 },
+        paymentMethods: {
+          telebirr: { enabled: true, accountNumber: '0933445566' },
+          cbe: { enabled: true, accountNumber: '1000567890123' },
+          chapa: { enabled: true, accountNumber: 'CHAPA-ET-2026-LIVE' },
+        },
+        payment: { provider: 'CHAPA', enabled: true, mode: 'LIVE', splitType: 'percentage', splitValue: 90 },
       },
       {
         companyName: 'Habesha Bus',
@@ -129,222 +152,206 @@ const seed = async () => {
         rating: 4.6,
         totalReviews: 32,
         cancellationPolicy: { allowed: true, deadlineHours: 24, refundPercentage: 85 },
+        paymentMethods: {
+          telebirr: { enabled: true, accountNumber: '0944556677' },
+          cbe: { enabled: true, accountNumber: '1000789012345' },
+          chapa: { enabled: true, accountNumber: 'CHAPA-ET-2026-LIVE' },
+        },
+        payment: { provider: 'CHAPA', enabled: true, mode: 'LIVE', splitType: 'percentage', splitValue: 90 },
       },
     ]);
     console.log(`✅ Seeded ${companies.length} transport companies`);
 
-    // 2. Create System Users (Admins, Agents, Conductors, Passenger)
     const rawUsers = [
-      // Super Admin
       {
         name: 'Ethio Trip Super Admin',
         email: 'superadmin@ethiotrip.com',
-        phone: '0900000000',
-        password: 'password123',
-        role: 'super_admin',
+        phone: '0911000000',
+        password: 'SuperAdmin@2026',
+        role: ROLES.SUPER_ADMIN,
         city: 'Addis Ababa',
+        isEmailVerified: true,
       },
-      // 1. Selam Bus
       {
-        name: 'Alemayehu',
+        name: 'Dawit (Selam Admin)',
         email: 'admin@selambus.com',
         phone: '0911111111',
-        password: 'password123',
-        role: 'company_admin',
+        password: 'SelamAdmin@2026',
+        role: ROLES.COMPANY_ADMIN,
         companyId: companies[0]._id,
         city: 'Addis Ababa',
+        isEmailVerified: true,
       },
       {
-        name: 'Tigist',
+        name: 'Tigist (Selam Staff)',
         email: 'staff@selambus.com',
         phone: '0911111112',
-        password: 'password123',
-        role: 'agent',
+        password: 'SelamStaff@2026',
+        role: ROLES.COMPANY_STAFF,
         companyId: companies[0]._id,
         city: 'Addis Ababa',
+        isEmailVerified: true,
       },
       {
-        name: 'Dawit',
+        name: 'Haile (Selam Conductor)',
         email: 'conductor@selambus.com',
         phone: '0911111113',
-        password: 'password123',
-        role: 'conductor',
+        password: 'SelamConductor@2026',
+        role: ROLES.CONDUCTOR,
         companyId: companies[0]._id,
         city: 'Addis Ababa',
+        isEmailVerified: true,
       },
-      // 2. Ethio Bus
       {
-        name: 'Kassahun ',
-        email: 'admin@ethiobus.com',
+        name: 'Kassahun (Sky Bus Admin)',
+        email: 'admin@skybus.com',
         phone: '0922222222',
-        password: 'password123',
-        role: 'company_admin',
+        password: 'SkyAdmin@2026',
+        role: ROLES.COMPANY_ADMIN,
         companyId: companies[1]._id,
         city: 'Addis Ababa',
+        isEmailVerified: true,
       },
       {
-        name: 'Biniyam ',
-        email: 'staff@ethiobus.com',
+        name: 'Biniyam (Sky Bus Staff)',
+        email: 'staff@skybus.com',
         phone: '0922222223',
-        password: 'password123',
-        role: 'agent',
+        password: 'SkyStaff@2026',
+        role: ROLES.COMPANY_STAFF,
         companyId: companies[1]._id,
         city: 'Bahir Dar',
+        isEmailVerified: true,
       },
       {
-        name: 'Solomon ',
-        email: 'conductor@ethiobus.com',
+        name: 'Solomon (Sky Bus Conductor)',
+        email: 'conductor@skybus.com',
         phone: '0922222224',
-        password: 'password123',
-        role: 'conductor',
+        password: 'SkyConductor@2026',
+        role: ROLES.CONDUCTOR,
         companyId: companies[1]._id,
         city: 'Addis Ababa',
+        isEmailVerified: true,
       },
-      // 3. Zemen Bus
       {
-        name: 'Bethlehem',
+        name: 'Bethlehem (Zemen Admin)',
         email: 'admin@zemenbus.com',
         phone: '0933333333',
-        password: 'password123',
-        role: 'company_admin',
+        password: 'ZemenAdmin@2026',
+        role: ROLES.COMPANY_ADMIN,
         companyId: companies[2]._id,
         city: 'Addis Ababa',
+        isEmailVerified: true,
       },
       {
-        name: 'Yared',
-        email: 'staff@zemenbus.com',
-        phone: '0933333334',
-        password: 'password123',
-        role: 'agent',
-        companyId: companies[2]._id,
-        city: 'Mekelle',
-      },
-      {
-        name: 'Henok',
+        name: 'Henok (Zemen Conductor)',
         email: 'conductor@zemenbus.com',
         phone: '0933333335',
-        password: 'password123',
-        role: 'conductor',
+        password: 'ZemenConductor@2026',
+        role: ROLES.CONDUCTOR,
         companyId: companies[2]._id,
         city: 'Addis Ababa',
+        isEmailVerified: true,
       },
-      // 4. Abay Bus
       {
-        name: 'Tewodros ',
+        name: 'Tewodros (Abay Admin)',
         email: 'admin@abaybus.com',
         phone: '0944444444',
-        password: 'password123',
-        role: 'company_admin',
+        password: 'AbayAdmin@2026',
+        role: ROLES.COMPANY_ADMIN,
         companyId: companies[3]._id,
         city: 'Bahir Dar',
+        isEmailVerified: true,
       },
       {
-        name: 'Mesfin',
-        email: 'staff@abaybus.com',
-        phone: '0944444445',
-        password: 'password123',
-        role: 'agent',
-        companyId: companies[3]._id,
-        city: 'Gondar',
-      },
-      {
-        name: 'Mulugeta',
+        name: 'Yonas (Abay Conductor)',
         email: 'conductor@abaybus.com',
         phone: '0944444446',
-        password: 'password123',
-        role: 'conductor',
+        password: 'AbayConductor@2026',
+        role: ROLES.CONDUCTOR,
         companyId: companies[3]._id,
         city: 'Bahir Dar',
+        isEmailVerified: true,
       },
-      // 5. Habesha Bus
       {
-        name: 'Hiwot (Habesha Admin)',
+        name: 'Almaz (Habesha Admin)',
         email: 'admin@habeshabus.com',
         phone: '0955555555',
-        password: 'password123',
-        role: 'company_admin',
+        password: 'HabeshaAdmin@2026',
+        role: ROLES.COMPANY_ADMIN,
         companyId: companies[4]._id,
         city: 'Hawassa',
+        isEmailVerified: true,
       },
       {
-        name: 'Fikadu (Habesha Agent)',
-        email: 'staff@habeshabus.com',
-        phone: '0955555556',
-        password: 'password123',
-        role: 'agent',
-        companyId: companies[4]._id,
-        city: 'Jimma',
-      },
-      {
-        name: 'Natnael (Habesha Conductor)',
+        name: 'Girma (Habesha Conductor)',
         email: 'conductor@habeshabus.com',
         phone: '0955555557',
-        password: 'password123',
-        role: 'conductor',
+        password: 'HabeshaConductor@2026',
+        role: ROLES.CONDUCTOR,
         companyId: companies[4]._id,
         city: 'Hawassa',
+        isEmailVerified: true,
       },
-      // Public Passenger
       {
         name: 'Samuel Passenger',
         email: 'passenger@example.com',
         phone: '0966666666',
-        password: 'password123',
-        role: 'passenger',
+        password: 'Passenger@2026',
+        role: ROLES.PASSENGER,
         city: 'Addis Ababa',
+        isEmailVerified: true,
       },
     ];
 
     const users = [];
     for (const u of rawUsers) {
-      const created = await User.create({ ...u, isEmailVerified: true });
+      const created = await User.create(u);
       users.push(created);
     }
-    console.log(`✅ Seeded ${users.length} users with password 'password123'`);
+    console.log(`✅ Seeded ${users.length} canonical role users`);
 
-    // 3. Create Buses
     const buses = await Bus.insertMany([
       {
         companyId: companies[0]._id,
-        busNumber: 'Selam Luxury Coach (VIP-01)',
+        busNumber: 'Selam Scania Luxury 01',
         plateNumber: '3-A10101-ET',
         type: 'VIP',
         capacity: 45,
-        amenities: ['WiFi', 'Air Conditioning', 'Leather Recliner', 'Snacks', 'USB Charging', 'TV'],
-        description: 'Flagship executive coach for premier comfort on long distance routes.',
+        amenities: ['Air Conditioning', 'High-Speed WiFi', 'USB Charging', 'Water', 'TV Entertainment'],
+        description: 'Flagship European-standard Scania touring coach.',
         image: '/images/selam_bus.png',
         status: 'active',
       },
       {
         companyId: companies[1]._id,
-        busNumber: 'Ethio Express Liner',
+        busNumber: 'Sky Bus Express 01',
         plateNumber: '3-B20202-ET',
-        type: 'Luxury',
+        type: 'Executive',
         capacity: 45,
         amenities: ['Air Conditioning', 'WiFi', 'USB Charging', 'Water'],
-        description: 'Ethio Bus national express intercity liner.',
-        image: '/images/ethio_bus.png',
+        description: 'Modern long-distance executive coach.',
+        image: '/images/sky_bus_real.webp',
         status: 'active',
       },
       {
         companyId: companies[2]._id,
-        busNumber: 'Zemen Star Executive',
+        busNumber: 'Zemen Golden Star',
         plateNumber: '3-C30303-ET',
         type: 'VIP',
-        capacity: 45,
-        amenities: ['WiFi', 'Air Conditioning', 'Coffee/Tea', 'USB Charging', 'Extra Legroom'],
-        description: 'Zemen high-end VIP intercity coach with premium hospitality.',
+        capacity: 40,
+        amenities: ['Extra Legroom', 'WiFi', 'AC', 'Refreshments', 'Entertainment'],
+        description: 'First-class luxury travel liner.',
         image: '/images/zemen_bus.png',
         status: 'active',
       },
       {
         companyId: companies[3]._id,
-        busNumber: 'Abay Standard Express',
+        busNumber: 'Abay Northern Express',
         plateNumber: '3-D40404-ET',
         type: 'Standard',
         capacity: 45,
-        amenities: ['Air Conditioning', 'Water', 'USB Charging'],
-        description: 'Abay Express northern passenger liner.',
+        amenities: ['Air Conditioning', 'Water', 'Comfort Seats'],
+        description: 'Sturdy long-distance coach for northern highlands.',
         image: '/images/abay_bus.png',
         status: 'active',
       },
@@ -362,7 +369,6 @@ const seed = async () => {
     ]);
     console.log(`✅ Seeded ${buses.length} distinct buses`);
 
-    // 4. Create Routes
     const routes = await Route.insertMany([
       {
         companyId: companies[0]._id,
@@ -402,15 +408,6 @@ const seed = async () => {
       },
       {
         companyId: companies[1]._id,
-        from: 'Bahir Dar',
-        to: 'Addis Ababa',
-        distance: 578,
-        duration: '8.5 hours',
-        stops: ['Debre Markos'],
-        status: 'active',
-      },
-      {
-        companyId: companies[1]._id,
         from: 'Addis Ababa',
         to: 'Dire Dawa',
         distance: 515,
@@ -418,46 +415,13 @@ const seed = async () => {
         stops: ['Adama', 'Awash'],
         status: 'active',
       },
-      {
-        companyId: companies[2]._id,
-        from: 'Addis Ababa',
-        to: 'Mekelle',
-        distance: 783,
-        duration: '12 hours',
-        stops: ['Dessie', 'Woldia'],
-        status: 'active',
-      },
-      {
-        companyId: companies[3]._id,
-        from: 'Addis Ababa',
-        to: 'Gondar',
-        distance: 738,
-        duration: '11 hours',
-        stops: ['Debre Birhan', 'Debre Markos'],
-        status: 'active',
-      },
-      {
-        companyId: companies[4]._id,
-        from: 'Addis Ababa',
-        to: 'Hawassa',
-        distance: 273,
-        duration: '4 hours',
-        stops: ['Bishoftu', 'Mojo'],
-        status: 'active',
-      },
     ]);
-    console.log(`✅ Seeded ${routes.length} routes for all 5 companies`);
+    console.log(`✅ Seeded ${routes.length} intercity routes`);
 
-    // Conductor references
-    const selamConductor = users.find(u => u.email === 'conductor@selambus.com');
-    const ethioConductor = users.find(u => u.email === 'conductor@ethiobus.com');
-    const zemenConductor = users.find(u => u.email === 'conductor@zemenbus.com');
-    const abayConductor = users.find(u => u.email === 'conductor@abaybus.com');
-    const habeshaConductor = users.find(u => u.email === 'conductor@habeshabus.com');
+    const selamConductor = users.find((u) => u.email === 'conductor@selambus.com');
+    const skyConductor = users.find((u) => u.email === 'conductor@skybus.com');
 
-    // 5. Create Schedules with Unique Trip IDs & Assigned Conductors
     const scheduleData = [
-      // Today schedules
       {
         tripId: 'TRP-1001',
         companyId: companies[0]._id,
@@ -468,7 +432,7 @@ const seed = async () => {
         arrivalTime: '03:00 PM',
         price: 950,
         availableSeats: 43,
-        bookedSeats: ['Seat 1', 'Seat 2'],
+        bookedSeats: ['1', '2'],
         assignedConductor: selamConductor?._id,
         status: 'scheduled',
       },
@@ -482,11 +446,10 @@ const seed = async () => {
         arrivalTime: '03:30 PM',
         price: 980,
         availableSeats: 43,
-        bookedSeats: ['Seat 3', 'Seat 4'],
-        assignedConductor: ethioConductor?._id,
+        bookedSeats: ['3', '4'],
+        assignedConductor: skyConductor?._id,
         status: 'scheduled',
       },
-      // Tomorrow Outbound schedules
       {
         tripId: 'TRP-2001',
         companyId: companies[0]._id,
@@ -501,123 +464,100 @@ const seed = async () => {
         assignedConductor: selamConductor?._id,
         status: 'scheduled',
       },
-      {
-        tripId: 'TRP-2002',
-        companyId: companies[1]._id,
-        bus: buses[1]._id,
-        route: routes[3]._id,
-        date: getFutureDate(1),
-        departureTime: '07:00 AM',
-        arrivalTime: '03:30 PM',
-        price: 980,
-        availableSeats: 45,
-        bookedSeats: [],
-        assignedConductor: ethioConductor?._id,
-        status: 'scheduled',
-      },
-      // Return schedules (in 3 days)
-      {
-        tripId: 'TRP-3001',
-        companyId: companies[0]._id,
-        bus: buses[0]._id,
-        route: routes[1]._id, // Bahir Dar -> Addis Ababa
-        date: getFutureDate(3),
-        departureTime: '06:00 AM',
-        arrivalTime: '03:00 PM',
-        price: 950,
-        availableSeats: 45,
-        bookedSeats: [],
-        assignedConductor: selamConductor?._id,
-        status: 'scheduled',
-      },
-      {
-        tripId: 'TRP-3002',
-        companyId: companies[1]._id,
-        bus: buses[1]._id,
-        route: routes[4]._id, // Bahir Dar -> Addis Ababa
-        date: getFutureDate(3),
-        departureTime: '07:00 AM',
-        arrivalTime: '03:30 PM',
-        price: 980,
-        availableSeats: 45,
-        bookedSeats: [],
-        assignedConductor: ethioConductor?._id,
-        status: 'scheduled',
-      },
-      // Other routes
-      {
-        tripId: 'TRP-2003',
-        companyId: companies[2]._id,
-        bus: buses[2]._id,
-        route: routes[6]._id,
-        date: getFutureDate(1),
-        departureTime: '05:00 AM',
-        arrivalTime: '05:00 PM',
-        price: 1100,
-        availableSeats: 45,
-        bookedSeats: [],
-        assignedConductor: zemenConductor?._id,
-        status: 'scheduled',
-      },
-      {
-        tripId: 'TRP-2004',
-        companyId: companies[3]._id,
-        bus: buses[3]._id,
-        route: routes[7]._id,
-        date: getFutureDate(1),
-        departureTime: '05:30 AM',
-        arrivalTime: '04:30 PM',
-        price: 850,
-        availableSeats: 45,
-        bookedSeats: [],
-        assignedConductor: abayConductor?._id,
-        status: 'scheduled',
-      },
-      {
-        tripId: 'TRP-2005',
-        companyId: companies[4]._id,
-        bus: buses[4]._id,
-        route: routes[8]._id,
-        date: getFutureDate(1),
-        departureTime: '08:00 AM',
-        arrivalTime: '12:00 PM',
-        price: 650,
-        availableSeats: 45,
-        bookedSeats: [],
-        assignedConductor: habeshaConductor?._id,
-        status: 'scheduled',
-      },
     ];
 
     const schedules = await Schedule.insertMany(scheduleData);
-    console.log(`✅ Seeded ${schedules.length} schedules with unique Trip IDs and Assigned Conductors`);
+    console.log(`✅ Seeded ${schedules.length} schedules with assigned conductors`);
 
-    // 6. Create Discounts
+    const demoPassenger = users.find((u) => u.email === 'passenger@example.com');
+    const primarySchedule = schedules[0];
+
+    const demoBooking = await Booking.create({
+      companyId: companies[0]._id,
+      ticketNumber: 'ETH-891021-4401',
+      schedule: primarySchedule._id,
+      passenger: {
+        name: demoPassenger.name,
+        phone: demoPassenger.phone,
+        email: demoPassenger.email,
+        gender: 'Male',
+        age: '28',
+      },
+      user: demoPassenger._id,
+      selectedSeats: ['1'],
+      baseFare: 950,
+      totalPrice: 950,
+      tripType: 'oneway',
+      status: BOOKING_STATUS.CONFIRMED,
+      paymentStatus: PAYMENT_STATUS.PAID,
+      outboundLeg: {
+        schedule: primarySchedule._id,
+        bus: buses[0]._id,
+        route: routes[0]._id,
+        date: primarySchedule.date,
+        departureTime: primarySchedule.departureTime,
+        seats: ['1'],
+        price: 950,
+        status: 'CONFIRMED',
+      },
+    });
+
+    const demoPayment = await Payment.create({
+      companyId: companies[0]._id,
+      booking: demoBooking._id,
+      user: demoPassenger._id,
+      amount: 950,
+      currency: 'ETB',
+      paymentMethod: 'Chapa',
+      txRef: 'BUS-SEED-PAYMENT-001',
+      transactionId: 'BUS-SEED-PAYMENT-001',
+      chapaReference: 'CHAPA-DEMO-SEED-REF',
+      status: PAYMENT_STATUS.PAID,
+      paidAt: new Date(),
+    });
+
+    const demoTicket = await Ticket.create({
+      ticketNumber: 'TKT-891021-1-321',
+      companyId: companies[0]._id,
+      booking: demoBooking._id,
+      user: demoPassenger._id,
+      schedule: primarySchedule._id,
+      tripId: primarySchedule.tripId,
+      legType: 'oneway',
+      passengerName: demoPassenger.name,
+      passengerPhone: demoPassenger.phone,
+      passengerEmail: demoPassenger.email,
+      seatNumber: '1',
+      price: 950,
+      busCompany: 'Selam Bus Line',
+      companyName: 'Selam Bus Line',
+      route: 'Addis Ababa → Bahir Dar',
+      from: 'Addis Ababa',
+      to: 'Bahir Dar',
+      travelDate: primarySchedule.date,
+      departureTime: primarySchedule.departureTime,
+      qrCode: `ETHIOTRIP:TKT-891021-1-321:${primarySchedule.tripId}:1:${demoPassenger.name}`,
+      status: TICKET_STATUS.ACTIVE,
+      verificationStatus: 'VERIFIED',
+      boardingStatus: BOARDING_STATUS.NOT_BOARDED,
+    });
+    console.log(`✅ Seeded demo confirmed booking & active ticket with ETHIOTRIP QR code`);
+
     const discounts = await Discount.insertMany([
       {
         companyId: companies[0]._id,
         code: 'ROUNDTRIP10',
-        name: 'Selam 10% Round-Trip Discount',
+        name: 'Selam 10% Round-Trip Saver',
         discountType: 'percentage',
         discountValue: 10,
         tripType: 'round',
         minAmount: 500,
-        isActive: true,
-      },
-      {
-        companyId: companies[0]._id,
-        code: 'SELAMVIP',
-        name: 'VIP Traveler Discount',
-        discountType: 'fixed',
-        discountValue: 100,
-        tripType: 'all',
-        minAmount: 800,
         isActive: true,
       },
       {
         companyId: companies[1]._id,
         code: 'ROUNDTRIP10',
-        name: 'Ethio Bus Round-Trip Saver',
+        name: 'Sky Bus Round-Trip Saver',
         discountType: 'percentage',
         discountValue: 10,
         tripType: 'round',
@@ -625,120 +565,133 @@ const seed = async () => {
         isActive: true,
       },
     ]);
-    console.log(`✅ Seeded ${discounts.length} company promotional & round-trip discounts`);
+    console.log(`✅ Seeded ${discounts.length} company discounts`);
 
-    // 7. Create Support Conversations
-    const supportTickets = await SupportTicket.insertMany([
+    const superAdminUser = await User.findOne({ email: 'superadmin@ethiotrip.com' });
+    const selamAdminUser = await User.findOne({ email: 'admin@selambus.com' });
+    const selamStaffUser = await User.findOne({ email: 'staff@selambus.com' });
+    const nowTime = new Date();
+
+    await AuditLog.insertMany([
       {
-        companyId: companies[0]._id, // Selam Bus
-        user: users[users.length - 1]._id, // Samuel Passenger
-        passengerName: 'Samuel Passenger',
-        passengerEmail: 'passenger@example.com',
-        passengerPhone: '0966666666',
-        subject: 'How can I cancel my ticket?',
-        category: 'Cancellation & Refund',
-        description: 'How can I cancel my ticket and what is the refund percentage for Selam Bus?',
-        status: 'ANSWERED',
-        priority: 'medium',
-        respondedBy: users[2]._id, // Selam Ticket Agent
-        respondedAt: new Date(),
-        feedbackResponse: 'You can request cancellation directly from your Passenger Dashboard under the Cancellation & Refund tab. Selam Bus refunds 90% if cancelled at least 24 hours before departure.',
-        messages: [
-          {
-            senderId: users[users.length - 1]._id,
-            senderName: 'Samuel Passenger',
-            senderRole: 'passenger',
-            message: 'How can I cancel my ticket and what is the refund percentage for Selam Bus?',
-            createdAt: new Date(Date.now() - 3600000 * 2),
-          },
-          {
-            senderId: users[2]._id,
-            senderName: 'Tigist (Selam Ticket Agent)',
-            senderRole: 'agent',
-            message: 'You can request cancellation directly from your Passenger Dashboard under the Cancellation & Refund tab. Selam Bus refunds 90% if cancelled at least 24 hours before departure.',
-            createdAt: new Date(Date.now() - 3600000 * 1),
-          },
-        ],
+        user: superAdminUser?._id,
+        userEmail: 'superadmin@ethiotrip.com',
+        userRole: 'super_admin',
+        companyName: 'Platform Wide',
+        action: 'USER_LOGIN',
+        entityType: 'User',
+        entityId: superAdminUser?._id?.toString() || 'SA-01',
+        details: {
+          role: 'super_admin',
+          name: 'Ethio Trip Super Admin',
+          email: 'superadmin@ethiotrip.com',
+          loginTime: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+          ip: '197.156.104.2',
+          device: 'Chrome / Windows',
+        },
+        createdAt: new Date(Date.now() - 15 * 60 * 1000),
       },
       {
-        companyId: companies[1]._id, // Ethio Bus
-        user: users[users.length - 1]._id,
-        passengerName: 'Samuel Passenger',
-        passengerEmail: 'passenger@example.com',
-        passengerPhone: '0966666666',
-        subject: 'Luggage Weight Limit Inquiry',
-        category: 'Luggage / Lost Item',
-        description: 'What is the maximum allowed baggage weight for the morning express?',
-        status: 'OPEN',
-        priority: 'low',
-        messages: [
-          {
-            senderId: users[users.length - 1]._id,
-            senderName: 'Samuel Passenger',
-            senderRole: 'passenger',
-            message: 'What is the maximum allowed baggage weight for the morning express?',
-            createdAt: new Date(Date.now() - 1800000),
-          },
-        ],
+        user: selamAdminUser?._id,
+        userEmail: 'admin@selambus.com',
+        userRole: 'company_admin',
+        companyId: companies[0]._id,
+        companyName: 'Selam Bus Line',
+        action: 'USER_LOGIN',
+        entityType: 'User',
+        entityId: selamAdminUser?._id?.toString() || 'CA-01',
+        details: {
+          role: 'company_admin',
+          name: 'Dawit (Selam Admin)',
+          email: 'admin@selambus.com',
+          loginTime: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+          ip: '197.156.104.8',
+          device: 'Edge / Windows',
+        },
+        createdAt: new Date(Date.now() - 45 * 60 * 1000),
+      },
+      {
+        user: selamStaffUser?._id,
+        userEmail: 'staff@selambus.com',
+        userRole: 'company_staff',
+        companyId: companies[0]._id,
+        companyName: 'Selam Bus Line',
+        action: 'USER_LOGIN',
+        entityType: 'User',
+        entityId: selamStaffUser?._id?.toString() || 'CS-01',
+        details: {
+          role: 'company_staff',
+          name: 'Almaz (Selam Staff)',
+          email: 'staff@selambus.com',
+          loginTime: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+          ip: '197.156.104.12',
+          device: 'Firefox / Windows',
+        },
+        createdAt: new Date(Date.now() - 90 * 60 * 1000),
+      },
+      {
+        user: superAdminUser?._id,
+        userEmail: 'superadmin@ethiotrip.com',
+        userRole: 'super_admin',
+        companyId: companies[0]._id,
+        companyName: 'Selam Bus Line',
+        action: 'COMPANY_APPROVED',
+        entityType: 'Company',
+        entityId: companies[0]._id.toString(),
+        details: {
+          companyName: 'Selam Bus Line',
+          paymentMethods: ['Telebirr', 'CBE Bank', 'Chapa'],
+          approvedAt: nowTime.toISOString(),
+        },
+        createdAt: new Date(Date.now() - 2 * 3600 * 1000),
+      },
+      {
+        user: selamStaffUser?._id,
+        userEmail: 'staff@selambus.com',
+        userRole: 'company_staff',
+        companyId: companies[0]._id,
+        companyName: 'Selam Bus Line',
+        action: 'COUNTER_BOOKING_ISSUED',
+        entityType: 'Booking',
+        entityId: 'ETH-891021',
+        details: {
+          ticketNumber: 'ETH-891021',
+          paymentStatus: 'PAID',
+          paymentMethod: 'Cash',
+          amount: 950,
+          passengerName: 'Abebe Kebede',
+        },
+        createdAt: new Date(Date.now() - 3 * 3600 * 1000),
       },
     ]);
-    console.log(`✅ Seeded ${supportTickets.length} support conversation threads`);
-
-    // 8. Create Conductor Reports
-    const reports = await ConductorReport.insertMany([
-      {
-        companyId: companies[0]._id, // Selam Bus
-        conductorId: users[3]._id, // Selam Conductor
-        scheduleId: schedules[0]._id,
-        tripId: schedules[0].tripId,
-        busId: buses[0]._id,
-        passengerName: 'Abebe Kebede',
-        ticketNumber: 'TKT-891021-04-321',
-        category: 'Seat mismatch',
-        description: 'Passenger sat in Seat 04 instead of booked Seat 12, resolved peacefully after checking manifest.',
-        status: 'RESOLVED',
-        resolutionNotes: 'Conductor assisted passenger in relocating to correct assigned seat before departure.',
-        resolvedBy: users[1]._id, // Selam Admin
-        resolvedAt: new Date(),
-      },
-      {
-        companyId: companies[0]._id, // Selam Bus
-        conductorId: users[3]._id, // Selam Conductor
-        scheduleId: schedules[0]._id,
-        tripId: schedules[0].tripId,
-        busId: buses[0]._id,
-        passengerName: 'Marta Hailu',
-        ticketNumber: 'TKT-992104-09-881',
-        category: 'Ticket problem',
-        description: 'Passenger presented digital ticket on phone with low battery; verified ticket number against printed manifest.',
-        status: 'OPEN',
-      },
-    ]);
-    console.log(`✅ Seeded ${reports.length} conductor problem reports`);
+    console.log('✅ Seeded platform audit logs with user login timestamps and system activities');
 
     console.log('\n========================================================================');
-    console.log('🎉 ETHIO TRIP MULTI-COMPANY SEEDING COMPLETED SUCCESSFULLY!');
+    console.log('🎉 ETHIO TRIP MULTI-OPERATOR SEEDING COMPLETED SUCCESSFULLY!');
     console.log('========================================================================');
-    console.log('Registered Companies: Selam Bus Line, Ethio Bus, Zemen Bus, Abay Bus, Habesha Bus');
-    console.log('\nTest Accounts Credentials (Password: password123):');
-    console.log('  1. Super Admin:          superadmin@ethiotrip.com');
-    console.log('  2. Selam Bus Admin:      admin@selambus.com');
-    console.log('     Selam Ticket Agent:   staff@selambus.com');
-    console.log('     Selam Conductor:      conductor@selambus.com');
-    console.log('  3. Ethio Bus Admin:      admin@ethiobus.com');
-    console.log('     Ethio Ticket Agent:   staff@ethiobus.com');
-    console.log('     Ethio Conductor:      conductor@ethiobus.com');
-    console.log('  4. Zemen Bus Admin:      admin@zemenbus.com');
-    console.log('     Zemen Conductor:      conductor@zemenbus.com');
-    console.log('  5. Abay Bus Admin:       admin@abaybus.com');
-    console.log('  6. Habesha Bus Admin:    admin@habeshabus.com');
-    console.log('  7. Passenger Account:    passenger@example.com');
+    console.log('Platform: Ethio Trip — Smart Multi-Operator Bus Ticketing & Management System');
+    console.log('Operators: Selam Bus Line, Sky Bus Line, Zemen Bus, Abay Bus, Habesha Bus');
+    console.log('\nRole-Specific Credentials:');
+    console.log('  1. Super Admin:          superadmin@ethiotrip.com  / Password: SuperAdmin@2026');
+    console.log('  2. Selam Bus Admin:      admin@selambus.com        / Password: SelamAdmin@2026');
+    console.log('     Selam Company Staff:  staff@selambus.com        / Password: SelamStaff@2026');
+    console.log('     Selam Conductor:      conductor@selambus.com    / Password: SelamConductor@2026');
+    console.log('  3. Sky Bus Admin:        admin@skybus.com          / Password: SkyAdmin@2026');
+    console.log('     Sky Bus Staff:        staff@skybus.com          / Password: SkyStaff@2026');
+    console.log('     Sky Bus Conductor:    conductor@skybus.com      / Password: SkyConductor@2026');
+    console.log('  4. Zemen Bus Admin:      admin@zemenbus.com        / Password: ZemenAdmin@2026');
+    console.log('     Zemen Conductor:      conductor@zemenbus.com    / Password: ZemenConductor@2026');
+    console.log('  5. Abay Bus Admin:       admin@abaybus.com         / Password: AbayAdmin@2026');
+    console.log('     Abay Conductor:       conductor@abaybus.com     / Password: AbayConductor@2026');
+    console.log('  6. Habesha Bus Admin:    admin@habeshabus.com      / Password: HabeshaAdmin@2026');
+    console.log('     Habesha Conductor:    conductor@habeshabus.com  / Password: HabeshaConductor@2026');
+    console.log('  7. Demo Passenger:       passenger@example.com     / Password: Passenger@2026');
     console.log('========================================================================\n');
 
     if (require.main === module) {
       process.exit(0);
     }
-    return { success: true, companiesSeeded: companies.length, busesSeeded: buses.length };
+    return { success: true };
   } catch (err) {
     console.error('❌ Seeding error:', err.message);
     if (require.main === module) {

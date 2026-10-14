@@ -3,6 +3,7 @@ import { FaTimes, FaDownload, FaPrint, FaTicketAlt } from 'react-icons/fa';
 import { QRCodeSVG } from 'qrcode.react';
 import jsPDF from 'jspdf';
 import { toast } from 'react-toastify';
+import { useTranslation } from '../i18n';
 
 const convertSvgToPng = (svgEl) => {
   return new Promise((resolve) => {
@@ -30,7 +31,8 @@ const convertSvgToPng = (svgEl) => {
 };
 
 const TicketModal = ({ booking, onClose }) => {
-  const [activeLeg, setActiveLeg] = useState('outbound'); // 'outbound' | 'return'
+  const { t } = useTranslation();
+  const [activeLeg, setActiveLeg] = useState('outbound');  
 
   if (!booking) return null;
 
@@ -46,47 +48,23 @@ const TicketModal = ({ booking, onClose }) => {
     return (
       <div
         onClick={onClose}
-        style={{
-          position: 'fixed', inset: 0,
-          backgroundColor: 'rgba(15, 23, 42, 0.78)',
-          backdropFilter: 'blur(6px)',
-          zIndex: 9999,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: '16px',
-        }}
+        className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 font-sans"
       >
         <div
           onClick={(e) => e.stopPropagation()}
-          style={{
-            background: '#ffffff',
-            borderRadius: 16,
-            width: '100%',
-            maxWidth: 400,
-            padding: '28px 24px',
-            textAlign: 'center',
-            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
-          }}
+          className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm p-7 text-center shadow-2xl border border-slate-200 dark:border-slate-800"
         >
-          <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#fffbeb', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', margin: '0 auto 14px' }}>
+          <div className="w-12 h-12 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-600 text-2xl flex items-center justify-center mx-auto mb-3.5">
             <FaTicketAlt />
           </div>
-          <h3 style={{ margin: '0 0 8px', color: '#0f172a', fontWeight: 900 }}>Payment Required</h3>
-          <p style={{ color: '#64748b', fontSize: '0.85rem', margin: '0 0 20px', lineHeight: 1.5 }}>
+          <h3 className="m-0 mb-2 text-slate-900 dark:text-white font-black text-lg">Payment Required</h3>
+          <p className="text-slate-500 dark:text-slate-400 text-xs mb-5 leading-relaxed">
             This reservation is pending payment. Official E-Tickets and Ticket IDs are only issued after payment is completed.
           </p>
           <button
             type="button"
             onClick={onClose}
-            style={{
-              padding: '10px 24px',
-              background: '#078930',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 8,
-              fontWeight: 800,
-              fontSize: '0.88rem',
-              cursor: 'pointer',
-            }}
+            className="py-2.5 px-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs cursor-pointer shadow-md shadow-emerald-600/20 transition"
           >
             Understood
           </button>
@@ -114,7 +92,6 @@ const TicketModal = ({ booking, onClose }) => {
     booking.user?.name ||
     'Passenger';
 
-  // Active leg info
   const isOutbound = !isRoundTrip || activeLeg === 'outbound';
   const legData = isOutbound ? (booking.outboundLeg || {}) : (booking.returnLeg || {});
   const schedule = legData.schedule || (isOutbound ? booking.schedule : null) || {};
@@ -178,7 +155,6 @@ const TicketModal = ({ booking, onClose }) => {
   const returnPrice = booking.returnLeg?.price || Math.round(totalPrice / 2);
   const currentPrice = isOutbound ? outboundPrice : returnPrice;
 
-  // Format date with day of week (e.g. 2026-08-09 (Saturday))
   const formattedDate = (() => {
     try {
       if (!depDate) return 'Upcoming';
@@ -188,12 +164,10 @@ const TicketModal = ({ booking, onClose }) => {
         return `${depDate} (${days[d.getDay()]})`;
       }
     } catch {
-      // fallback
     }
     return depDate || 'Upcoming';
   })();
 
-  // Verifiable QR Code payload string
   const qrVerificationData = [
     `TICKET: ${currentTicketNo}`,
     `LEG: ${isOutbound ? 'OUTBOUND' : 'RETURN'}`,
@@ -209,26 +183,22 @@ const TicketModal = ({ booking, onClose }) => {
     `VERIFY: https://ethiotrip.com/verify?ticket=${currentTicketNo}`
   ].join('\n');
 
-  // Helper to render one ticket onto a jsPDF doc
   const renderTicketPage = async (doc, ticketData) => {
-    // Top Red & Yellow Bar
     doc.setFillColor(220, 38, 38);
     doc.rect(0, 0, 90, 3, 'F');
     doc.setFillColor(234, 179, 8);
     doc.rect(0, 3, 90, 1.5, 'F');
 
-    // Title
     doc.setTextColor(15, 23, 42);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(15);
-    doc.text('E-TICKET', 45, 13, { align: 'center' });
+    doc.setFontSize(13);
+    doc.text('ETHIO TRIP E-TICKET', 45, 13, { align: 'center' });
 
     doc.setFontSize(7.5);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
     doc.text(`Thank you for choosing ${ticketData.operator}!`, 45, 18, { align: 'center' });
 
-    // Ticket Data Table
     const fields = [
       ['Ticket No', ticketData.ticketNo],
       ['Journey Leg', ticketData.legLabel],
@@ -258,14 +228,12 @@ const TicketModal = ({ booking, onClose }) => {
       y += 7;
     });
 
-    // Capture QR code SVG element and convert to PNG data URL
     let qrDataUrl = null;
     const svgEl = document.querySelector(`#qr-svg-${ticketData.ticketNo}`) || document.querySelector('.ticket-qr-box svg');
     if (svgEl) {
       qrDataUrl = await convertSvgToPng(svgEl);
     }
 
-    // Draw QR Container Box
     doc.setFillColor(241, 245, 249);
     doc.roundedRect(18, y + 2, 54, 44, 3, 3, 'F');
 
@@ -278,7 +246,6 @@ const TicketModal = ({ booking, onClose }) => {
     doc.setTextColor(100, 116, 139);
     doc.text('Scan to Verify Ticket', 45, y + 38, { align: 'center' });
 
-    // Dark Green Footer
     doc.setFillColor(6, 47, 34);
     doc.rect(0, 198, 90, 12, 'F');
     doc.setTextColor(255, 255, 255);
@@ -289,12 +256,10 @@ const TicketModal = ({ booking, onClose }) => {
     doc.text('www.ethiotrip.com', 82, 205, { align: 'right' });
   };
 
-  // PDF Ticket Generation
   const handleDownloadPDF = async () => {
     try {
       const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: [90, 210] });
 
-      // Outbound ticket data
       const outboundData = {
         ticketNo: outboundTicketNo,
         legLabel: 'Outbound Trip',
@@ -312,10 +277,8 @@ const TicketModal = ({ booking, onClose }) => {
       };
 
       if (isRoundTrip) {
-        // Render Outbound on Page 1
         await renderTicketPage(doc, outboundData);
 
-        // Render Return on Page 2
         doc.addPage([90, 210]);
         const returnData = {
           ticketNo: returnTicketNo,
@@ -346,164 +309,103 @@ const TicketModal = ({ booking, onClose }) => {
   };
 
   const ticketRows = [
-    { label: 'Ticket No', value: currentTicketNo },
-    { label: 'Journey Leg', value: isRoundTrip ? (isOutbound ? 'Outbound Trip' : 'Return Trip') : 'One-Way Trip' },
-    { label: 'Passenger Name', value: resolvedPassengerName },
-    { label: 'Bus Company', value: operatorName },
-    { label: 'Bus Type', value: busType },
-    { label: 'Bus Number', value: busNumber },
-    { label: 'Route', value: `${routeFrom} -> ${routeTo}` },
-    { label: 'Date', value: formattedDate },
-    { label: 'Departure Time', value: depTime },
-    { label: 'Arrival Time', value: arrTime },
-    { label: 'Seat No', value: seats },
-    { label: 'Leg Fare', value: `${currentPrice} ETB` },
-    { label: 'Total Booking Fare', value: `${totalPrice} ETB` },
-    { label: 'Payment Status', value: (paymentStatus || 'PAID').toString().toUpperCase() },
+    { label: t('ticket number', 'Ticket No'), value: currentTicketNo },
+    { label: t('Journey Leg', 'Journey Leg'), value: isRoundTrip ? (isOutbound ? t('outbound', 'Outbound Trip') : t('return', 'Return Trip')) : t('One-Way', 'One-Way Trip') },
+    { label: t('passenger name', 'Passenger Name'), value: resolvedPassengerName },
+    { label: t('operator', 'Bus Company'), value: operatorName },
+    { label: t('bus type', 'Bus Type'), value: busType },
+    { label: t('bus number', 'Bus Number'), value: busNumber },
+    { label: t('route', 'Route'), value: `${routeFrom} -> ${routeTo}` },
+    { label: t('date', 'Date'), value: formattedDate },
+    { label: t('departure time', 'Departure Time'), value: depTime },
+    { label: t('arrival time', 'Arrival Time'), value: arrTime },
+    { label: t('seat(s)', 'Seat No'), value: seats },
+    { label: t('Leg Fare', 'Leg Fare'), value: `${currentPrice} ETB` },
+    { label: t('total amount', 'Total Booking Fare'), value: `${totalPrice} ETB` },
+    { label: t('status', 'Payment Status'), value: (paymentStatus || 'PAID').toString().toUpperCase() },
   ];
 
   return (
     <div
       onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.78)',
-        backdropFilter: 'blur(6px)',
-        zIndex: 9999,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '16px',
-        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-      }}
+      className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 font-sans"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{
-          background: '#ffffff',
-          borderRadius: 16,
-          width: '100%',
-          maxWidth: 420,
-          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.45)',
-          overflow: 'hidden',
-          border: '1px solid #e2e8f0',
-          display: 'flex',
-          flexDirection: 'column',
-          position: 'relative',
-          maxHeight: '94vh',
-        }}
+        className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-[420px] shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col relative max-h-[94vh] transition-colors"
       >
-        {/* ── Top Red & Yellow Accent Stripe ── */}
-        <div style={{ height: 5, background: '#dc2626', width: '100%' }} />
-        <div style={{ height: 2.5, background: '#eab308', width: '100%' }} />
+        {}
+        <div className="h-1.5 bg-red-600 w-full" />
+        <div className="h-1 bg-amber-400 w-full" />
 
-        {/* Close Button */}
+        {}
         <button
           onClick={onClose}
           type="button"
           title="Close"
-          style={{
-            position: 'absolute', top: 12, right: 12,
-            background: '#f1f5f9', border: 'none',
-            width: 28, height: 28, borderRadius: '50%',
-            color: '#64748b', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '0.85rem', zIndex: 10
-          }}
+          className="absolute top-3.5 right-3.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 w-7 h-7 rounded-full text-slate-500 dark:text-slate-400 cursor-pointer flex items-center justify-center text-xs z-10 transition"
         >
           <FaTimes />
         </button>
 
-        {/* ── Round-Trip Switcher (if round-trip) ── */}
+        {}
         {isRoundTrip && (
-          <div style={{ display: 'flex', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+          <div className="flex bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700/60">
             <button
               type="button"
               onClick={() => setActiveLeg('outbound')}
-              style={{
-                flex: 1, padding: '9px 0', border: 'none',
-                borderBottom: activeLeg === 'outbound' ? '3px solid #078930' : 'none',
-                background: activeLeg === 'outbound' ? '#ffffff' : 'transparent',
-                fontWeight: 800, color: activeLeg === 'outbound' ? '#078930' : '#64748b',
-                fontSize: '0.78rem', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5
-              }}
+              className={`flex-1 py-2.5 border-b-2 font-extrabold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                activeLeg === 'outbound'
+                  ? 'border-emerald-600 bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400'
+                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
             >
-              <FaTicketAlt /> Outbound Ticket
+              <FaTicketAlt /> {t('outbound ticket', 'Outbound Ticket')}
             </button>
             <button
               type="button"
               onClick={() => setActiveLeg('return')}
-              style={{
-                flex: 1, padding: '9px 0', border: 'none',
-                borderBottom: activeLeg === 'return' ? '3px solid #d97706' : 'none',
-                background: activeLeg === 'return' ? '#ffffff' : 'transparent',
-                fontWeight: 800, color: activeLeg === 'return' ? '#d97706' : '#64748b',
-                fontSize: '0.78rem', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5
-              }}
+              className={`flex-1 py-2.5 border-b-2 font-extrabold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                activeLeg === 'return'
+                  ? 'border-amber-500 bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400'
+                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
             >
-              <FaTicketAlt /> Return Ticket
+              <FaTicketAlt /> {t('return ticket', 'Return Ticket')}
             </button>
           </div>
         )}
 
-        {/* ── Scrollable Ticket Body ── */}
-        <div style={{ overflowY: 'auto', padding: '20px 24px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-          {/* Title Header */}
-          <div style={{ textAlign: 'center', marginBottom: 6 }}>
-            <h1 style={{ margin: '0 0 4px', fontSize: '1.65rem', fontWeight: 900, color: '#0f172a', letterSpacing: '0.5px' }}>
-              E-TICKET
+        {}
+        <div className="overflow-y-auto px-6 py-5 flex flex-col gap-3.5">
+          {}
+          <div className="text-center mb-1">
+            <h1 className="m-0 mb-1 text-2xl font-black text-slate-900 dark:text-white tracking-wide">
+              {t('official e-ticket', 'E-TICKET')}
             </h1>
-            <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b', fontWeight: 500 }}>
-              Thank you for choosing {operatorName}!
+            <p className="m-0 text-xs text-slate-500 dark:text-slate-400 font-medium">
+              {t('Thank you for choosing', 'Thank you for choosing')} {operatorName}!
             </p>
           </div>
 
-          {/* Key-Value Rows (Exact match with reference image) */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid #f1f5f9', paddingTop: 14 }}>
+          {}
+          <div className="flex flex-col gap-2.5 border-t border-slate-100 dark:border-slate-800 pt-3.5">
             {ticketRows.map((row) => (
               <div
                 key={row.label}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  fontSize: '0.84rem'
-                }}
+                className="flex justify-between items-center text-xs"
               >
-                <span style={{ color: '#64748b', fontWeight: 500 }}>{row.label}</span>
-                <span style={{
-                  color: '#0f172a',
-                  fontWeight: 800,
-                  textAlign: 'right',
-                  fontFamily: row.label === 'Ticket No' ? 'monospace' : 'inherit'
-                }}>
+                <span className="text-slate-500 dark:text-slate-400 font-medium">{row.label}</span>
+                <span className={`text-slate-900 dark:text-white font-extrabold text-right ${row.label.includes('No') ? 'font-mono' : ''}`}>
                   {row.value}
                 </span>
               </div>
             ))}
           </div>
 
-          {/* ── Real QR Code Container ── */}
-          <div className="ticket-qr-box" style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            marginTop: 6,
-            padding: '16px',
-            background: '#f8fafc',
-            borderRadius: 14,
-            border: '1px solid #e2e8f0'
-          }}>
-            <div style={{
-              background: '#ffffff',
-              padding: 10,
-              borderRadius: 10,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
+          {}
+          <div className="ticket-qr-box flex flex-col items-center mt-1.5 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <div className="bg-white p-2.5 rounded-xl shadow-sm flex items-center justify-center">
               <QRCodeSVG
                 id={`qr-svg-${currentTicketNo}`}
                 value={qrVerificationData}
@@ -512,57 +414,34 @@ const TicketModal = ({ booking, onClose }) => {
                 includeMargin={false}
               />
             </div>
-            <span style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600, marginTop: 8 }}>
-              Scan to Verify Ticket
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold mt-2">
+              {t('show this qr code to the conductor upon boarding', 'Scan to Verify Ticket')}
             </span>
           </div>
 
-          {/* ── Action Buttons (Download & Print) ── */}
-          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          {}
+          <div className="flex gap-2 mt-1">
             <button
               type="button"
               onClick={handleDownloadPDF}
-              style={{
-                flex: 1, padding: '10px',
-                background: '#078930',
-                color: '#ffffff', border: 'none', borderRadius: 8,
-                fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                boxShadow: '0 2px 8px rgba(7,137,48,0.25)'
-              }}
+              className="flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/25 transition cursor-pointer"
             >
-              <FaDownload /> {isRoundTrip ? 'Download Both Tickets (PDF)' : 'Download E-Ticket'}
+              <FaDownload /> {isRoundTrip ? t('download ticket', 'Download Both (PDF)') : t('download ticket', 'Download E-Ticket')}
             </button>
             <button
               type="button"
               onClick={() => window.print()}
-              style={{
-                padding: '10px 16px',
-                background: '#ffffff',
-                color: '#334155', border: '1.5px solid #cbd5e1', borderRadius: 8,
-                fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5
-              }}
+              className="py-2.5 px-4 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer"
             >
-              <FaPrint /> Print
+              <FaPrint /> {t('print ticket', 'Print')}
             </button>
           </div>
-
         </div>
 
-        {/* ── Dark Green Bottom Footer Bar ── */}
-        <div style={{
-          background: '#062f22',
-          padding: '12px 20px',
-          display: 'flex',
-          justify: 'space-between',
-          alignItems: 'center',
-          color: '#ffffff',
-          fontSize: '0.78rem',
-          flexShrink: 0
-        }}>
-          <span style={{ fontWeight: 800 }}>Safe Journey!</span>
-          <span style={{ opacity: 0.85, fontSize: '0.74rem' }}>www.ethiotrip.com</span>
+        {}
+        <div className="bg-[#062f22] px-5 py-3 flex justify-between items-center text-white text-xs shrink-0">
+          <span className="font-extrabold">{t('safe journey!', 'Safe Journey!')}</span>
+          <span className="opacity-80 text-[11px]">www.ethiotrip.com</span>
         </div>
       </div>
     </div>

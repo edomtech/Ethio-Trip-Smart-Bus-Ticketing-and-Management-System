@@ -6,21 +6,26 @@ const {
   createStaff,
   getUserById,
   updateUser,
+  toggleUserStatus,
   deleteUser,
 } = require('../controllers/userController');
 const { protect, authorize } = require('../middleware/auth');
 
+const ROLES = require('../constants/roles');
+
 router.use(protect);
 
-router.get('/staff', authorize('super_admin', 'company_admin', 'admin'), getStaff);
-router.post('/staff', authorize('super_admin', 'company_admin', 'admin'), createStaff);
-router.get('/conductors', authorize('super_admin', 'company_admin', 'admin'), getConductors);
-router.get('/agents', authorize('super_admin', 'company_admin', 'admin'), getStaff);
-router.post('/agents', authorize('super_admin', 'company_admin', 'admin'), createStaff);
+router.get('/staff', authorize(ROLES.SUPER_ADMIN, ROLES.COMPANY_ADMIN), getStaff);
+router.post('/staff', authorize(ROLES.SUPER_ADMIN, ROLES.COMPANY_ADMIN), createStaff);
+router.get('/conductors', authorize(ROLES.SUPER_ADMIN, ROLES.COMPANY_ADMIN), getConductors);
 
-router.get('/', authorize('super_admin', 'company_admin', 'admin'), getAllUsers);
-router.get('/:id', authorize('super_admin', 'company_admin', 'admin'), getUserById);
-router.put('/:id', authorize('super_admin', 'company_admin', 'admin'), updateUser);
-router.delete('/:id', authorize('super_admin', 'company_admin', 'admin'), deleteUser);
+router.get('/agents', authorize(ROLES.SUPER_ADMIN, ROLES.COMPANY_ADMIN), getStaff);
+router.post('/agents', authorize(ROLES.SUPER_ADMIN, ROLES.COMPANY_ADMIN), createStaff);
+
+router.get('/', authorize(ROLES.SUPER_ADMIN, ROLES.COMPANY_ADMIN), getAllUsers);
+router.get('/:id', authorize(ROLES.SUPER_ADMIN, ROLES.COMPANY_ADMIN), getUserById);
+router.put('/:id', authorize(ROLES.SUPER_ADMIN, ROLES.COMPANY_ADMIN), updateUser);
+router.patch('/:id/toggle-status', authorize(ROLES.SUPER_ADMIN, ROLES.COMPANY_ADMIN), toggleUserStatus);
+router.delete('/:id', authorize(ROLES.SUPER_ADMIN, ROLES.COMPANY_ADMIN), deleteUser);
 
 module.exports = router;

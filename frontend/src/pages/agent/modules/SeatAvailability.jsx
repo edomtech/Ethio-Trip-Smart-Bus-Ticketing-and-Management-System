@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
   FaBus, FaSearch, FaCalendarAlt, FaMapMarkerAlt, FaClock,
-  FaTimes, FaCouch, FaChair, FaEye, FaSync, FaTrash
+  FaTimes, FaEye, FaSync, FaTrash
 } from 'react-icons/fa';
-import { toast } from 'react-toastify';
 import { scheduleAPI } from '../../../utils/api';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useNotification } from '../../../contexts/NotificationContext';
+import { MESSAGES } from '../../../constants/messages';
+import { useTranslation } from '../../../i18n';
 
-// ── Exact 45-seat bus layout (same as SeatSelectorModal) ──
 const ROWS = [
   { key: 1,  left: [1],       right: [2, 3] },
   { key: 2,  left: [4, 5],    right: [6, 7] },
@@ -28,30 +29,24 @@ const DEFAULT_CITIES = [
   'Bahir Dar', 'Jimma', 'Adama', 'Gondar', 'Dessie', 'Jijiga',
 ];
 
-// ── Read-only seat button ──
-const SeatView = ({ num, bookedSeats }) => {
+const SeatView = ({ num, bookedSeats, t }) => {
   const isBooked = bookedSeats.includes(num) || bookedSeats.includes(String(num));
   return (
     <div
-      title={isBooked ? `Seat ${num} – Reserved` : `Seat ${num} – Available`}
-      style={{
-        width: 38, height: 34, borderRadius: 8,
-        border: `1.5px solid ${isBooked ? '#94a3b8' : '#d1d5db'}`,
-        background: isBooked ? '#cbd5e1' : '#ffffff',
-        color: isBooked ? '#64748b' : '#1e293b',
-        fontWeight: 800, fontSize: '0.82rem',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexShrink: 0, cursor: 'default',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-      }}
+      title={isBooked ? `${t('booking.seat', 'Seat')} ${num} – ${t('booking.reserved', 'Reserved')}` : `${t('booking.seat', 'Seat')} ${num} – ${t('booking.available', 'Available')}`}
+      className={`w-[38px] h-[34px] rounded-lg border-[1.5px] font-extrabold text-[0.82rem] flex items-center justify-center shrink-0 cursor-default shadow-sm ${
+        isBooked
+          ? 'border-slate-400 bg-slate-300 text-slate-500'
+          : 'border-slate-300 bg-white text-slate-800'
+      }`}
     >
       {num}
     </div>
   );
 };
 
-// ── Seat Layout Modal (view-only grid) ──
 const SeatLayoutModal = ({ schedule, onClose }) => {
+  const { t } = useTranslation();
   const [bookedSeats, setBookedSeats] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -77,132 +72,88 @@ const SeatLayoutModal = ({ schedule, onClose }) => {
   const pct = Math.min(100, Math.round((reserved / cap) * 100));
 
   const renderSeatCol = (seats) =>
-    seats.map(n => <SeatView key={n} num={n} bookedSeats={bookedSeats} />);
+    seats.map(n => <SeatView key={n} num={n} bookedSeats={bookedSeats} t={t} />);
 
   return (
     <div
       onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0,
-        background: 'rgba(15,23,42,0.72)',
-        backdropFilter: 'blur(6px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        zIndex: 9999, padding: 16,
-      }}
+      className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"
     >
       <div
         onClick={e => e.stopPropagation()}
-        style={{
-          background: '#fff', borderRadius: 20, width: '100%', maxWidth: 520,
-          maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
-          boxShadow: '0 25px 60px rgba(0,0,0,0.45)',
-        }}
+        className="bg-white rounded-[20px] w-full max-w-[520px] max-h-[92vh] overflow-hidden flex flex-col shadow-2xl"
       >
-        {/* Modal Header */}
-        <div style={{
-          background: 'linear-gradient(135deg,#064e3b,#065f46)',
-          padding: '18px 20px',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-          flexShrink: 0,
-        }}>
+        <div className="bg-gradient-to-br from-[#064e3b] to-[#065f46] py-[18px] px-5 flex justify-between items-start shrink-0">
           <div>
-            <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,.65)', fontWeight: 700, marginBottom: 4 }}>
-              SEAT AVAILABILITY · VIEW ONLY
+            <div className="text-[0.68rem] text-white/70 font-bold mb-1">
+              {t('agent.seatAvailabilityTitle', 'SEAT AVAILABILITY · VIEW ONLY')}
             </div>
-            <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#fff' }}>
-              {schedule?.route?.from || '—'} → {schedule?.route?.to || '—'}
+            <div className="text-[1.2rem] font-black text-white">
+              {t(schedule?.route?.from, schedule?.route?.from || '—')} → {t(schedule?.route?.to, schedule?.route?.to || '—')}
             </div>
-            <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,.7)', marginTop: 3 }}>
-              Bus {schedule?.bus?.busNumber} ({schedule?.bus?.type || 'Luxury'}) · {schedule?.date} · {schedule?.departureTime}
+            <div className="text-[0.78rem] text-white/75 mt-1">
+              {t('admin.bus', 'Bus')} {schedule?.bus?.busNumber} ({schedule?.bus?.type || 'Luxury'}) · {schedule?.date} · {schedule?.departureTime}
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            style={{
-              background: 'rgba(255,255,255,.12)', border: 'none',
-              color: '#fff', borderRadius: 8, width: 34, height: 34,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', fontSize: '1rem', flexShrink: 0,
-            }}
+            className="bg-white/15 hover:bg-white/25 text-white border-0 rounded-lg w-[34px] h-[34px] flex items-center justify-center cursor-pointer text-base shrink-0 transition-colors"
           >
             <FaTimes />
           </button>
         </div>
 
-        {/* Capacity Bar */}
-        <div style={{ padding: '12px 20px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 700, marginBottom: 6 }}>
-            <span style={{ color: '#64748b' }}>
-              Reserved: <span style={{ color: '#dc2626', fontWeight: 900 }}>{reserved}</span>
+        <div className="py-3 px-5 border-b border-slate-100 shrink-0">
+          <div className="flex justify-between text-[0.78rem] font-bold mb-1.5 text-slate-500">
+            <span>
+              {t('booking.reserved', 'Reserved')}: <span className="text-red-600 font-black">{reserved}</span>
             </span>
-            <span style={{ color: '#64748b' }}>
-              Available: <span style={{ color: '#16a34a', fontWeight: 900 }}>{available}</span>
+            <span>
+              {t('booking.available', 'Available')}: <span className="text-green-600 font-black">{available}</span>
             </span>
-            <span style={{ color: '#64748b' }}>
-              Total: <strong>{cap}</strong>
+            <span>
+              {t('common.total', 'Total')}: <strong className="text-slate-700">{cap}</strong>
             </span>
           </div>
-          <div style={{ height: 7, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden' }}>
-            <div style={{
-              height: '100%', width: pct + '%',
-              background: pct > 85 ? '#ef4444' : pct > 60 ? '#f59e0b' : '#10b981',
-              borderRadius: 4, transition: 'width 0.4s ease',
-            }} />
+          <div className="h-[7px] bg-slate-200 rounded overflow-hidden">
+            <div
+              style={{ width: `${pct}%` }}
+              className={`h-full rounded transition-[width] duration-300 ${pct > 85 ? 'bg-red-500' : pct > 60 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+            />
           </div>
         </div>
 
-        {/* Legend */}
-        <div style={{ padding: '10px 20px', display: 'flex', gap: 16, flexShrink: 0 }}>
+        <div className="py-2.5 px-5 flex gap-4 shrink-0">
           {[
-            { color: '#fff', border: '#d1d5db', label: 'Available' },
-            { color: '#cbd5e1', border: '#94a3b8', label: 'Reserved' },
-          ].map(({ color, border, label }) => (
-            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <div style={{
-                width: 16, height: 14, borderRadius: 4,
-                background: color, border: `1.5px solid ${border}`,
-              }} />
-              <span style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>{label}</span>
+            { label: t('booking.available', 'Available'), isAvail: true },
+            { label: t('booking.reserved', 'Reserved'), isAvail: false },
+          ].map(({ label, isAvail }) => (
+            <div key={label} className="flex items-center gap-1.5">
+              <div className={`w-4 h-3.5 rounded border-[1.5px] ${isAvail ? 'bg-white border-slate-300' : 'bg-slate-300 border-slate-400'}`} />
+              <span className="text-[0.72rem] text-slate-600 font-semibold">{label}</span>
             </div>
           ))}
         </div>
 
-        {/* Bus Layout */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 20px' }}>
+        <div className="flex-1 overflow-y-auto px-5 pb-5">
           {loading ? (
-            <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>Loading seat map...</div>
+            <div className="text-center py-10 text-slate-500 font-medium">{t('agent.loadingSeatMap', 'Loading seat map...')}</div>
           ) : (
-            <div style={{
-              background: '#f8fafc', borderRadius: 16, border: '1.5px solid #e2e8f0',
-              padding: 16, display: 'flex', flexDirection: 'column', gap: 0,
-            }}>
-              {/* Driver Area */}
-              <div style={{
-                background: 'linear-gradient(90deg,#064e3b,#065f46)',
-                borderRadius: '12px 12px 0 0', padding: '10px 16px',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                marginBottom: 12,
-              }}>
-                <span style={{ color: '#fff', fontWeight: 900, fontSize: '0.82rem' }}>🚌 DRIVER</span>
-                <div style={{
-                  width: 36, height: 28, background: 'rgba(255,255,255,.2)',
-                  borderRadius: 8, border: '1.5px solid rgba(255,255,255,.3)',
-                }} />
+            <div className="bg-slate-50 rounded-2xl border-[1.5px] border-slate-200 p-4 flex flex-col">
+              <div className="bg-gradient-to-r from-[#064e3b] to-[#065f46] rounded-t-xl py-2.5 px-4 flex justify-between items-center mb-3">
+                <span className="text-white font-black text-[0.82rem]">🚌 {t('booking.driver', 'DRIVER')}</span>
+                <div className="w-9 h-7 bg-white/20 rounded-lg border-[1.5px] border-white/30" />
               </div>
 
-              {/* Seat rows */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div className="flex flex-col gap-1.5">
                 {ROWS.map(row => (
-                  <div key={row.key} style={{
-                    display: 'flex', justifyContent: 'space-between',
-                    alignItems: 'center', gap: 4,
-                  }}>
-                    <div style={{ display: 'flex', gap: 4 }}>{renderSeatCol(row.left)}</div>
-                    <div style={{ width: 28, textAlign: 'center', fontSize: '0.6rem', color: '#94a3b8' }}>
+                  <div key={row.key} className="flex justify-between items-center gap-1">
+                    <div className="flex gap-1">{renderSeatCol(row.left)}</div>
+                    <div className="w-7 text-center text-[0.6rem] text-slate-400">
                       {row.isBack ? '━━' : ''}
                     </div>
-                    <div style={{ display: 'flex', gap: 4 }}>{renderSeatCol(row.right)}</div>
+                    <div className="flex gap-1">{renderSeatCol(row.right)}</div>
                   </div>
                 ))}
               </div>
@@ -214,9 +165,10 @@ const SeatLayoutModal = ({ schedule, onClose }) => {
   );
 };
 
-// ── Main SeatAvailability Component ──
 const SeatAvailability = () => {
+  const { t } = useTranslation();
   const { user } = useAuth();
+  const notify = useNotification();
   const companyId = user?.companyId?._id || user?.companyId;
 
   const [from, setFrom] = useState('All Cities');
@@ -252,7 +204,7 @@ const SeatAvailability = () => {
       const merged = Array.from(new Set(['All Cities', ...DEFAULT_CITIES.slice(1), ...origins, ...destinations]));
       setCityList(merged);
     } catch (err) {
-      toast.error('Failed to load schedules: ' + err.message);
+      notify.notifyError(err, MESSAGES.reports?.loadFailed || t('admin.loadFailed', 'Failed to load schedules'));
     } finally {
       setLoading(false);
     }
@@ -262,10 +214,23 @@ const SeatAvailability = () => {
     fetchSchedules();
   }, [companyId]);
 
-  const handleDeleteSchedule = (id) => {
-    if (!window.confirm('Are you sure you want to remove this schedule from your seat availability monitor?')) return;
+  const handleDeleteSchedule = async (schedule) => {
+    const id = schedule?._id || schedule;
+    const label = schedule
+      ? `${schedule.route?.from || '?'} → ${schedule.route?.to || '?'}${schedule.tripId ? ` (${schedule.tripId})` : ''}`
+      : '';
+
+    const confirmed = await notify.confirm({
+      title: t('agent.removeMonitorTitle', 'Remove From Monitor?'),
+      message: `${t('agent.removeMonitorConfirm', 'Are you sure you want to remove this schedule')} ${label ? `"${label}"` : ''} ${t('agent.fromMonitor', 'from your seat availability monitor?')}`,
+      description: t('agent.removeMonitorDesc', 'The schedule itself is not deleted. It will simply be hidden from this monitor list.'),
+      confirmLabel: t('common.remove', 'Remove'),
+      cancelLabel: t('common.cancel', 'Cancel'),
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
     setSchedules(prev => prev.filter(s => s._id !== id));
-    toast.success('Schedule removed from seat availability list');
   };
 
   const filteredSchedules = schedules.filter(s => {
@@ -303,92 +268,73 @@ const SeatAvailability = () => {
     return matchesKeyword && matchesFrom && matchesTo && matchesDate;
   });
 
-  const labelStyle = {
-    display: 'block', fontSize: '0.72rem', fontWeight: 800,
-    color: '#475569', marginBottom: 4,
-  };
-  const inputStyle = {
-    width: '100%', padding: '9px 12px', borderRadius: 8,
-    border: '1.5px solid #cbd5e1', fontSize: '0.87rem',
-    outline: 'none', boxSizing: 'border-box', background: '#fff'
-  };
+  const labelClass = "block text-[0.72rem] font-extrabold text-slate-600 mb-1";
+  const inputClass = "w-full px-3 py-[9px] rounded-lg border-[1.5px] border-slate-300 text-[0.87rem] outline-none bg-white text-slate-900 focus:border-eb-green transition-colors";
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-      {/* Clean Top Title Bar (No bulky green banner background) */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+    <div className="flex flex-col gap-5">
+      <div className="flex justify-between items-center flex-wrap gap-3">
         <div>
-          <h2 style={{ margin: 0, fontWeight: 900, fontSize: '1.35rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <FaEye style={{ color: '#078930' }} /> Seat Availability Monitor
+          <h2 className="m-0 font-black text-[1.35rem] text-slate-900 flex items-center gap-2.5">
+            <FaEye className="text-eb-green" /> {t('agent.seatAvailability', 'Seat Availability Monitor')}
           </h2>
-          <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.84rem' }}>
-            Monitor real-time seat reservation layout and capacity across scheduled company buses.
+          <p className="mt-1 mb-0 text-slate-500 text-[0.84rem]">
+            {t('agent.seatAvailabilitySub', 'Monitor real-time seat reservation layout and capacity across scheduled company buses.')}
           </p>
         </div>
         <button
           onClick={fetchSchedules}
           disabled={loading}
-          style={{
-            padding: '9px 18px', background: '#078930', color: '#fff',
-            border: 'none', borderRadius: 9, fontWeight: 800,
-            fontSize: '0.84rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7,
-            boxShadow: '0 2px 8px rgba(7,137,48,0.2)'
-          }}
+          className="py-[9px] px-[18px] bg-eb-green hover:bg-[#067328] text-white border-0 rounded-lg font-extrabold text-[0.84rem] cursor-pointer flex items-center gap-[7px] shadow-[0_2px_8px_rgba(7,137,48,0.2)] transition-colors disabled:opacity-50"
         >
-          <FaSync className={loading ? 'fa-spin' : ''} /> Refresh Availability
+          <FaSync className={loading ? 'fa-spin' : ''} /> {t('agent.refreshAvailability', 'Refresh Availability')}
         </button>
       </div>
 
-      {/* Search & Filters Card */}
-      <div style={{
-        background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0',
-        padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-      }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 14 }}>
-          {/* Search Input */}
-          <div style={{ gridColumn: 'span 2' }}>
-            <label style={labelStyle}>Search by Bus Name / Number / Plate / Route</label>
-            <div style={{ position: 'relative' }}>
-              <FaSearch style={{ position: 'absolute', left: 12, top: 12, color: '#94a3b8' }} />
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-3.5">
+          <div className="col-span-1 sm:col-span-2">
+            <label className={labelClass}>{t('agent.searchBusFilter', 'Search by Bus Name / Number / Plate / Route')}</label>
+            <div className="relative">
+              <FaSearch className="absolute left-3 top-3 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search bus number, plate, route or departure time..."
+                placeholder={t('agent.searchBusPlaceholder', 'Search bus number, plate, route or departure time...')}
                 value={searchKeyword}
                 onChange={e => setSearchKeyword(e.target.value)}
-                style={{ ...inputStyle, paddingLeft: 34 }}
+                className={`${inputClass} pl-9`}
               />
             </div>
           </div>
 
           <div>
-            <label style={labelStyle}>Origin</label>
-            <select value={from} onChange={e => setFrom(e.target.value)} style={inputStyle}>
-              {cityList.map(c => <option key={c}>{c}</option>)}
+            <label className={labelClass}>{t('booking.fromOrigin', 'Origin')}</label>
+            <select value={from} onChange={e => setFrom(e.target.value)} className={inputClass}>
+              {cityList.map(c => <option key={c} value={c}>{c === 'All Cities' ? t('common.allCities', 'All Cities') : t(c, c)}</option>)}
             </select>
           </div>
 
           <div>
-            <label style={labelStyle}>Destination</label>
-            <select value={to} onChange={e => setTo(e.target.value)} style={inputStyle}>
-              {cityList.map(c => <option key={c}>{c}</option>)}
+            <label className={labelClass}>{t('booking.toDestination', 'Destination')}</label>
+            <select value={to} onChange={e => setTo(e.target.value)} className={inputClass}>
+              {cityList.map(c => <option key={c} value={c}>{c === 'All Cities' ? t('common.allCities', 'All Cities') : t(c, c)}</option>)}
             </select>
           </div>
 
           <div>
-            <label style={labelStyle}>Departure Date</label>
+            <label className={labelClass}>{t('booking.departureDate', 'Departure Date')}</label>
             <input
               type="date"
               value={date}
+              min={new Date().toISOString().split('T')[0]}
               onChange={e => setDate(e.target.value)}
-              style={inputStyle}
+              className={inputClass}
             />
           </div>
         </div>
 
-        {/* Clear Filters Button */}
         {(searchKeyword || from !== 'All Cities' || to !== 'All Cities' || date) && (
-          <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+          <div className="mt-3 flex justify-end">
             <button
               type="button"
               onClick={() => {
@@ -397,153 +343,121 @@ const SeatAvailability = () => {
                 setTo('All Cities');
                 setDate('');
               }}
-              style={{
-                background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 6,
-                padding: '5px 12px', fontSize: '0.78rem', color: '#475569',
-                cursor: 'pointer', fontWeight: 700
-              }}
+              className="bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-md py-1.5 px-3 text-[0.78rem] text-slate-600 cursor-pointer font-bold transition-colors"
             >
-              Clear Filters
+              {t('common.clearFilters', 'Clear Filters')}
             </button>
           </div>
         )}
       </div>
 
-      {/* Results */}
       <div>
-        <div style={{ marginBottom: 12, fontSize: '0.82rem', color: '#64748b', fontWeight: 700 }}>
-          {filteredSchedules.length} schedule{filteredSchedules.length !== 1 ? 's' : ''} available
+        <div className="mb-3 text-[0.82rem] text-slate-500 font-bold">
+          {filteredSchedules.length} {t('agent.schedulesAvailable', 'schedules available')}
         </div>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '60px 20px', background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', color: '#64748b' }}>
-            <FaSync className="fa-spin" style={{ fontSize: '2rem', color: '#078930', marginBottom: 12 }} />
-            <p style={{ margin: 0, fontWeight: 700 }}>Loading seat availability data...</p>
+          <div className="text-center py-16 px-5 bg-white rounded-2xl border border-slate-200 text-slate-500 shadow-sm">
+            <FaSync className="fa-spin text-[2rem] text-eb-green mb-3 mx-auto" />
+            <p className="m-0 font-bold">{t('agent.loadingSeatData', 'Loading seat availability data...')}</p>
           </div>
         ) : filteredSchedules.length === 0 ? (
-          <div style={{
-            textAlign: 'center', padding: '50px 20px',
-            background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', color: '#64748b',
-          }}>
-            <FaBus style={{ fontSize: '2.5rem', color: '#cbd5e1', marginBottom: 12 }} />
-            <h4 style={{ margin: '0 0 4px', color: '#334155' }}>No schedules match search</h4>
-            <p style={{ margin: 0, fontSize: '0.82rem' }}>
-              Try searching with a different bus name, route, or clear your filters.
+          <div className="text-center py-12 px-5 bg-white rounded-2xl border border-slate-200 text-slate-500 shadow-sm">
+            <FaBus className="text-[2.5rem] text-slate-300 mb-3 mx-auto" />
+            <h4 className="m-0 mb-1 text-slate-700 font-bold">{t('agent.noSchedulesMatch', 'No schedules match search')}</h4>
+            <p className="m-0 text-[0.82rem]">
+              {t('agent.tryDifferentSearch', 'Try searching with a different bus name, route, or clear your filters.')}
             </p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="flex flex-col gap-3.5">
             {filteredSchedules.map(sch => {
               const cap = sch.bus?.totalSeats || sch.bus?.capacity || 45;
               const booked = (sch.bookedSeats || []).length;
               const available = Math.max(0, cap - booked);
               const pct = Math.min(100, Math.round((booked / cap) * 100));
-              const barColor = pct > 85 ? '#ef4444' : pct > 60 ? '#f59e0b' : '#10b981';
 
               return (
                 <div
                   key={sch._id}
-                  style={{
-                    background: '#fff', borderRadius: 14,
-                    border: '1.5px solid #e2e8f0', padding: 18,
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-                  }}
+                  className="bg-white rounded-[14px] border-[1.5px] border-slate-200 p-[18px] shadow-sm"
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-                    {/* Bus Info */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 1 }}>
-                      <div style={{
-                        width: 46, height: 46, borderRadius: 12,
-                        background: '#f0fdf4', color: '#078930',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '1.25rem', flexShrink: 0,
-                      }}>
+                  <div className="flex justify-between items-start flex-wrap gap-3">
+                    <div className="flex items-center gap-3.5 flex-1 min-w-[280px]">
+                      <div className="w-[46px] h-[46px] rounded-xl bg-green-50 text-eb-green flex items-center justify-center text-xl shrink-0">
                         <FaBus />
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 900, color: '#0f172a', fontSize: '1rem', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span>Bus {sch.bus?.busNumber}</span>
-                          <span style={{ fontSize: '0.75rem', background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>
+                      <div className="flex-1">
+                        <div className="font-black text-slate-900 text-base mb-1 flex items-center gap-2 flex-wrap">
+                          <span>{t('admin.bus', 'Bus')} {sch.bus?.busNumber}</span>
+                          <span className="text-[0.75rem] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-bold">
                             {sch.bus?.type || 'Luxury'}
                           </span>
                           {sch.bus?.plateNumber && (
-                            <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                              Plate: {sch.bus.plateNumber}
+                            <span className="text-[0.72rem] text-slate-500">
+                              {t('admin.plate', 'Plate')}: {sch.bus.plateNumber}
                             </span>
                           )}
                         </div>
-                        <div style={{
-                          fontSize: '0.78rem', color: '#64748b',
-                          display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 3,
-                        }}>
-                          <span><FaMapMarkerAlt style={{ color: '#078930', marginRight: 3 }} />
-                            {sch.route?.from || 'Origin'} → {sch.route?.to || 'Destination'}
+                        <div className="text-[0.78rem] text-slate-500 flex gap-3.5 flex-wrap mb-1">
+                          <span><FaMapMarkerAlt className="text-eb-green mr-1 inline" />
+                            {t(sch.route?.from, sch.route?.from || 'Origin')} → {t(sch.route?.to, sch.route?.to || 'Destination')}
                           </span>
-                          <span><FaCalendarAlt style={{ color: '#078930', marginRight: 3 }} />{sch.date}</span>
-                          <span><FaClock style={{ color: '#078930', marginRight: 3 }} />{sch.departureTime}</span>
+                          <span><FaCalendarAlt className="text-eb-green mr-1 inline" />{sch.date}</span>
+                          <span><FaClock className="text-eb-green mr-1 inline" />{sch.departureTime}</span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Stats + Action Buttons */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
-                      <div style={{ display: 'flex', gap: 12 }}>
-                        <div style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#dc2626', lineHeight: 1 }}>{booked}</div>
-                          <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700 }}>RESERVED</div>
+                    <div className="flex flex-col items-end gap-2.5">
+                      <div className="flex gap-3 items-center">
+                        <div className="text-center">
+                          <div className="text-[1.4rem] font-black text-red-600 leading-none">{booked}</div>
+                          <div className="text-[0.65rem] text-slate-500 font-bold uppercase">{t('booking.reserved', 'RESERVED')}</div>
                         </div>
-                        <div style={{ width: 1, background: '#e2e8f0' }} />
-                        <div style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#16a34a', lineHeight: 1 }}>{available}</div>
-                          <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700 }}>AVAILABLE</div>
+                        <div className="w-px h-8 bg-slate-200" />
+                        <div className="text-center">
+                          <div className="text-[1.4rem] font-black text-green-600 leading-none">{available}</div>
+                          <div className="text-[0.65rem] text-slate-500 font-bold uppercase">{t('booking.available', 'AVAILABLE')}</div>
                         </div>
-                        <div style={{ width: 1, background: '#e2e8f0' }} />
-                        <div style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#334155', lineHeight: 1 }}>{cap}</div>
-                          <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700 }}>TOTAL</div>
+                        <div className="w-px h-8 bg-slate-200" />
+                        <div className="text-center">
+                          <div className="text-[1.4rem] font-black text-slate-700 leading-none">{cap}</div>
+                          <div className="text-[0.65rem] text-slate-500 font-bold uppercase">{t('common.total', 'TOTAL')}</div>
                         </div>
                       </div>
 
-                      {/* Action buttons (View Layout + Delete / Remove) */}
-                      <div style={{ display: 'flex', gap: 8 }}>
+                      <div className="flex gap-2">
                         <button
                           type="button"
                           onClick={() => setViewSchedule(sch)}
-                          style={{
-                            padding: '8px 16px', background: '#0f172a', color: '#fff',
-                            border: 'none', borderRadius: 8, fontWeight: 800, fontSize: '0.82rem',
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                          }}
+                          className="py-2 px-4 bg-slate-900 hover:bg-slate-800 text-white border-0 rounded-lg font-extrabold text-[0.82rem] cursor-pointer flex items-center gap-1.5 transition-colors"
                         >
-                          <FaEye /> View Layout
+                          <FaEye /> {t('agent.viewLayout', 'View Layout')}
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDeleteSchedule(sch._id)}
-                          style={{
-                            padding: '8px 12px', background: '#fff', color: '#dc2626',
-                            border: '1.5px solid #fecaca', borderRadius: 8, fontWeight: 800, fontSize: '0.82rem',
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
-                          }}
+                          onClick={() => handleDeleteSchedule(sch)}
+                          aria-label={`Remove schedule ${sch.tripId || ''} from monitor`}
+                          className="py-2 px-3 bg-white hover:bg-red-50 text-red-600 border-[1.5px] border-red-200 rounded-lg font-extrabold text-[0.82rem] cursor-pointer flex items-center gap-1.5 transition-colors"
                         >
-                          <FaTrash /> Remove
+                          <FaTrash /> {t('common.remove', 'Remove')}
                         </button>
                       </div>
                     </div>
                   </div>
 
-                  {/* Progress bar */}
-                  <div style={{ marginTop: 14 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#94a3b8', marginBottom: 4 }}>
+                  <div className="mt-3.5">
+                    <div className="flex justify-between text-[0.7rem] text-slate-400 mb-1">
                       <span>0%</span>
-                      <span style={{ fontWeight: 700, color: barColor }}>{pct}% Occupied</span>
+                      <span className={`font-bold ${pct > 85 ? 'text-red-600' : pct > 60 ? 'text-amber-600' : 'text-emerald-600'}`}>{pct}% {t('agent.occupied', 'Occupied')}</span>
                       <span>100%</span>
                     </div>
-                    <div style={{ height: 6, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden' }}>
-                      <div style={{
-                        height: '100%', width: pct + '%',
-                        background: barColor, borderRadius: 4, transition: 'width 0.4s ease',
-                      }} />
+                    <div className="h-1.5 bg-slate-200 rounded overflow-hidden">
+                      <div
+                        style={{ width: `${pct}%` }}
+                        className={`h-full rounded transition-[width] duration-300 ${pct > 85 ? 'bg-red-500' : pct > 60 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                      />
                     </div>
                   </div>
                 </div>
@@ -553,7 +467,6 @@ const SeatAvailability = () => {
         )}
       </div>
 
-      {/* Seat Layout View Modal */}
       {viewSchedule && (
         <SeatLayoutModal
           schedule={viewSchedule}

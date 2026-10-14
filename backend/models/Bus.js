@@ -4,7 +4,7 @@ const busSchema = new mongoose.Schema({
   companyId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true },
   busNumber:   { type: String, required: true },
   plateNumber: { type: String, default: '' },
-  type:        { type: String, enum: ['Standard', 'Luxury', 'VIP'], default: 'Standard' },
+  type:        { type: String, enum: ['Standard', 'Luxury', 'VIP', 'Executive', 'Economy'], default: 'Standard' },
   capacity:    { type: Number, required: true, min: 1 },
   amenities:   [{ type: String }],
   description: { type: String, default: '' },

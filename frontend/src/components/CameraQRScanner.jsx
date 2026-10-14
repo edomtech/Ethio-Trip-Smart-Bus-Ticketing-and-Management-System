@@ -2,14 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { FaCamera, FaTimes, FaRedo, FaUpload, FaSearch, FaCheck, FaExclamationTriangle } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 
-// Sound effect synthesizer for QR scan success
 const playBeep = () => {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, ctx.currentTime); // A5 note
+    osc.frequency.setValueAtTime(880, ctx.currentTime);  
     gain.gain.setValueAtTime(0.15, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
     osc.connect(gain);
@@ -17,7 +16,6 @@ const playBeep = () => {
     osc.start();
     osc.stop(ctx.currentTime + 0.15);
   } catch {
-    // AudioContext not allowed or not supported
   }
 };
 
@@ -29,7 +27,7 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
 
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState('');
-  const [facingMode, setFacingMode] = useState('environment'); // 'environment' (back) or 'user' (front)
+  const [facingMode, setFacingMode] = useState('environment');  
   const [manualInput, setManualInput] = useState('');
   const [analyzingImage, setAnalyzingImage] = useState(false);
 
@@ -110,11 +108,10 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
               if (rawValue) {
                 playBeep();
                 handleDetected(rawValue);
-                return; // Stop scanning once detected
+                return;  
               }
             }
           } catch (e) {
-            // Frame detection continue
           }
         }
         animFrameId.current = requestAnimationFrame(scanLoop);
@@ -128,15 +125,17 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
 
   const handleDetected = (content) => {
     let clean = content.trim();
-    if (clean.startsWith('ETHIOTRIP:')) {
+    if (clean.startsWith('ETHIOTRIP:') || clean.startsWith('ETHIOBUS:')) {
       const parts = clean.split(':');
       clean = parts[1] || clean;
+    } else if (clean.includes('TICKET:')) {
+      const match = clean.match(/TICKET:\s*([^\s\n\r|;]+)/i);
+      if (match && match[1]) clean = match[1];
     } else if (clean.startsWith('{')) {
       try {
         const parsed = JSON.parse(clean);
         clean = parsed.ticketNumber || parsed.tkt || clean;
       } catch {
-        // use raw
       }
     }
 
@@ -196,14 +195,14 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
   };
 
   return (
-    <div style={{ background: '#ffffff', borderRadius: 20, border: '1.5px solid #e2e8f0', padding: 20, boxShadow: '0 10px 25px rgba(0,0,0,0.06)', maxWidth: 420, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-xl max-w-[420px] mx-auto transition-colors">
+      {}
+      <div className="flex justify-between items-center mb-3">
         <div>
-          <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 900, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <FaCamera style={{ color: '#4f46e5' }} /> Live Camera QR Scanner
+          <h3 className="m-0 text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+            <FaCamera className="text-indigo-600 dark:text-indigo-400" /> Live Camera QR Scanner
           </h3>
-          <p style={{ margin: '2px 0 0', color: '#64748b', fontSize: '0.78rem' }}>
+          <p className="m-0 mt-0.5 text-slate-500 dark:text-slate-400 text-xs">
             Point camera at passenger's printed ticket or smartphone screen
           </p>
         </div>
@@ -211,127 +210,56 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
           <button
             type="button"
             onClick={onClose}
-            style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: '#f1f5f9', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center cursor-pointer transition"
           >
             <FaTimes />
           </button>
         )}
       </div>
 
-      {/* Compact Video Viewport Container */}
-      <div
-        style={{
-          position: 'relative',
-          width: '100%',
-          maxWidth: 340,
-          height: 200,
-          margin: '0 auto 14px',
-          background: '#090d16',
-          borderRadius: 16,
-          overflow: 'hidden',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: 'inset 0 0 15px rgba(0,0,0,0.8)',
-        }}
-      >
+      <div className="relative w-full max-w-[340px] h-52 mx-auto mb-3.5 bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center shadow-inner">
         <video
           ref={videoRef}
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            display: cameraActive ? 'block' : 'none',
-          }}
+          className={`w-full h-full object-cover ${cameraActive ? 'block' : 'hidden'}`}
           muted
           playsInline
         />
 
-        <canvas ref={canvasRef} style={{ display: 'none' }} />
+        <canvas ref={canvasRef} className="hidden" />
 
-        {/* Targeting Grid Overlay when Camera is Active */}
         {cameraActive && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              pointerEvents: 'none',
-            }}
-          >
-            <div
-              style={{
-                width: 150,
-                height: 150,
-                border: '2px solid rgba(99, 102, 241, 0.8)',
-                borderRadius: 16,
-                position: 'relative',
-                boxShadow: '0 0 0 9999px rgba(15, 23, 42, 0.55), 0 0 15px rgba(99, 102, 241, 0.4)',
-              }}
-            >
-              {/* Animated scanning laser line */}
-              <div
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  right: 0,
-                  height: 3,
-                  background: 'linear-gradient(90deg, transparent, #22c55e, #38bdf8, transparent)',
-                  boxShadow: '0 0 8px #22c55e',
-                  animation: 'scanLaser 2s infinite ease-in-out',
-                }}
-              />
-              <style>{`
-                @keyframes scanLaser {
-                  0% { top: 10%; opacity: 0.2; }
-                  50% { top: 90%; opacity: 1; }
-                  100% { top: 10%; opacity: 0.2; }
-                }
-              `}</style>
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="w-38 h-38 border-2 border-indigo-500/80 rounded-2xl relative shadow-[0_0_0_9999px_rgba(15,23,42,0.55),0_0_15px_rgba(99,102,241,0.4)]">
 
-              {/* Corner brackets */}
-              <div style={{ position: 'absolute', top: -2, left: -2, width: 18, height: 18, borderTop: '3.5px solid #4f46e5', borderLeft: '3.5px solid #4f46e5', borderTopLeftRadius: 8 }} />
-              <div style={{ position: 'absolute', top: -2, right: -2, width: 18, height: 18, borderTop: '3.5px solid #4f46e5', borderRight: '3.5px solid #4f46e5', borderTopRightRadius: 8 }} />
-              <div style={{ position: 'absolute', bottom: -2, left: -2, width: 18, height: 18, borderBottom: '3.5px solid #4f46e5', borderLeft: '3.5px solid #4f46e5', borderBottomLeftRadius: 8 }} />
-              <div style={{ position: 'absolute', bottom: -2, right: -2, width: 18, height: 18, borderBottom: '3.5px solid #4f46e5', borderRight: '3.5px solid #4f46e5', borderBottomRightRadius: 8 }} />
+              <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-sky-400 shadow-[0_0_8px_#22c55e] animate-scan-laser" />
+
+              <div className="absolute -top-0.5 -left-0.5 w-4.5 h-4.5 border-t-[3.5px] border-l-[3.5px] border-indigo-500 rounded-tl-lg" />
+              <div className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 border-t-[3.5px] border-r-[3.5px] border-indigo-500 rounded-tr-lg" />
+              <div className="absolute -bottom-0.5 -left-0.5 w-4.5 h-4.5 border-b-[3.5px] border-l-[3.5px] border-indigo-500 rounded-bl-lg" />
+              <div className="absolute -bottom-0.5 -right-0.5 w-4.5 h-4.5 border-b-[3.5px] border-r-[3.5px] border-indigo-500 rounded-br-lg" />
             </div>
 
-            <div style={{ position: 'absolute', bottom: 10, color: '#f8fafc', fontSize: '0.7rem', fontWeight: 700, background: 'rgba(0,0,0,0.65)', padding: '3px 12px', borderRadius: 20, backdropFilter: 'blur(4px)' }}>
+            <div className="absolute bottom-2.5 text-white text-[11px] font-bold bg-black/65 px-3 py-0.5 rounded-full backdrop-blur-xs">
               Align QR code inside target
             </div>
           </div>
         )}
 
-        {/* Fallback Screen if Camera is Off or Error */}
         {!cameraActive && (
-          <div style={{ textAlign: 'center', padding: 16, color: '#cbd5e1', maxWidth: 300 }}>
-            <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px', fontSize: '1.2rem', color: cameraError ? '#f87171' : '#818cf8' }}>
+          <div className="text-center p-4 text-slate-300 max-w-[300px]">
+            <div className={`w-11 h-11 rounded-full bg-white/10 flex items-center justify-center mx-auto mb-2 text-xl ${cameraError ? 'text-red-400' : 'text-indigo-400'}`}>
               {cameraError ? <FaExclamationTriangle /> : <FaCamera />}
             </div>
-            <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#f8fafc', marginBottom: 3 }}>
+            <div className="font-extrabold text-sm text-white mb-1">
               {cameraError ? 'Camera Notice' : 'Camera Ready'}
             </div>
-            <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: 12, lineHeight: 1.3 }}>
+            <div className="text-xs text-slate-400 mb-3 leading-snug">
               {cameraError || 'Click below to start live camera scanning.'}
             </div>
             <button
               type="button"
               onClick={startCamera}
-              style={{
-                padding: '7px 16px',
-                background: '#4f46e5',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 9,
-                fontWeight: 700,
-                fontSize: '0.8rem',
-                cursor: 'pointer',
-              }}
+              className="py-2 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs cursor-pointer shadow-md shadow-indigo-600/25 transition"
             >
               Start Camera
             </button>
@@ -339,43 +267,20 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
         )}
       </div>
 
-      {/* Camera Controls Bar */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+      <div className="flex gap-2.5 flex-wrap">
         {cameraActive ? (
           <>
             <button
               type="button"
               onClick={stopCamera}
-              style={{
-                flex: 1,
-                padding: '9px 12px',
-                background: '#fee2e2',
-                color: '#dc2626',
-                border: 'none',
-                borderRadius: 10,
-                fontWeight: 700,
-                fontSize: '0.8rem',
-                cursor: 'pointer',
-              }}
+              className="flex-1 py-2.5 px-3 bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-xl font-bold text-xs cursor-pointer transition"
             >
               Pause Camera
             </button>
             <button
               type="button"
               onClick={toggleCameraFacing}
-              style={{
-                padding: '9px 12px',
-                background: '#f1f5f9',
-                color: '#334155',
-                border: '1px solid #cbd5e1',
-                borderRadius: 10,
-                fontWeight: 700,
-                fontSize: '0.8rem',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
+              className="py-2.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer transition"
             >
               <FaRedo /> Switch Camera ({facingMode === 'environment' ? 'Back' : 'Front'})
             </button>
@@ -384,48 +289,19 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
           <button
             type="button"
             onClick={startCamera}
-            style={{
-              flex: 1,
-              padding: '9px 12px',
-              background: '#e0e7ff',
-              color: '#4338ca',
-              border: 'none',
-              borderRadius: 10,
-              fontWeight: 800,
-              fontSize: '0.8rem',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
-            }}
+            className="flex-1 py-2.5 px-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition"
           >
             <FaCamera /> Turn On Camera
           </button>
         )}
 
-        {/* QR Code Photo Upload Option */}
-        <label
-          style={{
-            padding: '9px 14px',
-            background: '#f8fafc',
-            color: '#475569',
-            border: '1.5px solid #cbd5e1',
-            borderRadius: 10,
-            fontWeight: 700,
-            fontSize: '0.8rem',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
+        <label className="py-2.5 px-3.5 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer transition">
           <FaUpload /> {analyzingImage ? 'Reading...' : 'Scan Photo'}
           <input
             type="file"
             accept="image/*"
             onChange={handleFileUpload}
-            style={{ display: 'none' }}
+            className="hidden"
           />
         </label>
       </div>

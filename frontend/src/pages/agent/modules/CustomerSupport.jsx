@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import {
-  FaHeadset, FaPaperPlane, FaPhoneAlt, FaClipboardList,
-  FaCheckCircle, FaClock, FaTimesCircle, FaEnvelope, FaUser,
-  FaCommentDots, FaReply, FaSearch, FaFilter, FaCheckDouble, FaSync, FaComments
+  FaPaperPlane,
+  FaSearch, FaSync, FaComments
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { supportAPI } from '../../../utils/api';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useTranslation } from '../../../i18n';
 
 const CustomerSupport = () => {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'OPEN' | 'IN_PROGRESS' | 'ANSWERED' | 'CLOSED'
+  const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [replyText, setReplyText] = useState('');
@@ -25,13 +26,12 @@ const CustomerSupport = () => {
       if (Array.isArray(res)) {
         setTickets(res);
         if (selectedTicket) {
-          const updatedSelected = res.find((t) => t._id === selectedTicket._id);
+          const updatedSelected = res.find((tkt) => tkt._id === selectedTicket._id);
           if (updatedSelected) setSelectedTicket(updatedSelected);
         }
       }
-    } catch (err) {
-      console.error('Failed to load support tickets:', err);
-      toast.error('Failed to load support tickets');
+    } catch {
+      toast.error(t('agent.supportLoadFailed', 'Failed to load support tickets'));
     } finally {
       setLoading(false);
     }
@@ -48,21 +48,21 @@ const CustomerSupport = () => {
   const handleSendReply = async (e) => {
     e.preventDefault();
     if (!replyText.trim()) {
-      toast.warn('Please enter a reply message before sending.');
+      toast.warn(t('agent.enterReplyWarn', 'Please enter a reply message before sending.'));
       return;
     }
 
     setSendingReply(true);
     try {
       const res = await supportAPI.addMessage(selectedTicket._id, replyText.trim());
-      toast.success(`Reply sent to ${selectedTicket.passengerName}!`);
+      toast.success(`${t('agent.replySentTo', 'Reply sent to')} ${selectedTicket.passengerName}!`);
       setReplyText('');
       if (res?.ticket) {
         setSelectedTicket(res.ticket);
       }
       fetchTickets();
     } catch (err) {
-      toast.error(err.message || 'Failed to send reply');
+      toast.error(err.message || t('agent.sendReplyFailed', 'Failed to send reply'));
     } finally {
       setSendingReply(false);
     }
@@ -71,16 +71,16 @@ const CustomerSupport = () => {
   const handleUpdateStatus = async (ticketId, newStatus) => {
     try {
       const res = await supportAPI.updateStatus(ticketId, newStatus);
-      toast.success(`Conversation status updated to ${newStatus}`);
+      toast.success(`${t('agent.convStatusUpdated', 'Conversation status updated to')} ${newStatus}`);
       if (res?.ticket) setSelectedTicket(res.ticket);
       fetchTickets();
     } catch (err) {
-      toast.error(err.message || 'Failed to update status');
+      toast.error(err.message || t('agent.updateStatusFailed', 'Failed to update status'));
     }
   };
 
-  const filteredTickets = tickets.filter((t) => {
-    const normStatus = (t.status || 'OPEN').toUpperCase();
+  const filteredTickets = tickets.filter((tkt) => {
+    const normStatus = (tkt.status || 'OPEN').toUpperCase();
     const matchStatus =
       statusFilter === 'all' ||
       normStatus === statusFilter ||
@@ -88,193 +88,158 @@ const CustomerSupport = () => {
       (statusFilter === 'RESOLVED' && (normStatus === 'ANSWERED' || normStatus === 'CLOSED' || normStatus === 'RESOLVED'));
     const matchSearch =
       !searchQuery ||
-      t.subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.passengerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.passengerEmail?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.ticketNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.category?.toLowerCase().includes(searchQuery.toLowerCase());
+      tkt.subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tkt.passengerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tkt.passengerEmail?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tkt.ticketNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tkt.category?.toLowerCase().includes(searchQuery.toLowerCase());
     return matchStatus && matchSearch;
   });
 
-  const openCount = tickets.filter((t) => (t.status || '').toUpperCase() === 'OPEN').length;
-  const inProgressCount = tickets.filter((t) => (t.status || '').toUpperCase() === 'IN_PROGRESS').length;
-  const answeredCount = tickets.filter((t) => (t.status || '').toUpperCase() === 'ANSWERED').length;
-  const closedCount = tickets.filter((t) => (t.status || '').toUpperCase() === 'CLOSED' || (t.status || '').toUpperCase() === 'RESOLVED').length;
+  const openCount = tickets.filter((tkt) => (tkt.status || '').toUpperCase() === 'OPEN').length;
+  const inProgressCount = tickets.filter((tkt) => (tkt.status || '').toUpperCase() === 'IN_PROGRESS').length;
+  const answeredCount = tickets.filter((tkt) => (tkt.status || '').toUpperCase() === 'ANSWERED').length;
+  const closedCount = tickets.filter((tkt) => (tkt.status || '').toUpperCase() === 'CLOSED' || (tkt.status || '').toUpperCase() === 'RESOLVED').length;
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      <div className="flex justify-between items-center mb-5 flex-wrap gap-3">
         <div>
-          <h2 style={{ margin: '0 0 4px', fontSize: '1.4rem', fontWeight: 900, color: '#0f172a' }}>
-            Customer Support Desk
+          <h2 className="m-0 mb-1 text-[1.4rem] font-black text-slate-900">
+            {t('agent.customerSupportDesk', 'Customer Support Desk')}
           </h2>
-          <p style={{ margin: 0, color: '#64748b', fontSize: '0.85rem' }}>
-            Manage passenger inquiries, questions, and support message threads for your company
+          <p className="m-0 text-slate-500 text-[0.85rem]">
+            {t('agent.customerSupportDeskSub', 'Manage passenger inquiries, questions, and support message threads for your company')}
           </p>
         </div>
         <button
           onClick={fetchTickets}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '8px 14px',
-            background: '#f1f5f9',
-            border: '1px solid #cbd5e1',
-            borderRadius: 10,
-            fontSize: '0.85rem',
-            fontWeight: 700,
-            cursor: 'pointer',
-          }}
+          className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 border border-slate-300 rounded-[10px] text-[0.85rem] font-bold cursor-pointer hover:bg-slate-200 transition-colors"
         >
-          <FaSync /> Refresh
+          <FaSync /> {t('common.refresh', 'Refresh')}
         </button>
       </div>
 
-      {/* KPI Status Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mb-5">
         <div
           onClick={() => setStatusFilter('OPEN')}
-          style={{
-            background: statusFilter === 'OPEN' ? '#eff6ff' : '#fff',
-            borderRadius: 12,
-            padding: 16,
-            border: `1.5px solid ${statusFilter === 'OPEN' ? '#3b82f6' : '#e2e8f0'}`,
-            cursor: 'pointer',
-          }}
+          className={`rounded-xl p-4 border-[1.5px] cursor-pointer transition-colors ${
+            statusFilter === 'OPEN' ? 'bg-blue-50 border-blue-500' : 'bg-white border-slate-200 hover:border-slate-300'
+          }`}
         >
-          <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#dc2626', textTransform: 'uppercase' }}>New Questions</div>
-          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#dc2626', margin: '4px 0' }}>{openCount}</div>
-          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Awaiting first reply</div>
+          <div className="text-[0.72rem] font-extrabold text-red-600 uppercase">{t('agent.newQuestions', 'New Questions')}</div>
+          <div className="text-[1.6rem] font-black text-red-600 my-1">{openCount}</div>
+          <div className="text-[0.72rem] text-slate-500">{t('agent.awaitingFirstReply', 'Awaiting first reply')}</div>
         </div>
 
         <div
           onClick={() => setStatusFilter('IN_PROGRESS')}
-          style={{
-            background: statusFilter === 'IN_PROGRESS' ? '#eff6ff' : '#fff',
-            borderRadius: 12,
-            padding: 16,
-            border: `1.5px solid ${statusFilter === 'IN_PROGRESS' ? '#3b82f6' : '#e2e8f0'}`,
-            cursor: 'pointer',
-          }}
+          className={`rounded-xl p-4 border-[1.5px] cursor-pointer transition-colors ${
+            statusFilter === 'IN_PROGRESS' ? 'bg-blue-50 border-blue-500' : 'bg-white border-slate-200 hover:border-slate-300'
+          }`}
         >
-          <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#d97706', textTransform: 'uppercase' }}>In Progress</div>
-          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#d97706', margin: '4px 0' }}>{inProgressCount}</div>
-          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Active discussion</div>
+          <div className="text-[0.72rem] font-extrabold text-amber-600 uppercase">{t('agent.inProgress', 'In Progress')}</div>
+          <div className="text-[1.6rem] font-black text-amber-600 my-1">{inProgressCount}</div>
+          <div className="text-[0.72rem] text-slate-500">{t('agent.activeDiscussion', 'Active discussion')}</div>
         </div>
 
         <div
           onClick={() => setStatusFilter('ANSWERED')}
-          style={{
-            background: statusFilter === 'ANSWERED' ? '#eff6ff' : '#fff',
-            borderRadius: 12,
-            padding: 16,
-            border: `1.5px solid ${statusFilter === 'ANSWERED' ? '#3b82f6' : '#e2e8f0'}`,
-            cursor: 'pointer',
-          }}
+          className={`rounded-xl p-4 border-[1.5px] cursor-pointer transition-colors ${
+            statusFilter === 'ANSWERED' ? 'bg-blue-50 border-blue-500' : 'bg-white border-slate-200 hover:border-slate-300'
+          }`}
         >
-          <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#16a34a', textTransform: 'uppercase' }}>Answered</div>
-          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#16a34a', margin: '4px 0' }}>{answeredCount}</div>
-          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Agent reply delivered</div>
+          <div className="text-[0.72rem] font-extrabold text-green-600 uppercase">{t('agent.answered', 'Answered')}</div>
+          <div className="text-[1.6rem] font-black text-green-600 my-1">{answeredCount}</div>
+          <div className="text-[0.72rem] text-slate-500">{t('agent.replyDelivered', 'Agent reply delivered')}</div>
         </div>
 
         <div
           onClick={() => setStatusFilter('CLOSED')}
-          style={{
-            background: statusFilter === 'CLOSED' ? '#eff6ff' : '#fff',
-            borderRadius: 12,
-            padding: 16,
-            border: `1.5px solid ${statusFilter === 'CLOSED' ? '#3b82f6' : '#e2e8f0'}`,
-            cursor: 'pointer',
-          }}
+          className={`rounded-xl p-4 border-[1.5px] cursor-pointer transition-colors ${
+            statusFilter === 'CLOSED' ? 'bg-blue-50 border-blue-500' : 'bg-white border-slate-200 hover:border-slate-300'
+          }`}
         >
-          <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Closed / Resolved</div>
-          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#64748b', margin: '4px 0' }}>{closedCount}</div>
-          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Completed inquiries</div>
+          <div className="text-[0.72rem] font-extrabold text-slate-500 uppercase">{t('agent.closedResolved', 'Closed / Resolved')}</div>
+          <div className="text-[1.6rem] font-black text-slate-600 my-1">{closedCount}</div>
+          <div className="text-[0.72rem] text-slate-500">{t('agent.completedInquiries', 'Completed inquiries')}</div>
         </div>
       </div>
 
-      {/* Main Grid: Conversation List on Left, Active Thread on Right */}
-      <div style={{ display: 'grid', gridTemplateColumns: selectedTicket ? '1fr 1.3fr' : '1fr', gap: 20 }}>
-        {/* Left: Inquiries List */}
-        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', padding: 18 }}>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-            <div style={{ position: 'relative', flex: 1 }}>
-              <FaSearch style={{ position: 'absolute', left: 12, top: 11, color: '#94a3b8' }} />
+      <div className={`grid gap-5 ${selectedTicket ? 'grid-cols-1 lg:grid-cols-[1fr_1.3fr]' : 'grid-cols-1'}`}>
+        <div className="bg-white rounded-2xl border border-slate-200 p-4.5">
+          <div className="flex gap-2.5 mb-3.5 flex-wrap">
+            <div className="relative flex-1 min-w-[200px]">
+              <FaSearch className="absolute left-3 top-2.5 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search subject, passenger, ticket..."
+                placeholder={t('agent.searchSupportPlaceholder', 'Search subject, passenger, ticket...')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ width: '100%', padding: '8px 12px 8px 34px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                className="w-full py-2 pr-3 pl-8.5 rounded-lg border border-slate-300 text-[0.85rem] focus:outline-none focus:border-blue-500"
               />
             </div>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+              className="p-2 rounded-lg border border-slate-300 text-[0.85rem] focus:outline-none focus:border-blue-500"
             >
-              <option value="all">All Statuses</option>
-              <option value="OPEN">Open (New)</option>
-              <option value="IN_PROGRESS">In Progress</option>
-              <option value="ANSWERED">Answered</option>
-              <option value="CLOSED">Closed</option>
+              <option value="all">{t('common.allStatuses', 'All Statuses')}</option>
+              <option value="OPEN">{t('agent.openNew', 'Open (New)')}</option>
+              <option value="IN_PROGRESS">{t('agent.inProgress', 'In Progress')}</option>
+              <option value="ANSWERED">{t('agent.answered', 'Answered')}</option>
+              <option value="CLOSED">{t('agent.closed', 'Closed')}</option>
             </select>
           </div>
 
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '30px 0', color: '#94a3b8' }}>Loading support tickets...</div>
+            <div className="text-center py-7.5 text-slate-400">{t('agent.loadingSupportTickets', 'Loading support tickets...')}</div>
           ) : filteredTickets.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8' }}>
-              <FaComments style={{ fontSize: '2rem', marginBottom: 8, color: '#cbd5e1' }} />
-              <p>No support conversations found for this filter.</p>
+            <div className="text-center py-10 px-5 text-slate-400">
+              <FaComments className="text-[2rem] mb-2 text-slate-300 mx-auto" />
+              <p>{t('agent.noConversationsFound', 'No support conversations found for this filter.')}</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: '600px', overflowY: 'auto' }}>
-              {filteredTickets.map((t) => {
-                const isSelected = selectedTicket?._id === t._id;
-                const status = (t.status || 'OPEN').toUpperCase();
+            <div className="flex flex-col gap-2.5 max-h-[600px] overflow-y-auto">
+              {filteredTickets.map((tkt) => {
+                const isSelected = selectedTicket?._id === tkt._id;
+                const status = (tkt.status || 'OPEN').toUpperCase();
                 return (
                   <div
-                    key={t._id}
-                    onClick={() => setSelectedTicket(t)}
-                    style={{
-                      padding: 14,
-                      borderRadius: 12,
-                      border: `1.5px solid ${isSelected ? '#3b82f6' : '#e2e8f0'}`,
-                      background: isSelected ? '#eff6ff' : '#f8fafc',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}
+                    key={tkt._id}
+                    onClick={() => setSelectedTicket(tkt)}
+                    className={`p-3.5 rounded-xl border-[1.5px] cursor-pointer transition-all duration-150 ${
+                      isSelected ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-slate-50 hover:bg-slate-100/70'
+                    }`}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                      <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>{t.passengerName}</span>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-extrabold text-slate-900 text-[0.9rem]">{tkt.passengerName}</span>
                       <span
-                        style={{
-                          fontSize: '0.7rem',
-                          fontWeight: 800,
-                          padding: '2px 8px',
-                          borderRadius: 12,
-                          background: status === 'OPEN' ? '#fee2e2' : status === 'IN_PROGRESS' ? '#fef3c7' : status === 'ANSWERED' ? '#dcfce7' : '#f1f5f9',
-                          color: status === 'OPEN' ? '#dc2626' : status === 'IN_PROGRESS' ? '#d97706' : status === 'ANSWERED' ? '#16a34a' : '#64748b',
-                        }}
+                        className={`text-[0.7rem] font-extrabold px-2 py-0.5 rounded-full ${
+                          status === 'OPEN'
+                            ? 'bg-red-100 text-red-600'
+                            : status === 'IN_PROGRESS'
+                            ? 'bg-amber-100 text-amber-600'
+                            : status === 'ANSWERED'
+                            ? 'bg-green-100 text-green-600'
+                            : 'bg-slate-100 text-slate-500'
+                        }`}
                       >
                         {status}
                       </span>
                     </div>
 
-                    <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.85rem', marginBottom: 4 }}>
-                      {t.subject}
+                    <div className="font-bold text-slate-800 text-[0.85rem] mb-1">
+                      {tkt.subject}
                     </div>
 
-                    <div style={{ fontSize: '0.78rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 6 }}>
-                      {t.messages && t.messages.length > 0 ? t.messages[t.messages.length - 1].message : t.description}
+                    <div className="text-[0.78rem] text-slate-500 overflow-hidden text-ellipsis whitespace-nowrap mb-1.5">
+                      {tkt.messages && tkt.messages.length > 0 ? tkt.messages[tkt.messages.length - 1].message : tkt.description}
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: '#94a3b8' }}>
-                      <span>Category: {t.category}</span>
-                      <span>{new Date(t.updatedAt || t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <div className="flex justify-between text-[0.72rem] text-slate-400">
+                      <span>{t('conductor.categoryTrip', 'Category')}: {tkt.category}</span>
+                      <span>{new Date(tkt.updatedAt || tkt.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                   </div>
                 );
@@ -283,82 +248,72 @@ const CustomerSupport = () => {
           )}
         </div>
 
-        {/* Right: Active Conversation Thread */}
         {selectedTicket && (
-          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', height: '650px' }}>
-            {/* Thread Header */}
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="bg-white rounded-2xl border border-slate-200 flex flex-col h-[650px] overflow-hidden shadow-sm">
+            <div className="p-4 px-5 border-b border-slate-200 flex justify-between items-center bg-white">
               <div>
-                <h4 style={{ margin: '0 0 2px', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
+                <h4 className="m-0 mb-0.5 text-base font-extrabold text-slate-900">
                   {selectedTicket.subject}
                 </h4>
-                <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                  From: <strong>{selectedTicket.passengerName}</strong> ({selectedTicket.passengerEmail || selectedTicket.passengerPhone || 'Passenger'})
-                  {selectedTicket.ticketNumber && ` • Ticket: ${selectedTicket.ticketNumber}`}
+                <div className="text-[0.78rem] text-slate-500">
+                  {t('agent.from', 'From')}: <strong>{selectedTicket.passengerName}</strong> ({selectedTicket.passengerEmail || selectedTicket.passengerPhone || 'Passenger'})
+                  {selectedTicket.ticketNumber && ` • ${t('ticket.ticketNumber', 'Ticket')}: ${selectedTicket.ticketNumber}`}
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div className="flex gap-2">
                 {selectedTicket.status !== 'CLOSED' && (
                   <button
                     onClick={() => handleUpdateStatus(selectedTicket._id, 'CLOSED')}
-                    style={{ padding: '6px 12px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
+                    className="px-3 py-1.5 bg-slate-100 border border-slate-300 rounded-lg text-[0.75rem] font-bold cursor-pointer hover:bg-slate-200 transition-colors"
                   >
-                    Close Ticket
+                    {t('agent.closeTicket', 'Close Ticket')}
                   </button>
                 )}
                 {selectedTicket.status === 'CLOSED' && (
                   <button
                     onClick={() => handleUpdateStatus(selectedTicket._id, 'OPEN')}
-                    style={{ padding: '6px 12px', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 8, fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
+                    className="px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg text-[0.75rem] font-bold cursor-pointer hover:bg-blue-100 transition-colors"
                   >
-                    Reopen
+                    {t('agent.reopen', 'Reopen')}
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Messages Stream */}
-            <div style={{ flex: 1, padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14, background: '#f8fafc' }}>
-              {/* Initial ticket text if no structured messages array */}
+            <div className="flex-1 p-5 overflow-y-auto flex flex-col gap-3.5 bg-slate-50">
               {(!selectedTicket.messages || selectedTicket.messages.length === 0) && (
-                <div style={{ alignSelf: 'flex-start', maxWidth: '80%', background: '#fff', padding: 14, borderRadius: 14, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#2563eb', marginBottom: 4 }}>
-                    {selectedTicket.passengerName} (Passenger)
+                <div className="self-start max-w-[80%] bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm">
+                  <div className="text-[0.75rem] font-extrabold text-blue-600 mb-1">
+                    {selectedTicket.passengerName} ({t('passenger.passenger', 'Passenger')})
                   </div>
-                  <div style={{ fontSize: '0.88rem', color: '#1e293b', lineHeight: 1.4 }}>
+                  <div className="text-[0.88rem] text-slate-800 leading-relaxed">
                     {selectedTicket.description}
                   </div>
-                  <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: 4, textAlign: 'right' }}>
+                  <div className="text-[0.68rem] text-slate-400 mt-1 text-right">
                     {new Date(selectedTicket.createdAt).toLocaleTimeString()}
                   </div>
                 </div>
               )}
 
-              {/* Thread Messages */}
               {selectedTicket.messages && selectedTicket.messages.map((msg, i) => {
                 const isAgentOrStaff = ['agent', 'company_staff', 'company_admin', 'super_admin'].includes(msg.senderRole);
                 return (
                   <div
                     key={i}
-                    style={{
-                      alignSelf: isAgentOrStaff ? 'flex-end' : 'flex-start',
-                      maxWidth: '80%',
-                      background: isAgentOrStaff ? '#2563eb' : '#fff',
-                      color: isAgentOrStaff ? '#fff' : '#1e293b',
-                      padding: 14,
-                      borderRadius: 14,
-                      border: isAgentOrStaff ? 'none' : '1px solid #e2e8f0',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                    }}
+                    className={`max-w-[80%] p-3.5 rounded-2xl shadow-sm ${
+                      isAgentOrStaff
+                        ? 'self-end bg-blue-600 text-white'
+                        : 'self-start bg-white text-slate-800 border border-slate-200'
+                    }`}
                   >
-                    <div style={{ fontSize: '0.72rem', fontWeight: 800, color: isAgentOrStaff ? '#bfdbfe' : '#2563eb', marginBottom: 4 }}>
-                      {msg.senderName} {isAgentOrStaff ? '(Ticket Agent / Admin)' : '(Passenger)'}
+                    <div className={`text-[0.72rem] font-extrabold mb-1 ${isAgentOrStaff ? 'text-blue-200' : 'text-blue-600'}`}>
+                      {msg.senderName} {isAgentOrStaff ? `(${t('ticket agent', 'Ticket Agent / Admin')})` : `(${t('passenger.passenger', 'Passenger')})`}
                     </div>
-                    <div style={{ fontSize: '0.88rem', lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>
+                    <div className="text-[0.88rem] leading-relaxed whitespace-pre-wrap">
                       {msg.message}
                     </div>
-                    <div style={{ fontSize: '0.68rem', color: isAgentOrStaff ? 'rgba(255,255,255,0.7)' : '#94a3b8', marginTop: 4, textAlign: 'right' }}>
+                    <div className={`text-[0.68rem] mt-1 text-right ${isAgentOrStaff ? 'text-white/70' : 'text-slate-400'}`}>
                       {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
@@ -366,33 +321,20 @@ const CustomerSupport = () => {
               })}
             </div>
 
-            {/* Reply Input Box */}
-            <form onSubmit={handleSendReply} style={{ padding: '14px 20px', borderTop: '1px solid #e2e8f0', background: '#fff', display: 'flex', gap: 10 }}>
+            <form onSubmit={handleSendReply} className="p-3.5 px-5 border-t border-slate-200 bg-white flex gap-2.5">
               <input
                 type="text"
-                placeholder="Type your response to the passenger..."
+                placeholder={t('agent.replyPlaceholder', 'Type your response to the passenger...')}
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
-                style={{ flex: 1, padding: '10px 14px', borderRadius: 10, border: '1.5px solid #cbd5e1', fontSize: '0.88rem', outline: 'none' }}
+                className="flex-1 px-3.5 py-2.5 rounded-lg border-[1.5px] border-slate-300 text-[0.88rem] outline-none focus:border-blue-500"
               />
               <button
                 type="submit"
                 disabled={sendingReply}
-                style={{
-                  padding: '10px 18px',
-                  background: '#2563eb',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 10,
-                  fontWeight: 800,
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
+                className="px-4.5 py-2.5 bg-blue-600 text-white border-none rounded-lg font-extrabold text-[0.85rem] cursor-pointer flex items-center gap-1.5 hover:bg-blue-700 transition-colors disabled:opacity-75"
               >
-                <FaPaperPlane /> {sendingReply ? 'Sending...' : 'Reply'}
+                <FaPaperPlane /> {sendingReply ? t('common.sending', 'Sending...') : t('agent.reply', 'Reply')}
               </button>
             </form>
           </div>

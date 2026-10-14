@@ -33,4 +33,3 @@ router
   .put(updateSupportTicketStatus);
 
 module.exports = router;
-

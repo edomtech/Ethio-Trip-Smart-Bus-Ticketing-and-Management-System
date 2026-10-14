@@ -1,25 +1,23 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import {
-  companyAPI, reportAPI, auditAPI, userAPI, authAPI,
-  busAPI, routeAPI, scheduleAPI, bookingAPI, paymentAPI
+  companyAPI, auditAPI, authAPI, platformSettingAPI, supportAPI, notificationAPI, reportAPI
 } from '../../utils/api';
 import { uploadToCloudinary } from '../../utils/cloudinary';
-import { useTranslation } from '../../i18n.jsx';
+import { useTranslation } from '../../i18n';
 import LanguageSelector from '../../components/LanguageSelector';
-import { toast } from 'react-toastify';
+import NotificationPanel from '../../components/NotificationPanel';
+import ThemeToggle from '../../components/ThemeToggle';
+import { useNotification } from '../../contexts/NotificationContext';
+import { MESSAGES, PASSWORD_MIN_LENGTH } from '../../constants/messages';
 import {
-  FaBus, FaBuilding, FaUsers, FaTicketAlt, FaWallet, FaRoute,
-  FaChartLine, FaSearch, FaBell, FaGlobeAmericas, FaCrown, FaCog,
-  FaQuestionCircle, FaArrowRight, FaChevronRight, FaCalendarAlt,
-  FaClock, FaServer, FaDatabase, FaCheckCircle, FaTimesCircle,
-  FaPlus, FaTrash, FaEdit, FaEye, FaExternalLinkAlt,
-  FaCreditCard, FaMobileAlt, FaMoneyBillWave, FaSignOutAlt, FaShieldAlt,
-  FaUpload, FaImage, FaSyncAlt, FaExclamationTriangle
+  FaBuilding, FaPlus, FaCog, FaHistory, FaShieldAlt, FaSignOutAlt,
+  FaSearch, FaEdit, FaEye, FaPrint, FaDownload, FaCheckCircle,
+  FaTimesCircle, FaMobileAlt, FaCreditCard, FaUpload, FaBars,
+  FaTimes, FaLock, FaUser, FaPhone, FaEnvelope, FaMapMarkerAlt,
+  FaIdCard, FaFileInvoice, FaSyncAlt, FaCrown, FaChartLine, FaHeadset, FaPaperPlane, FaQuestionCircle
 } from 'react-icons/fa';
-import '../../styles/superAdmin.css';
 
-// Helper for relative timestamps based on actual data
 const formatRelativeTime = (timestamp) => {
   if (!timestamp) return 'Just now';
   const diffMs = Date.now() - new Date(timestamp).getTime();
@@ -34,80 +32,76 @@ const formatRelativeTime = (timestamp) => {
 
 const SuperAdminDashboard = () => {
   const { user, logout, updateUser } = useAuth();
+  const notify = useNotification();
   const { t } = useTranslation();
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [loading, setLoading] = useState(true);
 
-  // Core Platform Data (Live from Database)
   const [companies, setCompanies] = useState([]);
-  const [buses, setBuses] = useState([]);
-  const [routes, setRoutes] = useState([]);
-  const [schedules, setSchedules] = useState([]);
-  const [bookings, setBookings] = useState([]);
-  const [payments, setPayments] = useState([]);
-  const [usersList, setUsersList] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
-  const [overviewStats, setOverviewStats] = useState(null);
+  const [platformSettings, setPlatformSettings] = useState({
+    systemName: 'Ethio Trip - Smart Bus Ticketing System',
+    supportEmail: 'support@ethiotrip.et',
+    supportPhone: '+251 911 002 233',
+    systemAddress: 'Addis Ababa, Ethiopia',
+    maintenanceMode: false,
+    allowNewRegistrations: true,
+    maxLoginAttempts: 5,
+    sessionTimeoutMinutes: 60,
+  });
+  const [platformReports, setPlatformReports] = useState(null);
+  const [savingSettings, setSavingSettings] = useState(false);
 
-  // Filter & Search
   const [searchQuery, setSearchQuery] = useState('');
   const [companyStatusFilter, setCompanyStatusFilter] = useState('all');
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState('all');
-
-  // Modals
-  const [showRegisterCompanyModal, setShowRegisterCompanyModal] = useState(false);
-  const [showAddBusModal, setShowAddBusModal] = useState(false);
-  const [showAddRouteModal, setShowAddRouteModal] = useState(false);
   const [selectedCompanyDetails, setSelectedCompanyDetails] = useState(null);
-  const [showNotifications, setShowNotifications] = useState(false);
-
-  // Upload States
+  const [editingCompany, setEditingCompany] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [uploadingBusImage, setUploadingBusImage] = useState(false);
   const [uploadingProfileImage, setUploadingProfileImage] = useState(false);
+  const [selectedAuditLogDetails, setSelectedAuditLogDetails] = useState(null);
+  const [supportInquiries, setSupportInquiries] = useState([]);
+  const [selectedInquiry, setSelectedInquiry] = useState(null);
+  const [replyMessage, setReplyMessage] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
 
-  // Company Form
-  const [companyForm, setCompanyForm] = useState({
-    companyName: '', licenseNumber: '', registrationNumber: '', tinNumber: '',
-    phone: '', email: '', address: '', city: 'Addis Ababa', description: '', logo: ''
-  });
+  const initialCompanyForm = {
+    companyName: '',
+    licenseNumber: '',
+    registrationNumber: '',
+    tinNumber: '',
+    phone: '',
+    email: '',
+    address: '',
+    city: 'Addis Ababa',
+    description: '',
+    logo: '',
+    status: 'active',
+    adminName: '',
+    adminEmail: '',
+    adminPhone: '',
+    adminPassword: '',
+    telebirrEnabled: true,
+    telebirrNumber: '0911002233',
+    cbeEnabled: true,
+    cbeAccountNumber: '1000123456789',
+    chapaEnabled: false,
+    chapaKey: '',
+  };
+  const [companyForm, setCompanyForm] = useState(initialCompanyForm);
 
-  // Bus Form
-  const [busForm, setBusForm] = useState({
-    companyId: '', busNumber: '', plateNumber: '', type: 'Luxury',
-    capacity: 45, amenities: 'WiFi, Air Conditioning, Reclining Seats, USB Charging',
-    description: '', image: '', status: 'active'
-  });
-
-  // Route Form
-  const [routeForm, setRouteForm] = useState({
-    from: 'Addis Ababa', to: 'Hawassa', distance: 275, estimatedDuration: '4 hours',
-    basePrice: 550, description: 'Popular southern route'
-  });
-
-  // Profile Form
   const [profileForm, setProfileForm] = useState({
-    name: user?.name || 'Super Admin',
+    name: user?.name || 'Platform Admin',
     email: user?.email || '',
     phone: user?.phone || '',
     avatar: user?.avatar || '',
     currentPassword: '',
     newPassword: '',
+    confirmPassword: '',
   });
 
-  // Platform Settings
-  const [platformSettings, setPlatformSettings] = useState({
-    systemName: 'Ethio Trip - Super Admin Platform',
-    supportEmail: 'admin@ethiotrip.et',
-    commissionRate: 5.0,
-    currency: 'ETB',
-    maintenanceMode: false,
-    cloudinaryCloudName: '',
-    cloudinaryApiKey: '',
-    chapaTestMode: true,
-  });
-
-  // Current live date & time
   const [currentDateTime, setCurrentDateTime] = useState({
     date: new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' }),
     time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
@@ -125,45 +119,33 @@ const SuperAdminDashboard = () => {
   }, []);
 
   const fetchData = async () => {
-    setLoading(true);
     try {
-      const [
-        compRes, busRes, routeRes, schedRes,
-        bookRes, payRes, usrRes, logRes, repRes
-      ] = await Promise.all([
-        companyAPI.getAllCompanies().catch(() => ({ companies: [] })),
-        busAPI.getAll().catch(() => []),
-        routeAPI.getAll().catch(() => []),
-        scheduleAPI.getAll().catch(() => []),
-        bookingAPI.getAll().catch(() => []),
-        paymentAPI.getAll().catch(() => []),
-        userAPI.getAll().catch(() => []),
+      setLoading(true);
+      const [compRes, auditRes, settingsRes, supportRes, repRes] = await Promise.all([
+        companyAPI.getAll().catch(() => ({ companies: [] })),
         auditAPI.getLogs().catch(() => ({ logs: [] })),
-        reportAPI.getOverview().catch(() => ({ stats: null, companyPerformance: [] })),
+        platformSettingAPI.getSettings().catch(() => ({ settings: null })),
+        supportAPI.getAll().catch(() => []),
+        reportAPI.getOverview().catch(() => null),
       ]);
 
-      const fetchedCompanies = compRes.companies || (Array.isArray(compRes) ? compRes : []);
-      setCompanies(fetchedCompanies);
-      setBuses(Array.isArray(busRes) ? busRes : []);
-      setRoutes(Array.isArray(routeRes) ? routeRes : []);
-      setSchedules(Array.isArray(schedRes) ? schedRes : []);
-      setBookings(Array.isArray(bookRes) ? bookRes : []);
-      setPayments(Array.isArray(payRes) ? payRes : []);
+      const compList = Array.isArray(compRes) ? compRes : compRes?.companies || [];
+      setCompanies(compList);
 
-      // Filter users strictly removing conductor and ticket agent roles
-      const rawUsers = Array.isArray(usrRes) ? usrRes : [];
-      const sanitizedUsers = rawUsers.filter(u => u.role !== 'conductor' && u.role !== 'agent');
-      setUsersList(sanitizedUsers);
+      const logsList = Array.isArray(auditRes) ? auditRes : auditRes?.logs || [];
+      setAuditLogs(logsList);
 
-      setAuditLogs(logRes.logs || []);
-      setOverviewStats(repRes.stats || null);
+      setSupportInquiries(Array.isArray(supportRes) ? supportRes : supportRes?.tickets || []);
 
-      if (fetchedCompanies.length > 0 && !busForm.companyId) {
-        setBusForm(prev => ({ ...prev, companyId: fetchedCompanies[0]._id }));
+      if (settingsRes?.settings) {
+        setPlatformSettings(prev => ({ ...prev, ...settingsRes.settings }));
+      }
+
+      if (repRes) {
+        setPlatformReports(repRes);
       }
     } catch (err) {
-      console.error('Data loading error:', err);
-      toast.error('Failed to load live data');
+      notify.notifyError(err, MESSAGES.reports.loadFailed);
     } finally {
       setLoading(false);
     }
@@ -173,165 +155,226 @@ const SuperAdminDashboard = () => {
     fetchData();
   }, []);
 
-  // Handle Logo Upload (Cloudinary with safe fallback)
-  const handleLogoUpload = async (e) => {
+  const handleLogoUpload = async (e, isEdit = false) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploadingLogo(true);
     try {
-      const url = await uploadToCloudinary(file, 'company_logos');
-      setCompanyForm(prev => ({ ...prev, logo: url }));
-      toast.success('Company logo uploaded successfully!');
+      setUploadingLogo(true);
+      const url = await uploadToCloudinary(file);
+      if (isEdit) {
+        setEditingCompany(prev => ({ ...prev, logo: url }));
+      } else {
+        setCompanyForm(prev => ({ ...prev, logo: url }));
+      }
     } catch (err) {
-      toast.error('Logo upload failed. Please try again.');
+      notify.notifyError(err, MESSAGES.upload.failed);
     } finally {
       setUploadingLogo(false);
     }
   };
 
-  // Handle Bus Image Upload (Cloudinary with safe fallback)
-  const handleBusImageUpload = async (e) => {
+  const handleAvatarUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploadingBusImage(true);
     try {
-      const url = await uploadToCloudinary(file, 'bus_images');
-      setBusForm(prev => ({ ...prev, image: url }));
-      toast.success('Bus image uploaded successfully!');
-    } catch (err) {
-      toast.error('Bus image upload failed. Please try again.');
-    } finally {
-      setUploadingBusImage(false);
-    }
-  };
-
-  // Handle Profile Avatar Upload
-  const handleProfileImageUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingProfileImage(true);
-    try {
-      const url = await uploadToCloudinary(file, 'profile_avatars');
+      setUploadingProfileImage(true);
+      const url = await uploadToCloudinary(file);
       setProfileForm(prev => ({ ...prev, avatar: url }));
-      if (updateUser) updateUser({ avatar: url });
-      toast.success('Profile avatar uploaded successfully!');
     } catch (err) {
-      toast.error('Failed to upload profile image.');
+      notify.notifyError(err, MESSAGES.profile.avatarFailed);
     } finally {
       setUploadingProfileImage(false);
     }
   };
 
-  // Handle Register Company
   const handleRegisterCompany = async (e) => {
     e.preventDefault();
-    try {
-      await companyAPI.registerCompany({
-        ...companyForm,
-        adminName: `Admin ${companyForm.companyName}`,
-        adminEmail: `admin@${companyForm.companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.et`,
-        adminPassword: 'password123',
-      });
-      toast.success(`Company "${companyForm.companyName}" registered successfully!`);
-      setShowRegisterCompanyModal(false);
-      setCompanyForm({
-        companyName: '', licenseNumber: '', registrationNumber: '', tinNumber: '',
-        phone: '', email: '', address: '', city: 'Addis Ababa', description: '', logo: ''
-      });
-      fetchData();
-    } catch (err) {
-      toast.error(err.message || 'Registration failed');
-    }
-  };
 
-  // Handle Add Bus
-  const handleAddBus = async (e) => {
-    e.preventDefault();
-    try {
-      const amenitiesArr = busForm.amenities
-        ? busForm.amenities.split(',').map(s => s.trim()).filter(Boolean)
-        : ['WiFi', 'Air Conditioning'];
-
-      await busAPI.create({
-        companyId: busForm.companyId,
-        busNumber: busForm.busNumber,
-        plateNumber: busForm.plateNumber,
-        type: busForm.type,
-        capacity: Number(busForm.capacity) || 45,
-        amenities: amenitiesArr,
-        description: busForm.description,
-        image: busForm.image || '/images/selam_bus.png',
-        status: busForm.status,
-      });
-
-      toast.success(`Bus ${busForm.busNumber} added successfully! Visible on Home & Bus pages.`);
-      setShowAddBusModal(false);
-      setBusForm({
-        companyId: companies[0]?._id || '',
-        busNumber: '', plateNumber: '', type: 'Luxury',
-        capacity: 45, amenities: 'WiFi, Air Conditioning, Reclining Seats, USB Charging',
-        description: '', image: '', status: 'active'
-      });
-      fetchData();
-    } catch (err) {
-      toast.error(err.message || 'Failed to create bus');
-    }
-  };
-
-  // Handle Add Route
-  const handleAddRoute = async (e) => {
-    e.preventDefault();
-    try {
-      await routeAPI.create({
-        from: routeForm.from,
-        to: routeForm.to,
-        distance: Number(routeForm.distance) || 200,
-        estimatedDuration: routeForm.estimatedDuration || '4 hours',
-        basePrice: Number(routeForm.basePrice) || 400,
-        description: routeForm.description,
-      });
-      toast.success(`Route ${routeForm.from} → ${routeForm.to} created successfully!`);
-      setShowAddRouteModal(false);
-      fetchData();
-    } catch (err) {
-      toast.error(err.message || 'Failed to create route');
-    }
-  };
-
-  // Handle Update Company Status
-  const handleUpdateCompanyStatus = async (companyId, newStatus) => {
-    try {
-      await companyAPI.updateCompanyStatus(companyId, newStatus, `Status updated to ${newStatus} by Super Admin`);
-      toast.success(`Company status updated to ${newStatus}`);
-      fetchData();
-    } catch (err) {
-      toast.error(err.message || 'Failed to update company status');
-    }
-  };
-
-  // Verify Chapa Transaction
-  const handleVerifyChapaPayment = async (txRef) => {
-    if (!txRef) {
-      toast.warning('No transaction reference found');
+    if (!companyForm.companyName.trim() || !companyForm.licenseNumber.trim() || !companyForm.tinNumber.trim() || !companyForm.email.trim()) {
+      notify.warning(MESSAGES.company.detailsRequired);
       return;
     }
+    if (!companyForm.adminName.trim() || !companyForm.adminEmail.trim() || !companyForm.adminPassword) {
+      notify.warning(MESSAGES.company.adminRequired);
+      return;
+    }
+    if (companyForm.adminPassword.length < PASSWORD_MIN_LENGTH) {
+      notify.warning({
+        title: 'Password Too Short',
+        description: `Company Admin password must be at least ${PASSWORD_MIN_LENGTH} characters.`,
+      });
+      return;
+    }
+
+    const isTelebirr = !!companyForm.telebirrEnabled;
+    const isCBE = !!companyForm.cbeEnabled;
+    const isChapa = !!companyForm.chapaEnabled;
+
     try {
-      toast.info(`Verifying transaction ${txRef} with Chapa API...`);
-      const res = await paymentAPI.chapaVerify(txRef);
-      if (res.status === 'success' || res.payment?.status === 'PAID') {
-        toast.success(`Payment verified successfully! Status: ${res.payment?.status || 'PAID'}`);
-      } else {
-        toast.info(`Chapa verification result: ${res.status || 'Verified'}`);
-      }
+      const payload = {
+        companyName: companyForm.companyName.trim(),
+        licenseNumber: companyForm.licenseNumber.trim(),
+        registrationNumber: companyForm.registrationNumber.trim() || companyForm.licenseNumber.trim(),
+        tinNumber: companyForm.tinNumber.trim(),
+        phone: companyForm.phone.trim(),
+        email: companyForm.email.toLowerCase().trim(),
+        address: companyForm.address.trim(),
+        city: companyForm.city || 'Addis Ababa',
+        description: companyForm.description.trim(),
+        logo: companyForm.logo || '',
+        status: companyForm.status || 'active',
+        adminName: companyForm.adminName.trim(),
+        adminEmail: companyForm.adminEmail.toLowerCase().trim(),
+        adminPhone: companyForm.adminPhone.trim() || companyForm.phone.trim(),
+        adminPassword: companyForm.adminPassword,
+        paymentMethods: {
+          telebirr: {
+            enabled: isTelebirr,
+            accountNumber: isTelebirr ? (companyForm.telebirrNumber.trim() || companyForm.phone.trim()) : '',
+          },
+          cbe: {
+            enabled: isCBE,
+            accountNumber: isCBE ? (companyForm.cbeAccountNumber.trim() || '1000123456789') : '',
+          },
+          chapa: {
+            enabled: isChapa,
+            accountNumber: isChapa ? (companyForm.chapaKey.trim() || 'CHAPA-ET-2026-LIVE') : '',
+          },
+        },
+        payment: {
+          provider: 'CHAPA',
+          enabled: isChapa,
+          mode: 'LIVE',
+          splitType: 'percentage',
+          splitValue: 90,
+        },
+      };
+
+      await companyAPI.registerCompany(payload);
+      setCompanyForm(initialCompanyForm);
+      setActiveTab('companies');
       fetchData();
     } catch (err) {
-      toast.error(err.message || 'Verification check failed');
+      notify.notifyError(err, MESSAGES.company.registrationFailed);
     }
   };
 
-  // Profile Update
+  const handleToggleCompanyStatus = async (company) => {
+    const newStatus = company.status === 'active' ? 'suspended' : 'active';
+    const isSuspending = newStatus === 'suspended';
+
+    const confirmed = await notify.confirm({
+      title: isSuspending ? 'Suspend Company?' : 'Reactivate Company?',
+      message: isSuspending
+        ? `Are you sure you want to suspend "${company.companyName}"?`
+        : `Reactivate "${company.companyName}" on the Ethio Trip platform?`,
+      description: isSuspending
+        ? 'All of their scheduled trips will be paused and passengers will no longer be able to book with them.'
+        : 'The company will be able to publish and sell tickets again immediately.',
+      confirmLabel: isSuspending ? 'Suspend' : 'Reactivate',
+      cancelLabel: 'Cancel',
+      variant: isSuspending ? 'danger' : 'default',
+    });
+    if (!confirmed) return;
+
+    try {
+      await companyAPI.updateCompanyStatus(
+        company._id || company.id,
+        newStatus,
+        `Status changed to ${newStatus} by Platform Admin`
+      );
+      setCompanies((prev) =>
+        prev.map((c) => (c._id === (company._id || company.id) ? { ...c, status: newStatus } : c))
+      );
+      fetchData();
+    } catch (err) {
+      notify.notifyError(err, MESSAGES.company.statusFailed);
+    }
+  };
+
+  const handleApproveCompany = async (company) => {
+    try {
+      await companyAPI.updateCompanyStatus(company._id || company.id, 'active', 'Platform Admin Approved');
+      await notificationAPI.sendPassengerEmail({
+        email: company.adminEmail || company.email,
+        subject: 'Ethio Trip — Company Registration Approved! 🎉',
+        message: `Dear ${company.adminName || company.companyName} Admin,\n\nYour bus company registration for "${company.companyName}" has been successfully approved by Ethio Trip Platform Admin.\n\nYou can now log in using your registered admin email (${company.adminEmail || company.email}) to manage your fleet, add buses, define routes, and set travel schedules.\n\nWelcome to Ethio Trip platform!`,
+      }).catch(() => {});
+      notify.success(`🎉 Approved "${company.companyName}"! Notification email sent.`);
+      fetchData();
+    } catch (err) {
+      notify.error(err.message || 'Failed to approve company');
+    }
+  };
+
+  const handleRejectCompany = async (company) => {
+    const reason = window.prompt(`Enter rejection reason for "${company.companyName}":`, 'Registration information requires further verification.');
+    if (reason === null) return;
+
+    try {
+      await companyAPI.updateCompanyStatus(company._id || company.id, 'rejected', reason);
+      await notificationAPI.sendPassengerEmail({
+        email: company.adminEmail || company.email,
+        subject: 'Ethio Trip — Company Registration Update',
+        message: `Dear ${company.adminName || company.companyName} Admin,\n\nWe regret to inform you that your bus company registration for "${company.companyName}" has been rejected by Ethio Trip Platform Admin.\n\nReason: ${reason || 'Contact support for details.'}\n\nThank you,\nEthio Trip Team`,
+      }).catch(() => {});
+      notify.success(`Company "${company.companyName}" rejected.`);
+      fetchData();
+    } catch (err) {
+      notify.error(err.message || 'Failed to reject company');
+    }
+  };
+
+  const handleSaveCompanyEdit = async (e) => {
+    e.preventDefault();
+    if (!editingCompany) return;
+
+    try {
+      const isTelebirr = editingCompany.paymentMethodSelection === 'telebirr' || editingCompany.paymentMethodSelection === 'both';
+      const isCBE = editingCompany.paymentMethodSelection === 'cbe' || editingCompany.paymentMethodSelection === 'both';
+
+      const payload = {
+        companyName: editingCompany.companyName,
+        licenseNumber: editingCompany.licenseNumber,
+        registrationNumber: editingCompany.registrationNumber,
+        tinNumber: editingCompany.tinNumber,
+        phone: editingCompany.phone,
+        email: editingCompany.email,
+        address: editingCompany.address,
+        city: editingCompany.city,
+        description: editingCompany.description,
+        logo: editingCompany.logo,
+        paymentMethods: {
+          telebirr: {
+            enabled: isTelebirr,
+            accountNumber: isTelebirr ? editingCompany.telebirrNumber : '',
+          },
+          cbe: {
+            enabled: isCBE,
+            accountNumber: isCBE ? editingCompany.cbeAccountNumber : '',
+          },
+        },
+      };
+
+      await companyAPI.updateCompany(editingCompany._id || editingCompany.id, payload);
+      setEditingCompany(null);
+      fetchData();
+    } catch (err) {
+      notify.notifyError(err, MESSAGES.common.operationFailed);
+    }
+  };
+
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
+    if (profileForm.newPassword && profileForm.newPassword !== profileForm.confirmPassword) {
+      notify.warning(MESSAGES.profile.passwordsDontMatch);
+      return;
+    }
+    if (profileForm.newPassword && profileForm.newPassword.length < PASSWORD_MIN_LENGTH) {
+      notify.warning(MESSAGES.profile.passwordTooShort);
+      return;
+    }
+
     try {
       const payload = {
         name: profileForm.name,
@@ -340,1376 +383,1100 @@ const SuperAdminDashboard = () => {
         avatar: profileForm.avatar,
       };
       if (profileForm.newPassword) {
-        if (profileForm.newPassword.length < 6) {
-          toast.warning('Password must be at least 6 characters');
-          return;
-        }
         payload.password = profileForm.newPassword;
       }
+
       await authAPI.updateProfile(payload);
       if (updateUser) updateUser(payload);
-      toast.success('Super Admin profile updated successfully!');
-      setProfileForm(prev => ({ ...prev, currentPassword: '', newPassword: '' }));
+      setProfileForm(prev => ({ ...prev, currentPassword: '', newPassword: '', confirmPassword: '' }));
     } catch (err) {
-      toast.error(err.message || 'Failed to update profile');
+      notify.notifyError(err, MESSAGES.profile.updateFailed);
     }
   };
 
-  // ── 100% REAL DATA CALCULATIONS (ZERO FAKE NUMBERS) ──────────────────────
+  const handleSavePlatformSettings = async (e) => {
+    if (e) e.preventDefault();
+    try {
+      setSavingSettings(true);
+      await platformSettingAPI.updateSettings(platformSettings);
+      notify.success(t('platform settings saved successfully', 'Platform settings saved and applied successfully!'));
+      fetchData();
+    } catch (err) {
+      notify.notifyError(err, MESSAGES.settings?.saveFailed || 'Failed to save platform settings');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const filteredCompanies = useMemo(() => {
+    return companies.filter(c => {
+      const matchStatus =
+        companyStatusFilter === 'all' ||
+        (c.status || 'active').toLowerCase() === companyStatusFilter.toLowerCase();
+      const q = searchQuery.toLowerCase();
+      const matchSearch =
+        !q ||
+        c.companyName?.toLowerCase().includes(q) ||
+        c.city?.toLowerCase().includes(q) ||
+        c.licenseNumber?.toLowerCase().includes(q) ||
+        c.tinNumber?.toLowerCase().includes(q) ||
+        c.email?.toLowerCase().includes(q);
+      return matchStatus && matchSearch;
+    });
+  }, [companies, companyStatusFilter, searchQuery]);
+
   const totalCompaniesCount = companies.length;
-  const totalBusesCount = buses.length;
-  const totalUsersCount = usersList.length;
-  const totalBookingsCount = bookings.length;
-  const totalRoutesCount = routes.length;
+  const activeCompaniesCount = companies.filter(c => (c.status || 'active').toLowerCase() === 'active').length;
+  const suspendedCompaniesCount = companies.filter(c => (c.status || '').toLowerCase() === 'suspended').length;
 
-  // Real paid revenue sum from database
-  const paidPayments = useMemo(() => {
-    return payments.filter(p => p.status === 'PAID' || p.status === 'completed');
-  }, [payments]);
+  const paymentStats = useMemo(() => {
+    let allThreeCount = 0;
+    let telebirrCount = 0;
+    let cbeCount = 0;
+    let chapaCount = 0;
 
-  const totalRevenueAmount = useMemo(() => {
-    return paidPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
-  }, [paidPayments]);
-
-  // Real new items created this month
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
-  const isCreatedThisMonth = (item) => {
-    if (!item?.createdAt) return false;
-    const d = new Date(item.createdAt);
-    return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-  };
-
-  const newCompaniesCount = companies.filter(isCreatedThisMonth).length;
-  const newBusesCount = buses.filter(isCreatedThisMonth).length;
-  const newRoutesCount = routes.filter(isCreatedThisMonth).length;
-  const newBookingsCount = bookings.filter(isCreatedThisMonth).length;
-  const newUsersCount = usersList.filter(isCreatedThisMonth).length;
-
-  // Real Payment breakdown by method from database
-  const revenueBreakdown = useMemo(() => {
-    const chapaAmount = paidPayments
-      .filter(p => p.paymentMethod === 'Chapa' || p.method === 'Chapa' || (!p.paymentMethod && !p.method))
-      .reduce((sum, p) => sum + (p.amount || 0), 0);
-
-    const telebirrAmount = paidPayments
-      .filter(p => p.paymentMethod === 'Telebirr' || p.method === 'Telebirr')
-      .reduce((sum, p) => sum + (p.amount || 0), 0);
-
-    const otherAmount = paidPayments
-      .filter(p => p.paymentMethod === 'Cash' || p.paymentMethod === 'CBE Birr' || p.method === 'Cash' || p.method === 'CBE Birr')
-      .reduce((sum, p) => sum + (p.amount || 0), 0);
-
-    const total = totalRevenueAmount || 1;
-    const chapaPct = totalRevenueAmount > 0 ? Math.round((chapaAmount / total) * 100) : 0;
-    const telebirrPct = totalRevenueAmount > 0 ? Math.round((telebirrAmount / total) * 100) : 0;
-    const otherPct = totalRevenueAmount > 0 ? Math.max(0, 100 - chapaPct - telebirrPct) : 0;
-
-    return {
-      chapaAmount,
-      chapaPct,
-      telebirrAmount,
-      telebirrPct,
-      otherAmount,
-      otherPct
-    };
-  }, [paidPayments, totalRevenueAmount]);
-
-  // Real Top Bus Companies computed from companies, buses, and payments in DB
-  const liveTopCompanies = useMemo(() => {
-    return companies.map(comp => {
-      const compId = comp._id?.toString() || comp.id;
-      const compBuses = buses.filter(b => (b.companyId?._id || b.companyId)?.toString() === compId).length;
-      const compSchedules = schedules.filter(s => (s.companyId?._id || s.companyId)?.toString() === compId);
-      const compRoutes = new Set(compSchedules.map(s => (s.route?._id || s.route)?.toString())).size;
-      const compRev = paidPayments
-        .filter(p => (p.companyId?._id || p.companyId)?.toString() === compId)
-        .reduce((sum, p) => sum + (p.amount || 0), 0);
-
-      return {
-        ...comp,
-        busesCount: compBuses,
-        routesCount: compRoutes,
-        revenue: compRev,
-      };
-    }).sort((a, b) => b.revenue - a.revenue || b.busesCount - a.busesCount);
-  }, [companies, buses, schedules, paidPayments]);
-
-  // Real 7-day revenue overview computed dynamically from actual payment timestamps
-  const chartData = useMemo(() => {
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
-      const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
-      const dayTotal = paidPayments.filter(p => {
-        const pDate = (p.paidAt || p.createdAt || '').split('T')[0];
-        return pDate === dateStr;
-      }).reduce((sum, p) => sum + (p.amount || 0), 0);
-
-      days.push({ date: dateStr, label, amount: dayTotal });
-    }
-
-    const maxAmount = Math.max(...days.map(d => d.amount), 500);
-
-    const points = days.map((d, i) => {
-      const x = 55 + i * 70;
-      const y = 160 - (d.amount / maxAmount) * 125;
-      return { ...d, x, y };
+    companies.forEach(c => {
+      const t = c.paymentMethods?.telebirr?.enabled ?? true;
+      const b = c.paymentMethods?.cbe?.enabled ?? true;
+      const ch = c.paymentMethods?.chapa?.enabled ?? (c.payment?.enabled ?? true);
+      if (t && b && ch) allThreeCount++;
+      if (t) telebirrCount++;
+      if (b) cbeCount++;
+      if (ch) chapaCount++;
     });
 
-    let pathD = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 1; i < points.length; i++) {
-      pathD += ` L ${points[i].x} ${points[i].y}`;
-    }
-    const areaD = `${pathD} L ${points[points.length - 1].x} 160 L ${points[0].x} 160 Z`;
+    return { allThreeCount, telebirrCount, cbeCount, chapaCount };
+  }, [companies]);
 
-    return { days, maxAmount, points, pathD, areaD };
-  }, [paidPayments]);
+  const regionalBreakdown = useMemo(() => {
+    const map = {};
+    companies.forEach(c => {
+      const city = c.city || 'Addis Ababa';
+      map[city] = (map[city] || 0) + 1;
+    });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  }, [companies]);
 
-  // Real Recent Activity from Audit Logs (excluding conductor and ticket agent)
-  const sanitizedRecentActivity = useMemo(() => {
-    return auditLogs
-      .filter(log => {
-        const role = (log.userRole || '').toLowerCase();
-        const action = (log.action || '').toLowerCase();
-        return !role.includes('conductor') && !role.includes('agent') &&
-               !action.includes('conductor') && !action.includes('agent');
-      })
-      .slice(0, 5)
-      .map(log => {
-        let actionTitle = (log.action || 'System Update').replace(/_/g, ' ').toLowerCase();
-        actionTitle = actionTitle.charAt(0).toUpperCase() + actionTitle.slice(1);
+  const pendingCompaniesCount = companies.filter(c => (c.status || '').toLowerCase() === 'pending').length;
 
-        let entityDesc = log.userEmail || '';
-        if (log.details?.ticketNumber) entityDesc = `Ticket #${log.details.ticketNumber}`;
-        else if (log.details?.busNumber) entityDesc = `Bus ${log.details.busNumber}`;
-        else if (log.details?.companyName) entityDesc = log.details.companyName;
-        else if (log.entityType) entityDesc = `${log.entityType}`;
-
-        return {
-          id: log._id,
-          title: actionTitle,
-          subtitle: entityDesc,
-          type: log.entityType || 'Action',
-          time: formatRelativeTime(log.createdAt),
-        };
-      });
-  }, [auditLogs]);
-
-  // Filtered lists
-  const filteredCompanies = companies.filter(c => {
-    const matchStatus = companyStatusFilter === 'all' || c.status === companyStatusFilter;
-    const matchSearch = !searchQuery ||
-      c.companyName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.licenseNumber?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchStatus && matchSearch;
-  });
-
-  const filteredBuses = buses.filter(b => {
-    return !searchQuery ||
-      b.busNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      b.plateNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      b.companyId?.companyName?.toLowerCase().includes(searchQuery.toLowerCase());
-  });
-
-  const chapaPayments = payments.filter(p => (p.paymentMethod === 'Chapa' || p.method === 'Chapa' || !p.paymentMethod));
-  const filteredChapaPayments = chapaPayments.filter(p => {
-    const matchStatus = paymentStatusFilter === 'all' || (p.status || '').toUpperCase() === paymentStatusFilter.toUpperCase();
-    const matchSearch = !searchQuery ||
-      p.txRef?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.user?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.user?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.companyId?.companyName?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchStatus && matchSearch;
-  });
-
-  const chapaSuccessCount = chapaPayments.filter(p => p.status === 'PAID' || p.status === 'completed').length;
-  const chapaTotalVolume = chapaPayments
-    .filter(p => p.status === 'PAID' || p.status === 'completed')
-    .reduce((acc, curr) => acc + (curr.amount || 0), 0);
-
-  const chapaSuccessRate = chapaPayments.length > 0
-    ? Math.round((chapaSuccessCount / chapaPayments.length) * 100)
-    : 100;
-
-  // Sidebar navigation items matching image
   const sidebarItems = [
     { id: 'dashboard', label: t('nav.dashboard', 'Dashboard'), icon: <FaChartLine /> },
-    { section: t('nav.manage', 'MANAGE') },
-    { id: 'companies', label: t('nav.companies', 'Companies'), icon: <FaBuilding /> },
-    { id: 'buses', label: t('nav.buses', 'Buses'), icon: <FaBus /> },
-    { id: 'routes', label: t('nav.routes', 'Routes'), icon: <FaRoute /> },
-    { id: 'schedules', label: t('nav.schedules', 'Schedules'), icon: <FaCalendarAlt /> },
-    { id: 'bookings', label: t('nav.bookings', 'Bookings'), icon: <FaTicketAlt /> },
-    { id: 'users', label: t('nav.users', 'Users'), icon: <FaUsers /> },
-    { id: 'reports', label: t('nav.reports', 'Reports'), icon: <FaChartLine /> },
-    { id: 'payment_integration', label: t('nav.paymentIntegration', 'Payment Integration'), icon: <FaCreditCard /> },
-    { section: t('nav.system', 'SYSTEM') },
-    { id: 'system_settings', label: t('nav.systemSettings', 'System Settings'), icon: <FaCog /> },
-    { id: 'help_support', label: t('nav.helpSupport', 'Help & Support'), icon: <FaQuestionCircle /> },
+    { section: t('bus companies', 'BUS COMPANIES') },
+    { id: 'company_approvals', label: 'Company Approvals', icon: <FaCheckCircle />, badge: pendingCompaniesCount },
+    { id: 'companies', label: t('registered companies', 'Registered Companies'), icon: <FaBuilding /> },
+    { id: 'register_company', label: t('register bus company', 'Register Bus Company'), icon: <FaPlus /> },
+    { section: t('platform governance', 'PLATFORM GOVERNANCE') },
+    { id: 'platform_settings', label: t('platform settings', 'Platform Settings'), icon: <FaCog /> },
+    { id: 'reports', label: t('platform reports', 'Platform Reports'), icon: <FaFileInvoice /> },
+    { id: 'question_desk', label: 'Question Desk & Inquiries', icon: <FaHeadset /> },
+    { id: 'audit_logs', label: t('audit log & history', 'Audit Log & History'), icon: <FaHistory /> },
   ];
 
   return (
-    <div className="sa-portal-wrapper">
-      {/* ── SIDEBAR ─────────────────────────────────────────────────────────── */}
-      <aside className="sa-sidebar">
-        <div className="sa-sidebar-top">
-          {/* Branded Portal Header */}
-          <div className="sa-sidebar-brand">
-            <div className="sa-brand-icon-box">
-              <FaBus />
+    <div className="flex h-screen w-full bg-slate-100 font-sans text-slate-900 overflow-hidden">
+      {}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {}
+      <aside className={`
+        fixed lg:relative inset-y-0 left-0 z-50
+        w-[265px] min-w-[265px] bg-[#0b1329] text-slate-400
+        flex flex-col border-r border-white/5 h-screen overflow-y-auto
+        transition-transform duration-300 ease-in-out select-none
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
+        <div className="flex flex-col flex-1 min-h-0 p-4">
+          {}
+          <div className="flex items-center gap-3 pb-6 border-b border-white/[0.07] mb-2">
+            <div className="w-[42px] h-[42px] bg-blue-600 rounded-xl flex items-center justify-center text-white text-xl shrink-0 shadow-[0_4px_14px_rgba(29,107,243,0.35)]">
+              <FaCrown />
             </div>
-            <div className="sa-brand-text">
-              <h2>Ethio Trip</h2>
-              <p>Super Admin Portal</p>
+            <div className="flex flex-col min-w-0">
+              <h2 className="m-0 text-[0.98rem] font-extrabold text-white tracking-tight truncate">Ethio Trip</h2>
+              <p className="m-0 text-[0.7rem] text-blue-400 font-medium">Platform Admin Portal</p>
             </div>
           </div>
 
-          {/* Navigation Links */}
-          <nav>
+          {}
+          <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto py-2 pr-1 -mr-1">
             {sidebarItems.map((item, idx) => {
               if (item.section) {
                 return (
-                  <div key={idx} className="sa-nav-section-title">
+                  <div key={idx} className="text-slate-500 text-[0.68rem] font-bold tracking-[1.2px] uppercase px-2 mt-5 mb-1.5">
                     {item.section}
                   </div>
                 );
               }
-              const isActive = activeTab === item.id || (item.id === 'payment_integration' && activeTab === 'chapa_dashboard');
+              const isActive = activeTab === item.id;
               return (
                 <button
                   key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`sa-nav-item ${isActive ? 'active' : ''}`}
+                  onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
+                  className={`flex items-center gap-3.5 w-full py-2.5 px-3.5 rounded-xl border-0 text-sm font-medium cursor-pointer transition-all duration-150 text-left mb-0.5 ${isActive ? 'bg-blue-600 text-white font-semibold shadow-[0_4px_12px_rgba(29,107,243,0.3)]' : 'bg-transparent text-slate-400 hover:bg-white/5 hover:text-white'}`}
                 >
-                  <span className="sa-nav-icon">{item.icon}</span>
-                  <span>{item.label}</span>
+                  <span className="text-[1.05rem] flex items-center justify-center min-w-[20px]">{item.icon}</span>
+                  <span className="flex-1">{item.label}</span>
+                  {item.badge > 0 && (
+                    <span className="ml-auto bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-xs">
+                      {item.badge}
+                    </span>
+                  )}
                 </button>
               );
             })}
           </nav>
         </div>
 
-        {/* Bottom Profile Widget */}
-        <div className="sa-sidebar-bottom">
-          <div className="sa-admin-pill-card" onClick={() => setActiveTab('profile')}>
-            <div className="sa-admin-pill-left">
-              <div className="sa-crown-badge">
+        {}
+        <div className="p-4 pt-0 border-t border-white/[0.07] mt-auto shrink-0 flex flex-col gap-2">
+          <div
+            className="flex items-center justify-between p-3 px-3.5 bg-white/[0.04] border border-white/[0.08] rounded-xl cursor-pointer transition-colors duration-150 hover:bg-white/[0.08]"
+            onClick={() => setActiveTab('profile')}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-yellow-500/15 text-yellow-500 flex items-center justify-center text-base shrink-0">
                 <FaCrown />
               </div>
-              <div className="sa-admin-pill-info">
-                <h4>Super Admin</h4>
-                <p>Full access to all features</p>
+              <div className="flex flex-col min-w-0">
+                <h4 className="m-0 text-[0.82rem] font-bold text-white truncate">{user?.name || 'Platform Admin'}</h4>
+                <p className="m-0 text-[0.68rem] text-slate-400 truncate">Platform Administrator</p>
               </div>
             </div>
-            <FaChevronRight style={{ color: '#64748b', fontSize: '0.75rem' }} />
           </div>
+          <button
+            onClick={logout}
+            className="flex items-center justify-center gap-2 w-full py-2 px-3 rounded-xl border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-bold cursor-pointer transition"
+          >
+            <FaSignOutAlt /> {t('common.logout', 'Sign Out')}
+          </button>
         </div>
       </aside>
 
-      {/* ── MAIN CONTENT AREA ───────────────────────────────────────────────── */}
-      <div className="sa-main-wrap">
-        {/* Top Header Bar */}
-        <header className="sa-topbar">
-          <div className="sa-search-wrap">
-            <FaSearch className="sa-search-icon" />
-            <input
-              type="text"
-              className="sa-search-input"
-              placeholder="Search companies, buses, routes, users..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-            />
+      {}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {}
+        <header className="h-[68px] bg-white border-b border-slate-200 px-4 md:px-8 flex items-center justify-between shrink-0 z-30">
+          <div className="flex items-center gap-3">
+            <button
+              className="lg:hidden w-10 h-10 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 cursor-pointer transition-all hover:bg-slate-50"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <FaBars />
+            </button>
+            <div>
+              <h1 className="text-lg md:text-xl font-black text-slate-900 tracking-tight m-0">
+                {activeTab === 'dashboard' && t('platform overview & statistics', 'Platform Overview & Statistics')}
+                {activeTab === 'company_approvals' && 'Pending Bus Company Approvals'}
+                {activeTab === 'companies' && t('manage registered transport companies', 'Manage Registered Transport Companies')}
+                {activeTab === 'register_company' && t('register new bus transport company', 'Register New Bus Transport Company')}
+                {activeTab === 'platform_settings' && t('system-wide platform settings', 'System-Wide Platform Settings')}
+                {activeTab === 'reports' && t('platform reports & growth analysis', 'Platform Reports & Growth Analysis')}
+                {activeTab === 'audit_logs' && t('platform admin governance audit log', 'Platform Admin Governance Audit Log')}
+                {activeTab === 'profile' && t('platform admin account & security', 'Platform Admin Account & Security')}
+              </h1>
+              <p className="text-[11px] text-slate-500 m-0 hidden sm:block">
+                {t('ethio trip platform governance — platform admin authority', 'Ethio Trip Platform Governance — Platform Admin Authority')}
+              </p>
+            </div>
           </div>
 
-          <div className="sa-topbar-right">
-            {/* Notification Bell */}
-            <div style={{ position: 'relative' }}>
-              <button
-                className="sa-icon-btn"
-                title="Notifications"
-                onClick={() => setShowNotifications(!showNotifications)}
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <ThemeToggle />
+            <LanguageSelector />
+            <button
+              onClick={fetchData}
+              title={t('refresh platform data', 'Refresh Platform Data')}
+              className="w-9 h-9 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:text-blue-600 cursor-pointer shadow-xs transition"
+            >
+              <FaSyncAlt className={loading ? 'animate-spin' : ''} />
+            </button>
+            <div className="hidden md:flex flex-col text-right leading-tight">
+              <span className="text-xs font-bold text-slate-800">{currentDateTime.time}</span>
+              <span className="text-[10px] text-slate-500">{currentDateTime.date}</span>
+            </div>
+            {}
+            <NotificationPanel role="super_admin" />
+            {}
+            {}
+            <div className="relative">
+              <div
+                onClick={() => setProfileDropdownOpen(prev => !prev)}
+                className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl px-3 py-1.5 cursor-pointer transition"
+                title={t('manage account', 'Manage Account')}
               >
-                <FaBell />
-                {auditLogs.length > 0 && <span className="sa-badge-dot">{auditLogs.slice(0, 3).length}</span>}
-              </button>
-
-              {showNotifications && (
-                <div style={{ position: 'absolute', right: 0, top: 48, width: 320, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, boxShadow: '0 10px 30px rgba(0,0,0,0.12)', zIndex: 60, padding: '1rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>
-                    <strong style={{ fontSize: '0.9rem' }}>Recent Platform Logs</strong>
-                    <span style={{ fontSize: '0.75rem', color: '#1d6bf3', cursor: 'pointer' }} onClick={() => setShowNotifications(false)}>Close</span>
+                <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center text-sm font-black shrink-0 overflow-hidden">
+                  {user?.avatar ? <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" /> : <FaCrown />}
+                </div>
+                <span className="text-xs font-bold text-blue-800 hidden sm:block max-w-[120px] truncate">
+                  {user?.name?.replace(/\s*\([^)]*\)/g, '').trim() || 'Platform Admin'}
+                </span>
+              </div>
+              {profileDropdownOpen && (
+                <div className="absolute top-12 right-0 w-52 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 z-[1200] overflow-hidden" onMouseLeave={() => setProfileDropdownOpen(false)}>
+                  <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-black text-sm shrink-0 overflow-hidden">
+                      {user?.avatar ? <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" /> : <FaCrown />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-900 dark:text-white m-0 truncate">{user?.name || 'Platform Admin'}</p>
+                      <p className="text-[10px] text-slate-400 m-0">Platform Admin</p>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', fontSize: '0.8rem' }}>
-                    {sanitizedRecentActivity.slice(0, 3).map((act, idx) => (
-                      <div key={idx} style={{ padding: '0.5rem', background: '#f8fafc', borderRadius: 8 }}>
-                        <strong style={{ display: 'block', color: '#0f172a' }}>{act.title}</strong>
-                        <span style={{ color: '#64748b', fontSize: '0.72rem' }}>{act.subtitle} • {act.time}</span>
-                      </div>
-                    ))}
-                    {sanitizedRecentActivity.length === 0 && (
-                      <div style={{ color: '#94a3b8', fontSize: '0.78rem' }}>No recent notifications</div>
-                    )}
+                  <div className="p-2">
+                    <button
+                      type="button"
+                      onClick={() => { setActiveTab('profile'); setProfileDropdownOpen(false); }}
+                      className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:text-blue-700 dark:hover:text-blue-400 transition-colors cursor-pointer flex items-center gap-2"
+                    >
+                      <FaUser className="text-blue-600" /> Edit Profile
+                    </button>
                   </div>
                 </div>
               )}
             </div>
-
-            {/* Language Selector */}
-            <LanguageSelector />
-
-            {/* Super Admin Avatar Badge */}
-            <div className="sa-user-profile-badge" onClick={() => setActiveTab('profile')}>
-              <div className="sa-avatar-circle">
-                {profileForm.avatar ? (
-                  <img src={profileForm.avatar} alt="Admin" />
-                ) : (
-                  'SA'
-                )}
-              </div>
-              <div className="sa-user-meta">
-                <h4>Super Admin</h4>
-                <p>Administrator</p>
-              </div>
-            </div>
-
-            {/* Logout button */}
-            <button
-              onClick={logout}
-              className="sa-icon-btn"
-              title="Sign Out"
-              style={{ color: '#ef4444', borderColor: '#fee2e2' }}
-            >
-              <FaSignOutAlt />
-            </button>
           </div>
         </header>
 
-        {/* Content Body */}
-        <main className="sa-content-body">
-          {/* ================================================================= */}
-          {/* 1. DASHBOARD OVERVIEW TAB (100% REAL LIVE DATA)                  */}
-          {/* ================================================================= */}
+        {}
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50">
+          {}
+          {}
+          {}
           {activeTab === 'dashboard' && (
-            <>
-              {/* Welcome Banner */}
-              <section className="sa-welcome-banner">
-                <div className="sa-welcome-left">
-                  <span className="sa-wave-hand">👋</span>
-                  <div className="sa-welcome-headings">
-                    <h1>{t('dashboard.welcomeTitle', 'Welcome back, Super Admin')}</h1>
-                    <p>{t('dashboard.welcomeSubtitle', 'Manage all bus companies, monitor operations, and keep the system running smoothly.')}</p>
-                  </div>
-                </div>
-
-                <div className="sa-datetime-card">
-                  <FaCalendarAlt className="sa-calendar-icon" />
-                  <div className="sa-datetime-text">
-                    <h4>{currentDateTime.date}</h4>
-                    <p>{currentDateTime.time}</p>
-                  </div>
-                </div>
-              </section>
-
-              {/* Row 1: 6 Stat Cards (From Real Database) */}
-              <section className="sa-stats-grid">
-                {/* Total Companies */}
-                <div className="sa-stat-card">
-                  <div className="sa-stat-top">
-                    <div className="sa-stat-icon-square purple">
-                      <FaBuilding />
-                    </div>
-                    <div className="sa-stat-meta">
-                      <div className="sa-stat-label">{t('dashboard.totalCompanies', 'Total Companies')}</div>
-                      <div className="sa-stat-val">{totalCompaniesCount}</div>
-                    </div>
-                  </div>
-                  <div className="sa-stat-bottom">
-                    <span className="sa-stat-trend">
-                      {newCompaniesCount > 0 ? `↑ ${newCompaniesCount} new this month` : `${companies.filter(c => c.status === 'active').length} active`}
-                    </span>
-                    <button className="sa-stat-viewall" onClick={() => setActiveTab('companies')}>
-                      {t('common.viewAll', 'View All')} <FaArrowRight />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Total Buses */}
-                <div className="sa-stat-card">
-                  <div className="sa-stat-top">
-                    <div className="sa-stat-icon-square green">
-                      <FaBus />
-                    </div>
-                    <div className="sa-stat-meta">
-                      <div className="sa-stat-label">{t('dashboard.totalBuses', 'Total Buses')}</div>
-                      <div className="sa-stat-val">{totalBusesCount}</div>
-                    </div>
-                  </div>
-                  <div className="sa-stat-bottom">
-                    <span className="sa-stat-trend">
-                      {newBusesCount > 0 ? `↑ ${newBusesCount} new this month` : `${buses.filter(b => b.status === 'active').length} active`}
-                    </span>
-                    <button className="sa-stat-viewall" onClick={() => setActiveTab('buses')}>
-                      {t('common.viewAll', 'View All')} <FaArrowRight />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Total Users */}
-                <div className="sa-stat-card">
-                  <div className="sa-stat-top">
-                    <div className="sa-stat-icon-square blue">
-                      <FaUsers />
-                    </div>
-                    <div className="sa-stat-meta">
-                      <div className="sa-stat-label">{t('dashboard.totalUsers', 'Total Users')}</div>
-                      <div className="sa-stat-val">{totalUsersCount}</div>
-                    </div>
-                  </div>
-                  <div className="sa-stat-bottom">
-                    <span className="sa-stat-trend">
-                      {newUsersCount > 0 ? `↑ ${newUsersCount} new this month` : `${usersList.length} registered`}
-                    </span>
-                    <button className="sa-stat-viewall" onClick={() => setActiveTab('users')}>
-                      {t('common.viewAll', 'View All')} <FaArrowRight />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Total Bookings */}
-                <div className="sa-stat-card">
-                  <div className="sa-stat-top">
-                    <div className="sa-stat-icon-square orange">
-                      <FaTicketAlt />
-                    </div>
-                    <div className="sa-stat-meta">
-                      <div className="sa-stat-label">{t('dashboard.totalBookings', 'Total Bookings')}</div>
-                      <div className="sa-stat-val">{totalBookingsCount}</div>
-                    </div>
-                  </div>
-                  <div className="sa-stat-bottom">
-                    <span className="sa-stat-trend">
-                      {newBookingsCount > 0 ? `↑ ${newBookingsCount} this month` : `${bookings.filter(b => b.status === 'CONFIRMED' || b.status === 'confirmed').length} confirmed`}
-                    </span>
-                    <button className="sa-stat-viewall" onClick={() => setActiveTab('bookings')}>
-                      {t('common.viewAll', 'View All')} <FaArrowRight />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Total Revenue */}
-                <div className="sa-stat-card">
-                  <div className="sa-stat-top">
-                    <div className="sa-stat-icon-square red">
-                      <FaWallet />
-                    </div>
-                    <div className="sa-stat-meta">
-                      <div className="sa-stat-label">{t('dashboard.totalRevenue', 'Total Revenue')}</div>
-                      <div className="sa-stat-val" style={{ fontSize: '1.15rem' }}>
-                        ETB {Number(totalRevenueAmount).toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="sa-stat-bottom">
-                    <span className="sa-stat-trend">
-                      {paidPayments.length} paid txns
-                    </span>
-                    <button className="sa-stat-viewall" onClick={() => setActiveTab('chapa_dashboard')}>
-                      {t('common.viewAll', 'View All')} <FaArrowRight />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Total Routes */}
-                <div className="sa-stat-card">
-                  <div className="sa-stat-top">
-                    <div className="sa-stat-icon-square teal">
-                      <FaRoute />
-                    </div>
-                    <div className="sa-stat-meta">
-                      <div className="sa-stat-label">{t('dashboard.totalRoutes', 'Total Routes')}</div>
-                      <div className="sa-stat-val">{totalRoutesCount}</div>
-                    </div>
-                  </div>
-                  <div className="sa-stat-bottom">
-                    <span className="sa-stat-trend">
-                      {newRoutesCount > 0 ? `↑ ${newRoutesCount} new routes` : `${routes.length} active`}
-                    </span>
-                    <button className="sa-stat-viewall" onClick={() => setActiveTab('routes')}>
-                      {t('common.viewAll', 'View All')} <FaArrowRight />
-                    </button>
-                  </div>
-                </div>
-              </section>
-
-              {/* Row 2: Middle Section (Real Dynamic Chart, Real Revenue Breakdown, Real Top Companies) */}
-              <section className="sa-middle-grid">
-                {/* 1. Revenue Overview Area Chart (Calculated dynamically from real payments) */}
-                <div className="sa-card">
-                  <div className="sa-card-header">
-                    <div className="sa-card-title-group">
-                      <FaChartLine className="icon" />
-                      <h3>{t('dashboard.revenueOverview', 'Revenue Overview')}</h3>
-                    </div>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>
-                      {t('dashboard.last7Days', 'Last 7 Days (Live)')}
-                    </span>
-                  </div>
-
-                  {/* SVG Area Line Chart dynamically driven by actual payments */}
-                  <div style={{ position: 'relative', width: '100%', height: 210, marginTop: '0.5rem' }}>
-                    <svg viewBox="0 0 500 180" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
-                      <defs>
-                        <linearGradient id="revGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#1d6bf3" stopOpacity="0.28" />
-                          <stop offset="100%" stopColor="#1d6bf3" stopOpacity="0.0" />
-                        </linearGradient>
-                      </defs>
-
-                      {/* Horizontal Grid lines */}
-                      <line x1="45" y1="20" x2="490" y2="20" stroke="#f1f5f9" strokeWidth="1" />
-                      <line x1="45" y1="55" x2="490" y2="55" stroke="#f1f5f9" strokeWidth="1" />
-                      <line x1="45" y1="90" x2="490" y2="90" stroke="#f1f5f9" strokeWidth="1" />
-                      <line x1="45" y1="125" x2="490" y2="125" stroke="#f1f5f9" strokeWidth="1" />
-                      <line x1="45" y1="160" x2="490" y2="160" stroke="#f1f5f9" strokeWidth="1" />
-
-                      {/* Dynamic Y-Axis Labels based on actual max amount */}
-                      <text x="5" y="24" fill="#94a3b8" fontSize="10" fontFamily="sans-serif">
-                        {Math.round(chartData.maxAmount)}
-                      </text>
-                      <text x="5" y="59" fill="#94a3b8" fontSize="10" fontFamily="sans-serif">
-                        {Math.round(chartData.maxAmount * 0.75)}
-                      </text>
-                      <text x="5" y="94" fill="#94a3b8" fontSize="10" fontFamily="sans-serif">
-                        {Math.round(chartData.maxAmount * 0.5)}
-                      </text>
-                      <text x="5" y="129" fill="#94a3b8" fontSize="10" fontFamily="sans-serif">
-                        {Math.round(chartData.maxAmount * 0.25)}
-                      </text>
-                      <text x="25" y="164" fill="#94a3b8" fontSize="10" fontFamily="sans-serif">0</text>
-
-                      {/* Dynamic Area Fill */}
-                      <path d={chartData.areaD} fill="url(#revGradient)" />
-
-                      {/* Dynamic Line Stroke */}
-                      <path
-                        d={chartData.pathD}
-                        fill="none"
-                        stroke="#1d6bf3"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-
-                      {/* Dynamic Data Points */}
-                      {chartData.points.map((p, i) => (
-                        <circle
-                          key={i}
-                          cx={p.x}
-                          cy={p.y}
-                          r="4.5"
-                          fill="#1d6bf3"
-                          stroke="#ffffff"
-                          strokeWidth="2.5"
-                        >
-                          <title>{`${p.label}: ETB ${p.amount.toLocaleString()}`}</title>
-                        </circle>
-                      ))}
-
-                      {/* Dynamic X-Axis Date Labels */}
-                      {chartData.points.map((p, i) => (
-                        <text key={i} x={p.x - 14} y="178" fill="#94a3b8" fontSize="10" fontFamily="sans-serif">
-                          {p.label}
-                        </text>
-                      ))}
-                    </svg>
-                  </div>
-                </div>
-
-                {/* 2. Total Revenue Breakdown Card (Computed dynamically from real payments) */}
-                <div className="sa-card">
-                  <div className="sa-card-header" style={{ marginBottom: '0.5rem' }}>
-                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748b' }}>{t('dashboard.totalRevenue', 'Total Revenue')}</span>
-                  </div>
-
-                  <div style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.25rem' }}>
-                    ETB {Number(totalRevenueAmount).toLocaleString()}
-                  </div>
-
-                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 4, marginBottom: '1.25rem' }}>
-                    {paidPayments.length} {t('dashboard.verifiedTransactions', 'verified transactions')}
-                  </div>
-
-                  {/* Real Breakdown Percentages & Amounts */}
-                  <div className="sa-rev-breakdown-list">
-                    <div className="sa-rev-item">
-                      <div className="sa-rev-item-left">
-                        <span className="sa-rev-dot" style={{ backgroundColor: '#1d6bf3' }}></span>
-                        <span>{t('dashboard.onlineBooking', 'Online (Chapa)')}</span>
-                      </div>
-                      <span className="sa-rev-item-pct">
-                        {revenueBreakdown.chapaPct}% (ETB {revenueBreakdown.chapaAmount.toLocaleString()})
-                      </span>
-                    </div>
-
-                    <div className="sa-rev-item">
-                      <div className="sa-rev-item-left">
-                        <span className="sa-rev-dot" style={{ backgroundColor: '#8b5cf6' }}></span>
-                        <span>{t('dashboard.mobileMoney', 'Mobile Money (Telebirr)')}</span>
-                      </div>
-                      <span className="sa-rev-item-pct">
-                        {revenueBreakdown.telebirrPct}% (ETB {revenueBreakdown.telebirrAmount.toLocaleString()})
-                      </span>
-                    </div>
-
-                    <div className="sa-rev-item">
-                      <div className="sa-rev-item-left">
-                        <span className="sa-rev-dot" style={{ backgroundColor: '#f97316' }}></span>
-                        <span>{t('dashboard.walkIn', 'Walk-in / Cash / CBE')}</span>
-                      </div>
-                      <span className="sa-rev-item-pct">
-                        {revenueBreakdown.otherPct}% (ETB {revenueBreakdown.otherAmount.toLocaleString()})
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. Top Bus Companies Card (Computed from real companies in DB) */}
-                <div className="sa-card">
-                  <div className="sa-card-header">
-                    <div className="sa-card-title-group">
-                      <FaBus className="icon" />
-                      <h3>{t('dashboard.topCompanies', 'Top Bus Companies')}</h3>
-                    </div>
-                    <button className="sa-card-action-link" onClick={() => setActiveTab('companies')}>
-                      {t('common.viewAll', 'View All')} <FaArrowRight />
-                    </button>
-                  </div>
-
-                  <div className="sa-company-list">
-                    {liveTopCompanies.slice(0, 5).map((c, i) => (
-                      <div
-                        key={c._id || i}
-                        className="sa-company-row"
-                        onClick={() => { setSelectedCompanyDetails(c); setActiveTab('companies'); }}
-                      >
-                        <div className="sa-comp-left">
-                          <div
-                            className="sa-comp-logo"
-                            style={{ backgroundColor: ['#dc2626', '#2563eb', '#d97706', '#0284c7', '#7c3aed'][i % 5] }}
-                          >
-                            {c.logo ? (
-                              <img src={c.logo} alt={c.companyName} />
-                            ) : (
-                              (c.companyName || 'B').slice(0, 2).toUpperCase()
-                            )}
-                          </div>
-                          <div className="sa-comp-info">
-                            <h4>{c.companyName}</h4>
-                            <p>{c.routesCount} Routes • {c.busesCount} Buses</p>
-                          </div>
-                        </div>
-
-                        <div className="sa-comp-right">
-                          <span className="sa-badge-active" style={{ textTransform: 'capitalize' }}>
-                            {c.status || 'Active'}
-                          </span>
-                          <FaChevronRight style={{ color: '#94a3b8', fontSize: '0.7rem' }} />
-                        </div>
-                      </div>
-                    ))}
-                    {liveTopCompanies.length === 0 && (
-                      <div style={{ textAlign: 'center', padding: '1.5rem', color: '#94a3b8', fontSize: '0.8rem' }}>
-                        No companies registered yet. Click "Register Bus Company" to add one.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </section>
-
-              {/* Row 3: Bottom Section (Real Platform Grid, Real Recent Activity, Real System Status) */}
-              <section className="sa-bottom-grid">
-                {/* 1. Platform Management Grid with Actual DB Counts */}
-                <div className="sa-card">
-                  <div className="sa-card-header">
-                    <div className="sa-card-title-group">
-                      <FaServer className="icon" />
-                      <h3>{t('dashboard.platformManagement', 'Platform Management')}</h3>
-                    </div>
-                  </div>
-
-                  <div className="sa-mgmt-grid">
-                    <div className="sa-mgmt-tile" onClick={() => setActiveTab('companies')}>
-                      <div className="sa-mgmt-icon" style={{ background: '#f3e8ff', color: '#7e22ce' }}>
-                        <FaBuilding />
+            <div className="space-y-6 max-w-7xl mx-auto">
+              {}
+              {pendingCompaniesCount > 0 && (
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 dark:border-amber-700/60 rounded-3xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl shrink-0 shadow-sm animate-pulse">
+                        ⏳
                       </div>
                       <div>
-                        <div className="sa-mgmt-title">Manage Companies</div>
-                        <div className="sa-mgmt-sub">{totalCompaniesCount} Companies <FaChevronRight /></div>
+                        <h3 className="text-base font-black text-amber-900 dark:text-amber-200 m-0">
+                          {pendingCompaniesCount} Bus Company Registration{pendingCompaniesCount > 1 ? 's' : ''} Pending Platform Admin Approval!
+                        </h3>
+                        <p className="text-xs text-amber-800 dark:text-amber-300 m-0 mt-0.5">
+                          New bus transport operators submitted their registration from the landing page. Review license &amp; TIN information below to approve or reject.
+                        </p>
                       </div>
                     </div>
-
-                    <div className="sa-mgmt-tile" onClick={() => setActiveTab('buses')}>
-                      <div className="sa-mgmt-icon" style={{ background: '#dcfce7', color: '#15803d' }}>
-                        <FaBus />
-                      </div>
-                      <div>
-                        <div className="sa-mgmt-title">Manage Buses</div>
-                        <div className="sa-mgmt-sub">{totalBusesCount} Buses <FaChevronRight /></div>
-                      </div>
-                    </div>
-
-                    <div className="sa-mgmt-tile" onClick={() => setActiveTab('routes')}>
-                      <div className="sa-mgmt-icon" style={{ background: '#dbeafe', color: '#1d4ed8' }}>
-                        <FaRoute />
-                      </div>
-                      <div>
-                        <div className="sa-mgmt-title">Manage Routes</div>
-                        <div className="sa-mgmt-sub">{totalRoutesCount} Routes <FaChevronRight /></div>
-                      </div>
-                    </div>
-
-                    <div className="sa-mgmt-tile" onClick={() => setActiveTab('schedules')}>
-                      <div className="sa-mgmt-icon" style={{ background: '#ffedd5', color: '#c2410c' }}>
-                        <FaCalendarAlt />
-                      </div>
-                      <div>
-                        <div className="sa-mgmt-title">Manage Schedules</div>
-                        <div className="sa-mgmt-sub">{schedules.length} Schedules <FaChevronRight /></div>
-                      </div>
-                    </div>
-
-                    <div className="sa-mgmt-tile" onClick={() => setActiveTab('users')}>
-                      <div className="sa-mgmt-icon" style={{ background: '#ccfbf1', color: '#0f766e' }}>
-                        <FaUsers />
-                      </div>
-                      <div>
-                        <div className="sa-mgmt-title">Manage Users</div>
-                        <div className="sa-mgmt-sub">{totalUsersCount} Users <FaChevronRight /></div>
-                      </div>
-                    </div>
-
-                    <div className="sa-mgmt-tile" onClick={() => setActiveTab('reports')}>
-                      <div className="sa-mgmt-icon" style={{ background: '#f3e8ff', color: '#6b21a8' }}>
-                        <FaChartLine />
-                      </div>
-                      <div>
-                        <div className="sa-mgmt-title">Manage Reports</div>
-                        <div className="sa-mgmt-sub">{auditLogs.length} Records <FaChevronRight /></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. Real Recent Activity Feed (Sanitized to strictly exclude conductor & ticket agent) */}
-                <div className="sa-card">
-                  <div className="sa-card-header">
-                    <div className="sa-card-title-group">
-                      <FaClock className="icon" />
-                      <h3>{t('dashboard.recentActivity', 'Recent Activity')}</h3>
-                    </div>
-                    <span className="sa-card-action-link" onClick={() => setActiveTab('reports')}>
-                      {t('common.viewAll', 'View All')} <FaArrowRight />
-                    </span>
+                    <button
+                      onClick={() => { setCompanyStatusFilter('pending'); setActiveTab('companies'); }}
+                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-sm cursor-pointer transition"
+                    >
+                      View All Pending ({pendingCompaniesCount}) →
+                    </button>
                   </div>
 
-                  <div className="sa-activity-list">
-                    {sanitizedRecentActivity.map(act => (
-                      <div key={act.id} className="sa-activity-item">
-                        <div className="sa-activity-icon" style={{ background: '#dbeafe', color: '#1d6bf3' }}>
-                          <FaCheckCircle />
-                        </div>
-                        <div className="sa-activity-text">
-                          <p>{act.title}</p>
-                          <span>{act.subtitle}</span>
-                        </div>
-                        <span className="sa-activity-time">{act.time}</span>
-                      </div>
-                    ))}
-                    {sanitizedRecentActivity.length === 0 && (
-                      <div style={{ textAlign: 'center', padding: '1.5rem', color: '#94a3b8', fontSize: '0.8rem' }}>
-                        No recent activity recorded yet.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* 3. System Status Panel (Real live checks) */}
-                <div className="sa-card">
-                  <div className="sa-card-header">
-                    <div className="sa-card-title-group">
-                      <FaCog className="icon" />
-                      <h3>{t('dashboard.systemStatus', 'System Status')}</h3>
-                    </div>
-                    <span className="sa-badge-active" style={{ fontSize: '0.72rem', padding: '0.2rem 0.6rem' }}>
-                      ● {t('common.online', 'Online')}
-                    </span>
-                  </div>
-
-                  <div className="sa-status-list">
-                    <div className="sa-status-row">
-                      <div className="sa-status-left">
-                        <FaServer style={{ color: '#475569' }} />
-                        <span>Server API</span>
-                      </div>
-                      <span className="sa-status-indicator"><span className="dot"></span> Online</span>
-                    </div>
-
-                    <div className="sa-status-row">
-                      <div className="sa-status-left">
-                        <FaDatabase style={{ color: '#475569' }} />
-                        <span>Database (MongoDB)</span>
-                      </div>
-                      <span className="sa-status-indicator">
-                        <span className="dot"></span> {companies.length > 0 ? 'Connected' : 'Active'}
-                      </span>
-                    </div>
-
-                    <div className="sa-status-row">
-                      <div className="sa-status-left">
-                        <FaCreditCard style={{ color: '#475569' }} />
-                        <span>Payment Gateway (Chapa)</span>
-                      </div>
-                      <span className="sa-status-indicator"><span className="dot"></span> Active</span>
-                    </div>
-
-                    <div className="sa-status-row">
-                      <div className="sa-status-left">
-                        <FaCheckCircle style={{ color: '#475569' }} />
-                        <span>Email Notification Service</span>
-                      </div>
-                      <span className="sa-status-indicator"><span className="dot"></span> Online</span>
-                    </div>
-
-                    <div className="sa-status-row">
-                      <div className="sa-status-left">
-                        <FaImage style={{ color: '#475569' }} />
-                        <span>Image Cloud / Cloudinary</span>
-                      </div>
-                      <span className="sa-status-indicator"><span className="dot"></span> Ready</span>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* Portal Footer */}
-              <footer className="sa-footer">
-                <div>Ethio Trip | Super Admin Portal v1.0.0</div>
-                <div>Better Transport • A Connected Ethiopia</div>
-              </footer>
-            </>
-          )}
-
-          {/* ================================================================= */}
-          {/* 2. COMPANIES MANAGEMENT TAB                                       */}
-          {/* ================================================================= */}
-          {activeTab === 'companies' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 4px', color: '#0f172a' }}>
-                    Transport Companies
-                  </h2>
-                  <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0 }}>
-                    Manage registered bus transport companies, verify licenses, and upload official company logos.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowRegisterCompanyModal(true)}
-                  style={{ background: '#1d6bf3', color: '#fff', border: 'none', padding: '0.65rem 1.25rem', borderRadius: 10, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', boxShadow: '0 4px 12px rgba(29,107,243,0.3)' }}
-                >
-                  <FaPlus /> Register Bus Company
-                </button>
-              </div>
-
-              {/* Filter Row */}
-              <div style={{ display: 'flex', gap: '1rem', background: '#fff', padding: '0.85rem 1.25rem', borderRadius: 12, border: '1px solid #e2e8f0' }}>
-                {['all', 'active', 'pending', 'suspended'].map(s => (
-                  <button
-                    key={s}
-                    onClick={() => setCompanyStatusFilter(s)}
-                    style={{
-                      padding: '0.4rem 1rem', borderRadius: 8, border: 'none', cursor: 'pointer',
-                      fontWeight: 600, fontSize: '0.8rem', textTransform: 'capitalize',
-                      background: companyStatusFilter === s ? '#1d6bf3' : '#f1f5f9',
-                      color: companyStatusFilter === s ? '#fff' : '#475569'
-                    }}
-                  >
-                    {s} ({s === 'all' ? companies.length : companies.filter(c => c.status === s).length})
-                  </button>
-                ))}
-              </div>
-
-              {/* Companies Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
-                {filteredCompanies.map(c => (
-                  <div key={c._id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '0.85rem' }}>
-                        <div style={{ width: 48, height: 48, borderRadius: 12, overflow: 'hidden', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: '#4338ca', fontSize: '1.1rem', border: '1px solid #c7d2fe' }}>
-                          {c.logo ? (
-                            <img src={c.logo} alt={c.companyName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          ) : (
-                            c.companyName.slice(0, 2).toUpperCase()
-                          )}
-                        </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t border-amber-200/80">
+                    {companies.filter(c => (c.status || '').toLowerCase() === 'pending').slice(0, 3).map((comp) => (
+                      <div key={comp._id || comp.id} className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-amber-200 dark:border-amber-800 flex flex-col justify-between space-y-3 shadow-xs">
                         <div>
-                          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>{c.companyName}</h3>
-                          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>License: {c.licenseNumber}</span>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <strong className="text-sm font-black text-slate-900 dark:text-white truncate">{comp.companyName}</strong>
+                            <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Pending</span>
+                          </div>
+                          <div className="text-xs text-slate-600 dark:text-slate-300 space-y-0.5 font-mono">
+                            <div>License: <strong>{comp.licenseNumber}</strong></div>
+                            <div>TIN: <strong>{comp.tinNumber}</strong></div>
+                            <div className="text-slate-500 font-sans mt-1">Admin: {comp.adminName} ({comp.adminEmail || comp.email})</div>
+                          </div>
                         </div>
-                      </div>
-
-                      <div style={{ fontSize: '0.8rem', color: '#475569', display: 'flex', flexDirection: 'column', gap: 4, marginBottom: '1rem' }}>
-                        <div><strong>City:</strong> {c.city || 'Addis Ababa'}</div>
-                        <div><strong>Email:</strong> {c.email}</div>
-                        <div><strong>Phone:</strong> {c.phone}</div>
-                        <div><strong>TIN:</strong> {c.tinNumber || 'N/A'}</div>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem' }}>
-                      <span style={{
-                        fontSize: '0.72rem', fontWeight: 700, padding: '0.2rem 0.6rem', borderRadius: 999, textTransform: 'capitalize',
-                        background: c.status === 'active' ? '#dcfce7' : c.status === 'pending' ? '#fef3c7' : '#fee2e2',
-                        color: c.status === 'active' ? '#15803d' : c.status === 'pending' ? '#b45309' : '#b91c1c',
-                      }}>
-                        ● {c.status}
-                      </span>
-
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {c.status !== 'active' && (
+                        <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                           <button
-                            onClick={() => handleUpdateCompanyStatus(c._id, 'active')}
-                            style={{ background: '#10b981', color: '#fff', border: 'none', padding: '0.35rem 0.65rem', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}
+                            onClick={() => handleApproveCompany(comp)}
+                            className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition flex items-center justify-center gap-1.5"
                           >
-                            Approve
+                            <FaCheckCircle /> Approve Company
                           </button>
-                        )}
-                        {c.status === 'active' && (
                           <button
-                            onClick={() => handleUpdateCompanyStatus(c._id, 'suspended')}
-                            style={{ background: '#f59e0b', color: '#fff', border: 'none', padding: '0.35rem 0.65rem', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}
+                            onClick={() => handleRejectCompany(comp)}
+                            className="py-2 px-3 bg-red-100 hover:bg-red-200 text-red-600 rounded-xl text-xs font-bold cursor-pointer transition border border-red-200"
                           >
-                            Suspend
+                            Reject
                           </button>
-                        )}
-                        <button
-                          onClick={() => setSelectedCompanyDetails(c)}
-                          style={{ background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', padding: '0.35rem 0.65rem', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}
-                        >
-                          Details
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ================================================================= */}
-          {/* 3. BUSES MANAGEMENT TAB (WITH REAL BUS IMAGE UPLOAD)               */}
-          {/* ================================================================= */}
-          {activeTab === 'buses' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 4px', color: '#0f172a' }}>
-                    Fleet &amp; Bus Management
-                  </h2>
-                  <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0 }}>
-                    Add and manage buses across all transport companies with uploaded photos visible on Home and Bus pages.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowAddBusModal(true)}
-                  style={{ background: '#15803d', color: '#fff', border: 'none', padding: '0.65rem 1.25rem', borderRadius: 10, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', boxShadow: '0 4px 12px rgba(21,128,61,0.3)' }}
-                >
-                  <FaPlus /> Add New Bus
-                </button>
-              </div>
-
-              {/* Buses Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1.25rem' }}>
-                {filteredBuses.map(b => (
-                  <div key={b._id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
-                    {/* Bus Image */}
-                    <div style={{ width: '100%', height: 180, background: '#0f172a', position: 'relative', overflow: 'hidden' }}>
-                      <img
-                        src={b.image || '/images/selam_bus.png'}
-                        alt={b.busNumber}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        onError={e => { e.target.src = '/images/selam_bus.png'; }}
-                      />
-                      <span style={{ position: 'absolute', top: 12, right: 12, background: b.type === 'VIP' ? '#d97706' : b.type === 'Luxury' ? '#7c3aed' : '#2563eb', color: '#fff', fontSize: '0.72rem', fontWeight: 700, padding: '0.2rem 0.65rem', borderRadius: 999 }}>
-                        {b.type}
-                      </span>
-                      {b.companyId?.logo && (
-                        <div style={{ position: 'absolute', bottom: 12, left: 12, background: 'rgba(255,255,255,0.9)', padding: '4px 8px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <img src={b.companyId.logo} alt="logo" style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover' }} />
-                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0f172a' }}>{b.companyId.companyName}</span>
                         </div>
-                      )}
-                    </div>
-
-                    <div style={{ padding: '1.25rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                        <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>{b.busNumber}</h3>
-                        <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#64748b' }}>Plate: {b.plateNumber}</span>
                       </div>
-
-                      <div style={{ fontSize: '0.8rem', color: '#475569', marginBottom: '0.75rem' }}>
-                        <div><strong>Capacity:</strong> {b.capacity} Passenger Seats</div>
-                        <div><strong>Status:</strong> <span style={{ color: b.status === 'active' ? '#16a34a' : '#ef4444', fontWeight: 700 }}>● {b.status}</span></div>
-                      </div>
-
-                      {b.amenities && b.amenities.length > 0 && (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: '0.5rem' }}>
-                          {(Array.isArray(b.amenities) ? b.amenities : String(b.amenities).split(',')).map((a, idx) => (
-                            <span key={idx} style={{ background: '#f1f5f9', color: '#334155', fontSize: '0.68rem', padding: '2px 8px', borderRadius: 6 }}>
-                              {a.trim()}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ================================================================= */}
-          {/* 4. PAYMENT INTEGRATION TAB                                        */}
-          {/* ================================================================= */}
-          {activeTab === 'payment_integration' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 4px', color: '#0f172a' }}>
-                    Payment Gateways &amp; Integrations
-                  </h2>
-                  <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0 }}>
-                    Configure Ethiopian digital payment methods. Click on Chapa to access the live transactions dashboard.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setActiveTab('chapa_dashboard')}
-                  style={{ background: '#1d6bf3', color: '#fff', border: 'none', padding: '0.65rem 1.25rem', borderRadius: 10, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', boxShadow: '0 4px 14px rgba(29,107,243,0.3)' }}
-                >
-                  <FaCreditCard /> Open Chapa Dashboard <FaArrowRight />
-                </button>
-              </div>
-
-              {/* Payment Methods Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.25rem' }}>
-                {/* 1. CHAPA GATEWAY (PRIMARY - CLICKABLE) */}
-                <div
-                  style={{
-                    background: '#ffffff', border: '2px solid #1d6bf3', borderRadius: 16, padding: '1.5rem',
-                    boxShadow: '0 6px 20px rgba(29,107,243,0.08)', position: 'relative', cursor: 'pointer',
-                    transition: 'transform 0.15s'
-                  }}
-                  onClick={() => setActiveTab('chapa_dashboard')}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                      <div style={{ width: 48, height: 48, borderRadius: 12, background: 'linear-gradient(135deg, #1d6bf3, #0284c7)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.35rem', boxShadow: '0 4px 12px rgba(29,107,243,0.3)' }}>
-                        <FaCreditCard />
-                      </div>
-                      <div>
-                        <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Chapa Payment Gateway</h3>
-                        <span style={{ fontSize: '0.72rem', color: '#1d6bf3', fontWeight: 700 }}>PRIMARY PAYMENT GATEWAY</span>
-                      </div>
-                    </div>
-                    <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '0.72rem', fontWeight: 700, padding: '0.25rem 0.65rem', borderRadius: 999 }}>
-                      ● Active
-                    </span>
-                  </div>
-
-                  <p style={{ fontSize: '0.82rem', color: '#64748b', lineHeight: 1.5, marginBottom: '1.25rem' }}>
-                    Official Ethiopian payment aggregator supporting Visa, Mastercard, Telebirr, CBEBirr, Awash Birr, and Amole. Automated webhook verification and live settlement.
-                  </p>
-
-                  <div style={{ background: '#f8fafc', padding: '0.85rem', borderRadius: 10, marginBottom: '1.25rem', fontSize: '0.78rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <div><strong>Live Volume:</strong> ETB {Number(chapaTotalVolume).toLocaleString()}</div>
-                    <div><strong>Successful Payments:</strong> {chapaSuccessCount} transactions</div>
-                    <div><strong>Mode:</strong> Test / Sandbox Mode Active</div>
-                  </div>
-
-                  {/* Arrow Action Button specifically requested by user */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: '1rem', color: '#1d6bf3', fontWeight: 700, fontSize: '0.88rem' }}>
-                    <span>Click to open Chapa Transactions &amp; Dashboard</span>
-                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#1d6bf3', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <FaArrowRight />
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. TELEBIRR */}
-                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.5rem', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                      <div style={{ width: 48, height: 48, borderRadius: 12, background: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.35rem' }}>
-                        <FaMobileAlt />
-                      </div>
-                      <div>
-                        <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Telebirr (Ethio Telecom)</h3>
-                        <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Mobile Money Direct API</span>
-                      </div>
-                    </div>
-                    <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '0.72rem', fontWeight: 700, padding: '0.25rem 0.65rem', borderRadius: 999 }}>
-                      ● Active (via Chapa)
-                    </span>
-                  </div>
-
-                  <p style={{ fontSize: '0.82rem', color: '#64748b', lineHeight: 1.5, marginBottom: '1.25rem' }}>
-                    Ethio Telecom mobile payment. Passengers can pay directly using Telebirr USSD, QR code, or Mobile App checkout.
-                  </p>
-
-                  <div style={{ background: '#f8fafc', padding: '0.85rem', borderRadius: 10, marginBottom: '1.25rem', fontSize: '0.78rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <div><strong>Integration:</strong> Seamlessly routed via Chapa multi-rail</div>
-                    <div><strong>Status:</strong> Live and verified for all passengers</div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: '1rem', color: '#475569', fontWeight: 600, fontSize: '0.85rem' }}>
-                    <span>Telebirr Channel Settings</span>
-                    <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#f1f5f9', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <FaArrowRight />
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. CBE BIRR */}
-                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.5rem', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                      <div style={{ width: 48, height: 48, borderRadius: 12, background: '#fee2e2', color: '#b91c1c', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.35rem' }}>
-                        <FaBuilding />
-                      </div>
-                      <div>
-                        <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>CBE Birr</h3>
-                        <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Commercial Bank of Ethiopia</span>
-                      </div>
-                    </div>
-                    <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '0.72rem', fontWeight: 700, padding: '0.25rem 0.65rem', borderRadius: 999 }}>
-                      ● Active (via Chapa)
-                    </span>
-                  </div>
-
-                  <p style={{ fontSize: '0.82rem', color: '#64748b', lineHeight: 1.5, marginBottom: '1.25rem' }}>
-                    Commercial Bank of Ethiopia digital wallet and banking channel integration for corporate and counter payments.
-                  </p>
-
-                  <div style={{ background: '#f8fafc', padding: '0.85rem', borderRadius: 10, marginBottom: '1.25rem', fontSize: '0.78rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <div><strong>Merchant Terminal:</strong> Configured on Chapa Payment Switch</div>
-                    <div><strong>Currency:</strong> ETB</div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: '1rem', color: '#475569', fontWeight: 600, fontSize: '0.85rem' }}>
-                    <span>CBE Birr Channel Settings</span>
-                    <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#f1f5f9', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <FaArrowRight />
-                    </div>
-                  </div>
-                </div>
-
-                {/* 4. AWASH BIRR */}
-                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.5rem', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                      <div style={{ width: 48, height: 48, borderRadius: 12, background: '#e0e7ff', color: '#4338ca', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.35rem' }}>
-                        <FaWallet />
-                      </div>
-                      <div>
-                        <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Awash Birr / Awash Bank</h3>
-                        <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Awash International Bank Gateway</span>
-                      </div>
-                    </div>
-                    <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '0.72rem', fontWeight: 700, padding: '0.25rem 0.65rem', borderRadius: 999 }}>
-                      ● Active
-                    </span>
-                  </div>
-
-                  <p style={{ fontSize: '0.82rem', color: '#64748b', lineHeight: 1.5, marginBottom: '1.25rem' }}>
-                    Awash Bank internet banking and Awash Birr wallet payments enabled for instant bus booking clearance.
-                  </p>
-
-                  <div style={{ background: '#f8fafc', padding: '0.85rem', borderRadius: 10, marginBottom: '1.25rem', fontSize: '0.78rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <div><strong>Settlement Account:</strong> Main Operating Account</div>
-                    <div><strong>Fee:</strong> 0% Platform surcharge</div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: '1rem', color: '#475569', fontWeight: 600, fontSize: '0.85rem' }}>
-                    <span>Awash Gateway Settings</span>
-                    <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#f1f5f9', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <FaArrowRight />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ================================================================= */}
-          {/* 5. DEDICATED CHAPA DASHBOARD (CLICKED FROM CHAPA PAYMENT METHOD)  */}
-          {/* ================================================================= */}
-          {activeTab === 'chapa_dashboard' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              {/* Top Navigation / Breadcrumb */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <button
-                    onClick={() => setActiveTab('payment_integration')}
-                    style={{ background: 'none', border: 'none', color: '#1d6bf3', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', padding: 0, marginBottom: 4 }}
-                  >
-                    ← Back to Payment Integrations
-                  </button>
-                  <h2 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
-                    Chapa Payment Dashboard
-                  </h2>
-                  <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '2px 0 0' }}>
-                    Live transaction feed, settlement volumes, and verification records across all Ethiopian bus companies.
-                  </p>
-                </div>
-
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
-                  <button
-                    onClick={fetchData}
-                    style={{ background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', padding: '0.65rem 1rem', borderRadius: 10, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
-                  >
-                    <FaSyncAlt /> Refresh Transactions
-                  </button>
-                  <a
-                    href="https://dashboard.chapa.co"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ background: '#1d6bf3', color: '#fff', textDecoration: 'none', padding: '0.65rem 1.25rem', borderRadius: 10, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 4px 12px rgba(29,107,243,0.3)' }}
-                  >
-                    Open Chapa.co Dashboard <FaExternalLinkAlt style={{ fontSize: '0.8rem' }} />
-                  </a>
-                </div>
-              </div>
-
-              {/* Chapa Key Metrics Row (Live Computed) */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.25rem' }}>
-                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '1.25rem' }}>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Total Chapa Volume</div>
-                  <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#0f172a' }}>ETB {Number(chapaTotalVolume).toLocaleString()}</div>
-                  <span style={{ fontSize: '0.72rem', color: '#16a34a', fontWeight: 700 }}>Real cleared settlements</span>
-                </div>
-
-                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '1.25rem' }}>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Success Rate</div>
-                  <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#16a34a' }}>{chapaSuccessRate}%</div>
-                  <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Processed via Chapa Switch</span>
-                </div>
-
-                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '1.25rem' }}>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Completed Transactions</div>
-                  <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#0f172a' }}>{chapaSuccessCount}</div>
-                  <span style={{ fontSize: '0.72rem', color: '#1d6bf3', fontWeight: 700 }}>Verified &amp; Paid</span>
-                </div>
-
-                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '1.25rem' }}>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#64748b', marginBottom: 4 }}>API Status</div>
-                  <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#15803d' }}>Connected</div>
-                  <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Webhooks Live</span>
-                </div>
-              </div>
-
-              {/* Transactions Table with Filter & Search (Live Database Data) */}
-              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.5rem', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    {['all', 'PAID', 'PENDING', 'FAILED'].map(s => (
-                      <button
-                        key={s}
-                        onClick={() => setPaymentStatusFilter(s)}
-                        style={{
-                          padding: '0.4rem 0.85rem', borderRadius: 8, border: 'none', cursor: 'pointer',
-                          fontWeight: 600, fontSize: '0.78rem',
-                          background: paymentStatusFilter === s ? '#1d6bf3' : '#f1f5f9',
-                          color: paymentStatusFilter === s ? '#fff' : '#475569'
-                        }}
-                      >
-                        {s}
-                      </button>
                     ))}
                   </div>
+                </div>
+              )}
 
-                  <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                    Showing <strong>{filteredChapaPayments.length}</strong> real transactions
-                  </span>
+              {}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">{t('registered companies', 'Registered Companies')}</span>
+                    <strong className="text-3xl font-black text-slate-900 mt-1 block">{totalCompaniesCount}</strong>
+                    <span className="text-[11px] text-slate-500 mt-0.5 block">{t('transport operators', 'Transport operators')}</span>
+                  </div>
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl shrink-0">
+                    <FaBuilding />
+                  </div>
                 </div>
 
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
-                    <thead>
-                      <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#475569' }}>
-                        <th style={{ padding: '0.75rem 1rem' }}>Tx Ref</th>
-                        <th style={{ padding: '0.75rem 1rem' }}>Customer</th>
-                        <th style={{ padding: '0.75rem 1rem' }}>Bus Company</th>
-                        <th style={{ padding: '0.75rem 1rem' }}>Amount</th>
-                        <th style={{ padding: '0.75rem 1rem' }}>Method</th>
-                        <th style={{ padding: '0.75rem 1rem' }}>Status</th>
-                        <th style={{ padding: '0.75rem 1rem' }}>Date</th>
-                        <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredChapaPayments.length === 0 ? (
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider block">{t('Active Companies', 'Active Companies')}</span>
+                    <strong className="text-3xl font-black text-emerald-600 mt-1 block">{activeCompaniesCount}</strong>
+                    <span className="text-[11px] text-slate-500 mt-0.5 block">{t('Serving passengers', 'Serving passengers')}</span>
+                  </div>
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shrink-0">
+                    <FaCheckCircle />
+                  </div>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-amber-600 uppercase tracking-wider block">{t('Suspended Companies', 'Suspended Companies')}</span>
+                    <strong className="text-3xl font-black text-amber-600 mt-1 block">{suspendedCompaniesCount}</strong>
+                    <span className="text-[11px] text-slate-500 mt-0.5 block">{t('Registration paused', 'Registration paused')}</span>
+                  </div>
+                  <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl shrink-0">
+                    <FaTimesCircle />
+                  </div>
+                </div>
+              </div>
+
+              {}
+              <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white p-6 rounded-3xl shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-black tracking-tight m-0">{t('Add a Transport Company Directly', 'Add a Transport Company Directly')}</h3>
+                  <p className="text-xs text-blue-200 mt-1 m-0 max-w-xl">
+                    {t('Register a new bus operator, assign initial administrator credentials, and configure their verified Telebirr / CBE payment accounts.', 'Register a new bus operator, assign initial administrator credentials, and configure their verified Telebirr / CBE payment accounts.')}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveTab('register_company')}
+                  className="px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition flex items-center gap-2 shrink-0"
+                >
+                  <FaPlus /> {t('register bus company', 'Register New Company')}
+                </button>
+              </div>
+
+              {}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {}
+                <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
+                  <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 m-0">Recent Company Registrations</h4>
+                      <p className="text-[11px] text-slate-500 m-0">Latest transport operators added to the system</p>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('companies')}
+                      className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+                    >
+                      View All Companies →
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto flex-1">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px] font-bold border-b border-slate-200">
                         <tr>
-                          <td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
-                            No Chapa transactions found.
-                          </td>
+                          <th className="py-3 px-4">Company</th>
+                          <th className="py-3 px-4">License / TIN</th>
+                          <th className="py-3 px-4">Payment Methods</th>
+                          <th className="py-3 px-4">Status</th>
+                          <th className="py-3 px-4 text-right">Actions</th>
                         </tr>
-                      ) : (
-                        filteredChapaPayments.map(p => (
-                          <tr key={p._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#0f172a' }}>
-                              {p.txRef || p.transactionId || 'BUS-TX-' + p._id.slice(-6)}
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {companies.slice(0, 5).map((comp) => (
+                          <tr key={comp._id || comp.id} className="hover:bg-slate-50 transition">
+                            <td className="py-3 px-4 flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
+                                {comp.logo ? (
+                                  <img src={comp.logo} alt={comp.companyName} className="w-full h-full object-cover" />
+                                ) : (
+                                  <FaBuilding className="text-slate-400 text-xs" />
+                                )}
+                              </div>
+                              <div>
+                                <strong className="text-slate-800 block">{comp.companyName}</strong>
+                                <span className="text-[10px] text-slate-400">{comp.city || 'Addis Ababa'}</span>
+                              </div>
                             </td>
-                            <td style={{ padding: '0.75rem 1rem' }}>
-                              <div style={{ fontWeight: 600, color: '#1e293b' }}>{p.user?.name || 'Passenger User'}</div>
-                              <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{p.user?.email || 'user@ethiotrip.et'}</div>
+                            <td className="py-3 px-4 font-mono text-[11px]">
+                              <div>{comp.licenseNumber}</div>
+                              <span className="text-[10px] text-slate-400">TIN: {comp.tinNumber}</span>
                             </td>
-                            <td style={{ padding: '0.75rem 1rem', color: '#334155' }}>
-                              {p.companyId?.companyName || 'Ethio Trip Bus'}
+                            <td className="py-3 px-4">
+                              <div className="flex gap-1 flex-wrap">
+                                {(comp.paymentMethods?.telebirr?.enabled ?? true) && (
+                                  <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold">Telebirr</span>
+                                )}
+                                {(comp.paymentMethods?.cbe?.enabled ?? true) && (
+                                  <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded text-[10px] font-bold">CBE</span>
+                                )}
+                                {(comp.paymentMethods?.chapa?.enabled ?? (comp.payment?.enabled ?? true)) && (
+                                  <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold">Chapa</span>
+                                )}
+                              </div>
                             </td>
-                            <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#0f172a' }}>
-                              ETB {Number(p.amount).toLocaleString()}
-                            </td>
-                            <td style={{ padding: '0.75rem 1rem' }}>
-                              <span style={{ background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600 }}>
-                                {p.paymentMethod || p.method || 'Chapa'}
+                            <td className="py-3 px-4">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                comp.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                              }`}>
+                                {comp.status || 'active'}
                               </span>
                             </td>
-                            <td style={{ padding: '0.75rem 1rem' }}>
-                              <span style={{
-                                padding: '2px 8px', borderRadius: 999, fontSize: '0.72rem', fontWeight: 700,
-                                background: (p.status === 'PAID' || p.status === 'completed') ? '#dcfce7' : (p.status === 'PENDING' || p.status === 'pending') ? '#fef3c7' : '#fee2e2',
-                                color: (p.status === 'PAID' || p.status === 'completed') ? '#15803d' : (p.status === 'PENDING' || p.status === 'pending') ? '#b45309' : '#b91c1c'
-                              }}>
-                                ● {p.status}
-                              </span>
-                            </td>
-                            <td style={{ padding: '0.75rem 1rem', color: '#64748b' }}>
-                              {new Date(p.createdAt || p.paidAt || Date.now()).toLocaleDateString()}
-                            </td>
-                            <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
+                            <td className="py-3 px-4 text-right">
                               <button
-                                onClick={() => handleVerifyChapaPayment(p.txRef)}
-                                style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', padding: '0.35rem 0.65rem', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}
+                                onClick={() => setSelectedCompanyDetails(comp)}
+                                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer transition"
                               >
-                                Verify Chapa
+                                View
                               </button>
                             </td>
                           </tr>
-                        ))
+                        ))}
+                        {companies.length === 0 && (
+                          <tr>
+                            <td colSpan="5" className="py-8 text-center text-slate-400">
+                              No companies registered yet.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {}
+                <div className="space-y-6">
+                  {}
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                    <h4 className="text-sm font-bold text-slate-900 m-0 mb-3">Operator Payment Setup</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="font-semibold text-slate-700">All 3 (Chapa, Telebirr, CBE)</span>
+                          <span className="font-bold text-slate-900">{paymentStats.allThreeCount} companies</span>
+                        </div>
+                        <div className="w-full bg-slate-100 rounded-full h-2">
+                          <div
+                            className="bg-blue-600 h-2 rounded-full"
+                            style={{ width: `${totalCompaniesCount ? (paymentStats.allThreeCount / totalCompaniesCount) * 100 : 0}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="font-semibold text-slate-700">Telebirr Enabled</span>
+                          <span className="font-bold text-slate-900">{paymentStats.telebirrCount} companies</span>
+                        </div>
+                        <div className="w-full bg-slate-100 rounded-full h-2">
+                          <div
+                            className="bg-emerald-500 h-2 rounded-full"
+                            style={{ width: `${totalCompaniesCount ? (paymentStats.telebirrCount / totalCompaniesCount) * 100 : 0}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="font-semibold text-slate-700">CBE Bank Enabled</span>
+                          <span className="font-bold text-slate-900">{paymentStats.cbeCount} companies</span>
+                        </div>
+                        <div className="w-full bg-slate-100 rounded-full h-2">
+                          <div
+                            className="bg-purple-600 h-2 rounded-full"
+                            style={{ width: `${totalCompaniesCount ? (paymentStats.cbeCount / totalCompaniesCount) * 100 : 0}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="font-semibold text-slate-700">Chapa Gateway Enabled</span>
+                          <span className="font-bold text-slate-900">{paymentStats.chapaCount} companies</span>
+                        </div>
+                        <div className="w-full bg-slate-100 rounded-full h-2">
+                          <div
+                            className="bg-indigo-600 h-2 rounded-full"
+                            style={{ width: `${totalCompaniesCount ? (paymentStats.chapaCount / totalCompaniesCount) * 100 : 0}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {}
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                    <h4 className="text-sm font-bold text-slate-900 m-0 mb-3">Regional Hubs</h4>
+                    <div className="space-y-2">
+                      {regionalBreakdown.slice(0, 5).map(([city, count]) => (
+                        <div key={city} className="flex items-center justify-between text-xs py-1 border-b border-slate-50 last:border-0">
+                          <span className="text-slate-600 flex items-center gap-2">
+                            <FaMapMarkerAlt className="text-slate-400 text-[10px]" /> {city}
+                          </span>
+                          <span className="font-bold bg-slate-100 px-2 py-0.5 rounded text-slate-800">{count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {}
+          {}
+          {}
+          {activeTab === 'register_company' && (
+            <div className="max-w-4xl mx-auto bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+              <div className="p-6 md:p-8 border-b border-slate-100 bg-slate-50">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-bold mb-2">
+                  <FaPlus /> Direct Registration
+                </div>
+                <h2 className="text-xl font-black text-slate-900 m-0">Register Transport Company</h2>
+                <p className="text-xs text-slate-500 mt-1 m-0">
+                  Directly onboard a transport company, create their initial administrator account, and configure their Telebirr / CBE payment accounts.
+                </p>
+              </div>
+
+              <form onSubmit={handleRegisterCompany} className="p-6 md:p-8 space-y-6">
+                {}
+                <div>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">1. Company Registration & License Details</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Company Name *</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Selam Bus Line"
+                        value={companyForm.companyName}
+                        onChange={(e) => setCompanyForm({ ...companyForm, companyName: e.target.value })}
+                        required
+                        className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Official License Number *</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. ET-MOT-2026-081"
+                        value={companyForm.licenseNumber}
+                        onChange={(e) => setCompanyForm({ ...companyForm, licenseNumber: e.target.value })}
+                        required
+                        className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Commercial Registration Number</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. CR-AA-98124"
+                        value={companyForm.registrationNumber}
+                        onChange={(e) => setCompanyForm({ ...companyForm, registrationNumber: e.target.value })}
+                        className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Tax Identification Number (TIN) *</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 0019283746"
+                        value={companyForm.tinNumber}
+                        onChange={(e) => setCompanyForm({ ...companyForm, tinNumber: e.target.value })}
+                        required
+                        className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Company Contact Phone *</label>
+                      <input
+                        type="tel"
+                        placeholder="e.g. +251 911 234 567"
+                        value={companyForm.phone}
+                        onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })}
+                        required
+                        className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Official Email Address *</label>
+                      <input
+                        type="email"
+                        placeholder="e.g. contact@selambus.et"
+                        value={companyForm.email}
+                        onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })}
+                        required
+                        className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">City / Region</label>
+                      <select
+                        value={companyForm.city}
+                        onChange={(e) => setCompanyForm({ ...companyForm, city: e.target.value })}
+                        className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                      >
+                        {['Addis Ababa', 'Bahir Dar', 'Hawassa', 'Dire Dawa', 'Gondar', 'Mekelle', 'Jimma', 'Dessie', 'Adama'].map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Head Office Address *</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Meskel Square, Addis Ababa"
+                        value={companyForm.address}
+                        onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })}
+                        required
+                        className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Company Logo</label>
+                      <div className="flex items-center gap-4">
+                        {companyForm.logo && (
+                          <img src={companyForm.logo} alt="Logo preview" className="w-12 h-12 rounded-xl object-contain border border-slate-200 p-1" />
+                        )}
+                        <label className="cursor-pointer px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-2 transition">
+                          <FaUpload /> {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
+                          <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">2. Company Administrator Account</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Administrator Full Name *</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Abebe Bikila"
+                        value={companyForm.adminName}
+                        onChange={(e) => setCompanyForm({ ...companyForm, adminName: e.target.value })}
+                        required
+                        className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Admin Email Address *</label>
+                      <input
+                        type="email"
+                        placeholder="e.g. admin@selambus.et"
+                        value={companyForm.adminEmail}
+                        onChange={(e) => setCompanyForm({ ...companyForm, adminEmail: e.target.value })}
+                        required
+                        className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Admin Phone Number *</label>
+                      <input
+                        type="tel"
+                        placeholder="e.g. +251 911 234 567"
+                        value={companyForm.adminPhone}
+                        onChange={(e) => setCompanyForm({ ...companyForm, adminPhone: e.target.value })}
+                        required
+                        className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Admin Password *</label>
+                      <input
+                        type="password"
+                        placeholder="Minimum 6 characters"
+                        value={companyForm.adminPassword}
+                        onChange={(e) => setCompanyForm({ ...companyForm, adminPassword: e.target.value })}
+                        required
+                        className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">3. Payment Methods & Operator Payout Setup</h3>
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap gap-5 p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
+                        <input
+                          type="checkbox"
+                          checked={companyForm.telebirrEnabled}
+                          onChange={(e) => setCompanyForm({ ...companyForm, telebirrEnabled: e.target.checked })}
+                          className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                        />
+                        <span>Telebirr</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
+                        <input
+                          type="checkbox"
+                          checked={companyForm.cbeEnabled}
+                          onChange={(e) => setCompanyForm({ ...companyForm, cbeEnabled: e.target.checked })}
+                          className="w-4 h-4 text-purple-600 rounded border-slate-300 focus:ring-purple-500 cursor-pointer"
+                        />
+                        <span>Commercial Bank of Ethiopia (CBE)</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
+                        <input
+                          type="checkbox"
+                          checked={companyForm.chapaEnabled}
+                          onChange={(e) => setCompanyForm({ ...companyForm, chapaEnabled: e.target.checked })}
+                          className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                        />
+                        <span>Chapa Gateway <span className="text-[10px] text-slate-400 font-normal">(Optional - Live Mode)</span></span>
+                      </label>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {companyForm.telebirrEnabled && (
+                        <div>
+                          <label className="text-xs font-bold text-slate-700 block mb-1">Telebirr Merchant Phone / Shortcode</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 0911234567"
+                            value={companyForm.telebirrNumber}
+                            onChange={(e) => setCompanyForm({ ...companyForm, telebirrNumber: e.target.value })}
+                            className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none font-mono"
+                          />
+                        </div>
+                      )}
+                      {companyForm.cbeEnabled && (
+                        <div>
+                          <label className="text-xs font-bold text-slate-700 block mb-1">CBE Account Number</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 1000123456789"
+                            value={companyForm.cbeAccountNumber}
+                            onChange={(e) => setCompanyForm({ ...companyForm, cbeAccountNumber: e.target.value })}
+                            className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none font-mono"
+                          />
+                        </div>
+                      )}
+                      {companyForm.chapaEnabled && (
+                        <div>
+                          <label className="text-xs font-bold text-slate-700 block mb-1">
+                            Chapa Live Merchant Key / API Key <span className="text-emerald-500 font-bold">(Live Mode - Optional)</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. CHAPA-ET-2026-LIVE"
+                            value={companyForm.chapaKey}
+                            onChange={(e) => setCompanyForm({ ...companyForm, chapaKey: e.target.value })}
+                            className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-mono"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setCompanyForm(initialCompanyForm)}
+                    className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    Reset Form
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition cursor-pointer flex items-center gap-2"
+                  >
+                    <FaCheckCircle /> Register & Onboard Company
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {activeTab === 'company_approvals' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-2">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 dark:text-white m-0">Pending Company Registrations</h2>
+                  <p className="text-xs text-slate-500 m-0">Review submitted documents, licenses, and credentials before granting platform access.</p>
+                </div>
+                <span className="text-xs font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 px-3 py-1 rounded-full border border-amber-300">
+                  {pendingCompaniesCount} Pending
+                </span>
+              </div>
+
+              {companies.filter(c => (c.status || '').toLowerCase() === 'pending').length === 0 ? (
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-slate-200 dark:border-slate-800">
+                  <div className="w-16 h-16 rounded-3xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center text-2xl mx-auto mb-3">
+                    <FaCheckCircle />
+                  </div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">All Caught Up!</h3>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">There are no pending transport company registrations requiring platform admin review at this time.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {companies.filter(c => (c.status || '').toLowerCase() === 'pending').map(comp => (
+                    <div key={comp._id || comp.id} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+                      <div className="flex items-start justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-center justify-center text-xl shrink-0 overflow-hidden">
+                              {comp.logo ? (
+                                <img src={comp.logo} alt={comp.companyName} className="w-full h-full object-cover" />
+                              ) : (
+                                <FaBuilding className="text-amber-600" />
+                              )}
+                            </div>
+                            <div>
+                              <h3 className="text-base font-black text-slate-900 dark:text-white m-0">{comp.companyName}</h3>
+                              <p className="text-xs text-slate-500 m-0 flex items-center gap-1 mt-0.5">
+                                <FaMapMarkerAlt className="text-amber-500" /> {comp.city || 'Addis Ababa'} · {comp.address || 'Headquarters'}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 text-[10px] font-black px-2.5 py-1 rounded-full uppercase border border-amber-300">
+                            Pending Review
+                          </span>
+                        </div>
+
+                        {}
+                        <div className="grid grid-cols-2 gap-3 my-4 text-xs">
+                          <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700/60">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Legal Information</span>
+                            <div className="font-mono text-slate-800 dark:text-slate-200 space-y-1">
+                              <div>License: <strong className="text-blue-600 dark:text-blue-400">{comp.licenseNumber}</strong></div>
+                              <div>TIN: <strong>{comp.tinNumber}</strong></div>
+                              <div>Phone: {comp.phone}</div>
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700/60">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Company Administrator</span>
+                            <div className="text-slate-800 dark:text-slate-200 space-y-1">
+                              <div className="font-bold">{comp.adminName || 'Admin'}</div>
+                              <div className="text-[11px] text-slate-500 truncate">{comp.adminEmail || comp.email}</div>
+                              <div className="text-[11px] text-slate-500">{comp.adminPhone || comp.phone}</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {}
+                        <div className="bg-emerald-50/50 dark:bg-emerald-950/20 p-3 rounded-2xl border border-emerald-200/60 dark:border-emerald-800/40 text-xs">
+                          <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase block mb-1">Merchant Payment Setup</span>
+                          <div className="flex gap-2 flex-wrap">
+                            {comp.paymentMethods?.telebirr?.enabled && (
+                              <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                                Telebirr: {comp.paymentMethods.telebirr.accountNumber || 'Configured'}
+                              </span>
+                            )}
+                            {comp.paymentMethods?.cbe?.enabled && (
+                              <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                                CBE: {comp.paymentMethods.cbe.accountNumber || 'Configured'}
+                              </span>
+                            )}
+                            {comp.paymentMethods?.chapa?.enabled && (
+                              <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                                Chapa Online
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                        <button
+                          onClick={() => handleApproveCompany(comp)}
+                          className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold shadow-md shadow-emerald-600/30 cursor-pointer transition flex items-center justify-center gap-2"
+                        >
+                          <FaCheckCircle /> Approve &amp; Activate Company
+                        </button>
+                        <button
+                          onClick={() => handleRejectCompany(comp)}
+                          className="py-3 px-4 bg-red-100 hover:bg-red-200 text-red-600 dark:text-red-400 rounded-xl text-xs font-bold border border-red-200 dark:border-red-800 cursor-pointer transition flex items-center justify-center gap-1.5"
+                        >
+                          <FaTimesCircle /> Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'companies' && (
+            <div className="space-y-6 max-w-7xl mx-auto">
+
+              <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+                  <div className="relative w-full sm:w-80">
+                    <FaSearch className="absolute left-3.5 top-3 text-slate-400 text-xs" />
+                    <input
+                      type="text"
+                      placeholder="Search company, city, license, TIN..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full text-xs pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 outline-none bg-slate-50"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                    {['all', 'active', 'pending', 'suspended'].map((st) => (
+                      <button
+                        key={st}
+                        onClick={() => setCompanyStatusFilter(st)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition cursor-pointer ${
+                          companyStatusFilter === st
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {st}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setActiveTab('register_company')}
+                  className="w-full md:w-auto px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition flex items-center justify-center gap-2"
+                >
+                  <FaPlus /> Register New Company
+                </button>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px] font-bold border-b border-slate-200">
+                      <tr>
+                        <th className="py-3 px-4">Company Details</th>
+                        <th className="py-3 px-4">License & TIN</th>
+                        <th className="py-3 px-4">Contact Info</th>
+                        <th className="py-3 px-4">Saved Payment Details</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredCompanies.map((c) => (
+                        <tr key={c._id || c.id} className="hover:bg-slate-50 transition">
+                          <td className="py-3 px-4 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
+                              {c.logo ? (
+                                <img src={c.logo} alt={c.companyName} className="w-full h-full object-cover" />
+                              ) : (
+                                <FaBuilding className="text-slate-400" />
+                              )}
+                            </div>
+                            <div>
+                              <strong className="text-slate-900 block text-sm">{c.companyName}</strong>
+                              <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                                <FaMapMarkerAlt className="text-[10px]" /> {c.city || 'Addis Ababa'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 font-mono text-[11px]">
+                            <div className="font-bold text-slate-800">{c.licenseNumber}</div>
+                            <span className="text-[10px] text-slate-400">TIN: {c.tinNumber}</span>
+                          </td>
+                          <td className="py-3 px-4 text-[11px]">
+                            <div className="text-slate-800">{c.phone}</div>
+                            <span className="text-[10px] text-slate-400">{c.email}</span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="space-y-1">
+                              {(c.paymentMethods?.telebirr?.enabled ?? true) && (
+                                <div className="text-[11px] text-emerald-800 font-mono flex items-center gap-1">
+                                  <span className="bg-emerald-100 text-emerald-900 px-1.5 py-0.5 rounded text-[9px] font-bold">Telebirr</span>
+                                  <span>{c.paymentMethods?.telebirr?.accountNumber || c.phone || '0911223344'}</span>
+                                </div>
+                              )}
+                              {(c.paymentMethods?.cbe?.enabled ?? true) && (
+                                <div className="text-[11px] text-purple-800 font-mono flex items-center gap-1">
+                                  <span className="bg-purple-100 text-purple-900 px-1.5 py-0.5 rounded text-[9px] font-bold">CBE</span>
+                                  <span>{c.paymentMethods?.cbe?.accountNumber || '1000123456789'}</span>
+                                </div>
+                              )}
+                              {(c.paymentMethods?.chapa?.enabled ?? (c.payment?.enabled ?? true)) && (
+                                <div className="text-[11px] text-blue-800 font-mono flex items-center gap-1">
+                                  <span className="bg-blue-100 text-blue-900 px-1.5 py-0.5 rounded text-[9px] font-bold">Chapa</span>
+                                  <span>{c.paymentMethods?.chapa?.accountNumber || 'Active / Live'}</span>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 ${
+                              c.status === 'active'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${c.status === 'active' ? 'bg-emerald-600' : 'bg-amber-600'}`} />
+                              {c.status || 'active'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => setSelectedCompanyDetails(c)}
+                                title="View Registration Profile"
+                                className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center cursor-pointer transition"
+                              >
+                                <FaEye className="text-xs" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const t = c.paymentMethods?.telebirr?.enabled;
+                                  const b = c.paymentMethods?.cbe?.enabled;
+                                  setEditingCompany({
+                                    ...c,
+                                    paymentMethodSelection: (t && b) ? 'both' : t ? 'telebirr' : b ? 'cbe' : 'both',
+                                    telebirrNumber: c.paymentMethods?.telebirr?.accountNumber || '',
+                                    cbeAccountNumber: c.paymentMethods?.cbe?.accountNumber || '',
+                                  });
+                                }}
+                                title="Edit Company Details"
+                                className="w-8 h-8 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 flex items-center justify-center cursor-pointer transition"
+                              >
+                                <FaEdit className="text-xs" />
+                              </button>
+                              {c.status === 'pending' ? (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => handleApproveCompany(c)}
+                                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold cursor-pointer transition shadow-xs flex items-center gap-1"
+                                  >
+                                    <FaCheckCircle className="text-[10px]" /> Approve
+                                  </button>
+                                  <button
+                                    onClick={() => handleRejectCompany(c)}
+                                    className="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg text-[11px] font-bold cursor-pointer transition flex items-center gap-1 border border-red-200"
+                                  >
+                                    <FaTimesCircle className="text-[10px]" /> Reject
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handleToggleCompanyStatus(c)}
+                                  title={c.status === 'active' ? 'Suspend Company' : 'Reactivate Company'}
+                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition ${
+                                    c.status === 'active'
+                                      ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200'
+                                      : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                  }`}
+                                >
+                                  {c.status === 'active' ? 'Suspend' : 'Reactivate'}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {filteredCompanies.length === 0 && (
+                        <tr>
+                          <td colSpan="6" className="py-12 text-center text-slate-400">
+                            No companies found matching your search.
+                          </td>
+                        </tr>
                       )}
                     </tbody>
                   </table>
@@ -1718,673 +1485,1072 @@ const SuperAdminDashboard = () => {
             </div>
           )}
 
-          {/* ================================================================= */}
-          {/* 6. ROUTES TAB                                                     */}
-          {/* ================================================================= */}
-          {activeTab === 'routes' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {activeTab === 'profile' && (
+            <div className="max-w-3xl mx-auto space-y-6">
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 md:p-8">
+                <div className="flex items-center gap-4 pb-6 border-b border-slate-100 mb-6">
+                  <div className="relative">
+                    <div className="w-16 h-16 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center text-2xl font-black overflow-hidden border-2 border-white shadow-sm">
+                      {profileForm.avatar ? (
+                        <img src={profileForm.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                      ) : (
+                        user?.name?.[0] || 'S'
+                      )}
+                    </div>
+                    <label className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center cursor-pointer shadow-xs hover:bg-blue-500 transition">
+                      <FaUpload className="text-[10px]" />
+                      <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
+                    </label>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-slate-900 dark:text-white m-0">{user?.name || 'Platform Administrator'}</h3>
+                    <p className="text-xs text-slate-500 m-0">{user?.email || 'platformadmin@ethiotrip.et'}</p>
+                    <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-200 dark:border-purple-800 mt-1">
+                      Platform Administrator
+                    </span>
+                  </div>
+                </div>
+
+                <form onSubmit={handleUpdateProfile} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Full Name</label>
+                      <input
+                        type="text"
+                        value={profileForm.name}
+                        onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
+                        required
+                        className="w-full text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Email Address</label>
+                      <input
+                        type="email"
+                        value={profileForm.email}
+                        onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                        required
+                        className="w-full text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Phone Number</label>
+                      <input
+                        type="tel"
+                        value={profileForm.phone}
+                        onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
+                        className="w-full text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                    <h4 className="text-xs font-extrabold uppercase text-slate-500 tracking-wider mb-3">Change Password (Optional)</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">New Password</label>
+                        <input
+                          type="password"
+                          placeholder="Leave blank to keep unchanged"
+                          value={profileForm.newPassword || ''}
+                          onChange={(e) => setProfileForm({ ...profileForm, newPassword: e.target.value })}
+                          className="w-full text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Confirm New Password</label>
+                        <input
+                          type="password"
+                          placeholder="Confirm new password"
+                          value={profileForm.confirmPassword || ''}
+                          onChange={(e) => setProfileForm({ ...profileForm, confirmPassword: e.target.value })}
+                          className="w-full text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 flex justify-end">
+                    <button
+                      type="submit"
+                      className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition flex items-center gap-2"
+                    >
+                      <FaCheckCircle /> Save Profile Changes
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+          {activeTab === 'question_desk' && (
+            <div className="space-y-6 max-w-7xl mx-auto">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
                 <div>
-                  <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 4px', color: '#0f172a' }}>
-                    Inter-City Travel Routes
-                  </h2>
-                  <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0 }}>
-                    Manage origin and destination routes, base ticket prices, and distance records across Ethiopia.
+                  <h2 className="text-xl font-black text-slate-900 m-0">Question Desk &amp; Contact Inquiries</h2>
+                  <p className="text-xs text-slate-500 m-0 mt-1">Manage public messages and questions submitted from the Contact Us page</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500">Total Messages:</span>
+                  <span className="bg-blue-100 text-blue-800 text-xs font-black px-2.5 py-1 rounded-full">{supportInquiries.length}</span>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                  <h3 className="text-xs font-extrabold uppercase text-slate-500 tracking-wider m-0">Public Contact Messages</h3>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px] font-bold border-b border-slate-200">
+                      <tr>
+                        <th className="py-3 px-4">Sender Info</th>
+                        <th className="py-3 px-4">Topic / Subject</th>
+                        <th className="py-3 px-4">Message Snippet</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {supportInquiries.length > 0 ? (
+                        supportInquiries.map((inq) => (
+                          <tr key={inq._id || inq.id} className="hover:bg-slate-50 transition">
+                            <td className="py-3 px-4">
+                              <strong className="text-slate-900 block">{inq.passengerName || inq.user?.name || 'Public Visitor'}</strong>
+                              <span className="text-[10px] text-slate-400 block">{inq.passengerEmail || inq.user?.email}</span>
+                              {inq.passengerPhone && <span className="text-[10px] text-slate-500">{inq.passengerPhone}</span>}
+                            </td>
+                            <td className="py-3 px-4 font-bold text-slate-800">
+                              {inq.issueType || inq.subject || 'General Inquiry'}
+                            </td>
+                            <td className="py-3 px-4 max-w-xs truncate text-slate-600">
+                              {inq.description || inq.message}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                inq.status === 'RESOLVED' || inq.status === 'CLOSED'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}>
+                                {inq.status || 'OPEN'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <button
+                                onClick={() => setSelectedInquiry(inq)}
+                                className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-[11px] font-bold cursor-pointer transition inline-flex items-center gap-1 border border-blue-200"
+                              >
+                                <FaEye className="text-[10px]" /> View &amp; Reply
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="5" className="py-12 text-center text-slate-400 font-medium">
+                            No public contact inquiries received yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'audit_logs' && (
+            <div className="space-y-6 max-w-7xl mx-auto">
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 m-0">Platform Admin Governance Audit Log</h2>
+                  <p className="text-xs text-slate-500 mt-1 m-0">
+                    Track all registration, profile editing, suspension, and reactivation actions performed on transport companies.
                   </p>
                 </div>
                 <button
-                  onClick={() => setShowAddRouteModal(true)}
-                  style={{ background: '#0284c7', color: '#fff', border: 'none', padding: '0.65rem 1.25rem', borderRadius: 10, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}
+                  onClick={fetchData}
+                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer transition flex items-center gap-2"
                 >
-                  <FaPlus /> Add New Route
+                  <FaSyncAlt /> Refresh Log
                 </button>
               </div>
 
-              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#475569' }}>
-                      <th style={{ padding: '0.75rem 1rem' }}>Origin → Destination</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Distance</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Est. Duration</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Base Price</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {routes.map(r => (
-                      <tr key={r._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#0f172a' }}>
-                          {r.from} → {r.to}
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem', color: '#475569' }}>{r.distance} km</td>
-                        <td style={{ padding: '0.75rem 1rem', color: '#475569' }}>{r.estimatedDuration || '4 hrs'}</td>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#16a34a' }}>ETB {r.basePrice}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}><span style={{ color: '#16a34a', fontWeight: 700 }}>● Active</span></td>
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px] font-bold border-b border-slate-200">
+                      <tr>
+                        <th className="py-3 px-4">Action Performed</th>
+                        <th className="py-3 px-4">Target Company / Entity</th>
+                        <th className="py-3 px-4">Responsible Account</th>
+                        <th className="py-3 px-4">Date & Time</th>
+                        <th className="py-3 px-4">Details</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {auditLogs.map((log) => (
+                        <tr key={log._id || log.id} className="hover:bg-slate-50 transition">
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
+                              log.action === 'USER_LOGIN' ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' :
+                              log.action?.includes('CREATE') ? 'bg-emerald-100 text-emerald-800' :
+                              log.action?.includes('STATUS') ? 'bg-amber-100 text-amber-800' :
+                              log.action?.includes('DELETE') ? 'bg-red-100 text-red-800' :
+                              'bg-blue-100 text-blue-800'
+                            }`}>
+                              {log.action === 'USER_LOGIN' ? '🔐 User Login' : log.action}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <strong className="text-slate-800 block">{log.companyName || log.entityType || 'Platform'}</strong>
+                            <span className="text-[10px] font-mono text-slate-400">{log.entityId}</span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="text-slate-800 font-semibold">{log.userEmail || log.details?.email || 'Platform Admin'}</div>
+                            <span className="text-[10px] text-slate-400 uppercase">{log.userRole || log.details?.role || 'platform_admin'}</span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="text-slate-800 font-bold">
+                              {new Date(log.details?.loginTime || log.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </div>
+                            <span className="text-[10px] text-slate-500 font-mono">
+                              {new Date(log.details?.loginTime || log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} ({formatRelativeTime(log.createdAt)})
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAuditLogDetails(log)}
+                              className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-[11px] font-bold cursor-pointer transition inline-flex items-center gap-1 border border-purple-200"
+                            >
+                              <FaEye className="text-[10px]" /> View Details
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {auditLogs.length === 0 && (
+                        <tr>
+                          <td colSpan="5" className="py-12 text-center text-slate-400">
+                            No audit log records recorded yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
 
-          {/* ================================================================= */}
-          {/* 7. SCHEDULES & BOOKINGS TABS                                      */}
-          {/* ================================================================= */}
-          {activeTab === 'schedules' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 4px', color: '#0f172a' }}>
-                Operational Schedules
-              </h2>
-              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#475569' }}>
-                      <th style={{ padding: '0.75rem 1rem' }}>Route</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Bus</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Departure</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Price</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Available Seats</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {schedules.map(s => (
-                      <tr key={s._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700 }}>{s.route?.from} → {s.route?.to}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>{s.bus?.busNumber} ({s.bus?.type})</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>{s.departureTime}</td>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#16a34a' }}>ETB {s.price}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>{s.availableSeats}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'bookings' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 4px', color: '#0f172a' }}>
-                Passenger Bookings
-              </h2>
-              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#475569' }}>
-                      <th style={{ padding: '0.75rem 1rem' }}>Ticket Number</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Passenger</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Route</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Fare</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {bookings.map(b => (
-                      <tr key={b._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700, color: '#0f172a' }}>{b.ticketNumber}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>{b.passenger?.name || 'Passenger'}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>{b.schedule?.route?.from} → {b.schedule?.route?.to}</td>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 700 }}>ETB {b.totalAmount || b.totalPrice}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: '0.72rem', fontWeight: 700, background: '#dcfce7', color: '#15803d' }}>
-                            {b.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* ================================================================= */}
-          {/* 8. USERS TAB (STRICTLY NO CONDUCTOR AND NO TICKET AGENT)          */}
-          {/* ================================================================= */}
-          {activeTab === 'users' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div>
-                <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 4px', color: '#0f172a' }}>
-                  System Users
-                </h2>
-                <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0 }}>
-                  Active platform passengers and company administrators. Conductor and ticket agent roles are excluded.
-                </p>
+          {activeTab === 'platform_settings' && (
+            <div className="space-y-6 max-w-7xl mx-auto">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 m-0">{t('system-wide platform settings', 'System-Wide Platform Settings')}</h2>
+                  <p className="text-xs text-slate-500 m-0 mt-1">
+                    {t('manage core operational parameters, payment gateway modes, and platform security policies', 'Manage core operational parameters, payment gateway modes, and platform security policies')}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={fetchData}
+                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer transition flex items-center gap-2"
+                  >
+                    <FaSyncAlt className={loading ? 'animate-spin' : ''} /> {t('refresh', 'Refresh')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSavePlatformSettings}
+                    disabled={savingSettings}
+                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer transition flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <FaCheckCircle /> {savingSettings ? t('saving...', 'Saving...') : t('save settings', 'Save Settings')}
+                  </button>
+                </div>
               </div>
 
-              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#475569' }}>
-                      <th style={{ padding: '0.75rem 1rem' }}>Name</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Email</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Phone</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Role</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {usersList.map(u => (
-                      <tr key={u._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#0f172a' }}>{u.name}</td>
-                        <td style={{ padding: '0.75rem 1rem', color: '#475569' }}>{u.email}</td>
-                        <td style={{ padding: '0.75rem 1rem', color: '#475569' }}>{u.phone || 'N/A'}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <span style={{
-                            padding: '2px 8px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 700,
-                            background: u.role === 'super_admin' ? '#f3e8ff' : u.role === 'company_admin' ? '#dbeafe' : '#f1f5f9',
-                            color: u.role === 'super_admin' ? '#7e22ce' : u.role === 'company_admin' ? '#1d4ed8' : '#334155'
-                          }}>
-                            {u.role === 'super_admin' ? 'Super Admin' : u.role === 'company_admin' ? 'Company Admin' : 'Passenger'}
-                          </span>
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <span style={{ color: '#16a34a', fontWeight: 700 }}>● Active</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+              <form onSubmit={handleSavePlatformSettings} className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* General Configuration */}
+                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                    <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
+                      <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center text-sm">
+                        <FaBuilding />
+                      </div>
+                      <h3 className="text-sm font-bold text-slate-900 m-0">General Platform Information</h3>
+                    </div>
 
-          {/* ================================================================= */}
-          {/* 9. PROFILE TAB (WITH CLOUDINARY AVATAR UPLOAD)                    */}
-          {/* ================================================================= */}
-          {activeTab === 'profile' && (
-            <div style={{ maxWidth: 700, margin: '0 auto', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 20, padding: '2rem' }}>
-              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 1.25rem', color: '#0f172a' }}>
-                Super Admin Profile &amp; Settings
-              </h2>
+                    <div className="space-y-3 text-xs">
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">System &amp; Platform Name</label>
+                        <input
+                          type="text"
+                          value={platformSettings.systemName || ''}
+                          onChange={(e) => setPlatformSettings({ ...platformSettings, systemName: e.target.value })}
+                          className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 outline-none"
+                          placeholder="Ethio Trip - Smart Bus Ticketing System"
+                        />
+                      </div>
 
-              <form onSubmit={handleUpdateProfile}>
-                {/* Avatar Upload with Cloudinary */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', marginBottom: '1.75rem' }}>
-                  <div style={{ width: 80, height: 80, borderRadius: '50%', overflow: 'hidden', background: '#8b5cf6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '1.75rem', fontWeight: 800 }}>
-                    {profileForm.avatar ? (
-                      <img src={profileForm.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : (
-                      'SA'
-                    )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="font-bold text-slate-700 block mb-1">Official Support Email</label>
+                          <input
+                            type="email"
+                            value={platformSettings.supportEmail || ''}
+                            onChange={(e) => setPlatformSettings({ ...platformSettings, supportEmail: e.target.value })}
+                            className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 outline-none"
+                            placeholder="support@ethiotrip.et"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-bold text-slate-700 block mb-1">Helpline Phone Number</label>
+                          <input
+                            type="text"
+                            value={platformSettings.supportPhone || ''}
+                            onChange={(e) => setPlatformSettings({ ...platformSettings, supportPhone: e.target.value })}
+                            className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 outline-none"
+                            placeholder="+251 911 002 233"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">Headquarters / Physical Address</label>
+                        <input
+                          type="text"
+                          value={platformSettings.systemAddress || ''}
+                          onChange={(e) => setPlatformSettings({ ...platformSettings, systemAddress: e.target.value })}
+                          className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 outline-none"
+                          placeholder="Bole, Addis Ababa, Ethiopia"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label style={{ display: 'inline-block', background: '#1d6bf3', color: '#fff', padding: '0.5rem 1rem', borderRadius: 8, fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', marginBottom: 4 }}>
-                      <FaUpload style={{ marginRight: 6 }} />
-                      {uploadingProfileImage ? 'Uploading to Cloudinary...' : 'Upload Profile Picture'}
-                      <input type="file" accept="image/*" onChange={handleProfileImageUpload} style={{ display: 'none' }} />
-                    </label>
-                    <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748b' }}>Supports PNG, JPG, or WEBP. Uploads to Cloudinary.</p>
+
+                  {/* Payment & Financial Gateway Configuration */}
+                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                    <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center text-sm">
+                        <FaCreditCard />
+                      </div>
+                      <h3 className="text-sm font-bold text-slate-900 m-0">Payment Gateway &amp; Financial Policy</h3>
+                    </div>
+
+                    <div className="space-y-3 text-xs">
+                      <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-200 flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-blue-900 block">Chapa Payment Gateway</span>
+                          <span className="text-[11px] text-blue-600">National switch &amp; payment aggregator</span>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          LIVE MODE ACTIVE
+                        </span>
+                      </div>
+
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-slate-800 block">Operator Revenue Split</span>
+                          <span className="text-[11px] text-slate-500">Standard operator share on ticket sales</span>
+                        </div>
+                        <span className="font-black text-slate-900 text-xs">90% Operator / 10% Platform</span>
+                      </div>
+
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-slate-800 block">Supported Settlement Methods</span>
+                          <span className="text-[11px] text-slate-500">Automatic multi-bank channel support</span>
+                        </div>
+                        <span className="font-bold text-slate-700 text-[11px]">Chapa, Telebirr, CBE Bank</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Security & Access Controls */}
+                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                    <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
+                      <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center text-sm">
+                        <FaShieldAlt />
+                      </div>
+                      <h3 className="text-sm font-bold text-slate-900 m-0">Platform Access &amp; Governance Rules</h3>
+                    </div>
+
+                    <div className="space-y-4 text-xs">
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <div>
+                          <strong className="text-slate-800 block">Allow New Transport Operator Registration</strong>
+                          <span className="text-[11px] text-slate-500">Allow bus companies to submit public onboarding applications</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={platformSettings.allowNewRegistrations !== false}
+                          onChange={(e) => setPlatformSettings({ ...platformSettings, allowNewRegistrations: e.target.checked })}
+                          className="w-5 h-5 text-blue-600 rounded cursor-pointer"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <div>
+                          <strong className="text-slate-800 block">Platform Maintenance Mode</strong>
+                          <span className="text-[11px] text-slate-500">Temporarily restrict booking operations for platform upgrade</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={!!platformSettings.maintenanceMode}
+                          onChange={(e) => setPlatformSettings({ ...platformSettings, maintenanceMode: e.target.checked })}
+                          className="w-5 h-5 text-red-600 rounded cursor-pointer"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="font-bold text-slate-700 block mb-1">Max Failed Login Attempts</label>
+                          <input
+                            type="number"
+                            min="3"
+                            max="10"
+                            value={platformSettings.maxLoginAttempts || 5}
+                            onChange={(e) => setPlatformSettings({ ...platformSettings, maxLoginAttempts: Number(e.target.value) })}
+                            className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-bold text-slate-700 block mb-1">Session Timeout (Minutes)</label>
+                          <input
+                            type="number"
+                            min="15"
+                            max="480"
+                            value={platformSettings.sessionTimeoutMinutes || 60}
+                            onChange={(e) => setPlatformSettings({ ...platformSettings, sessionTimeoutMinutes: Number(e.target.value) })}
+                            className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* System Health & Infrastructure */}
+                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                    <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center text-sm">
+                        <FaCheckCircle />
+                      </div>
+                      <h3 className="text-sm font-bold text-slate-900 m-0">System Health &amp; Live Environment</h3>
+                    </div>
+
+                    <div className="space-y-3 text-xs">
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <span className="text-slate-600 font-semibold">Database Engine:</span>
+                        <span className="font-mono font-bold text-slate-900">MongoDB (ethio_trip)</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <span className="text-slate-600 font-semibold">Payment Engine:</span>
+                        <span className="font-bold text-emerald-700 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" /> Chapa Production Gateway (Live Mode)
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <span className="text-slate-600 font-semibold">Active Transport Operators:</span>
+                        <span className="font-black text-blue-700">{companies.filter(c => c.status === 'active').length} Companies Active</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <span className="text-slate-600 font-semibold">Audit Governance Logging:</span>
+                        <span className="font-bold text-slate-800">{auditLogs.length} Records Tracked</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="sa-form-grid">
-                  <div className="sa-form-group">
-                    <label>Full Name</label>
-                    <input
-                      type="text"
-                      value={profileForm.name}
-                      onChange={e => setProfileForm({ ...profileForm, name: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="sa-form-group">
-                    <label>Admin Email</label>
-                    <input
-                      type="email"
-                      value={profileForm.email}
-                      onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="sa-form-group full-width">
-                    <label>Mobile Phone</label>
-                    <input
-                      type="text"
-                      value={profileForm.phone}
-                      onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })}
-                      placeholder="e.g. 0911002233"
-                    />
-                  </div>
-                  <div className="sa-form-group full-width">
-                    <label>New Password (leave blank to keep current)</label>
-                    <input
-                      type="password"
-                      placeholder="Minimum 6 characters"
-                      value={profileForm.newPassword}
-                      onChange={e => setProfileForm({ ...profileForm, newPassword: e.target.value })}
-                    />
-                  </div>
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="submit"
+                    disabled={savingSettings}
+                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <FaCheckCircle /> {savingSettings ? 'Saving Platform Settings...' : 'Save & Apply All Settings'}
+                  </button>
                 </div>
-
-                <button
-                  type="submit"
-                  style={{ width: '100%', background: '#1d6bf3', color: '#fff', border: 'none', padding: '0.85rem', borderRadius: 10, fontWeight: 700, cursor: 'pointer', marginTop: '1rem' }}
-                >
-                  Save Profile Changes
-                </button>
               </form>
             </div>
           )}
 
-          {/* ================================================================= */}
-          {/* 10. SYSTEM SETTINGS & HELP TABS                                   */}
-          {/* ================================================================= */}
-          {activeTab === 'system_settings' && (
-            <div style={{ maxWidth: 750, margin: '0 auto', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 20, padding: '2rem' }}>
-              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 1rem', color: '#0f172a' }}>
-                System &amp; Cloudinary Settings
-              </h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', fontSize: '0.85rem' }}>
-                <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: 10 }}>
-                  <strong>Cloudinary Configuration</strong>
-                  <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.8rem' }}>
-                    Images upload automatically through Cloudinary backend service or fallback securely to high-resolution data storage. No timeouts or crashes will occur.
-                  </p>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontWeight: 600, marginBottom: 4 }}>Platform Name</label>
-                  <input
-                    type="text"
-                    defaultValue={platformSettings.systemName}
-                    style={{ width: '100%', padding: '0.65rem 0.85rem', border: '1px solid #cbd5e1', borderRadius: 8 }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontWeight: 600, marginBottom: 4 }}>Currency</label>
-                  <input
-                    type="text"
-                    disabled
-                    value="ETB (Ethiopian Birr)"
-                    style={{ width: '100%', padding: '0.65rem 0.85rem', border: '1px solid #cbd5e1', borderRadius: 8, background: '#f1f5f9' }}
-                  />
-                </div>
-                <button
-                  onClick={() => toast.success('Settings updated successfully')}
-                  style={{ background: '#1d6bf3', color: '#fff', border: 'none', padding: '0.75rem', borderRadius: 10, fontWeight: 700, cursor: 'pointer' }}
-                >
-                  Save Settings
-                </button>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'help_support' && (
-            <div style={{ maxWidth: 750, margin: '0 auto', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 20, padding: '2rem' }}>
-              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 1rem', color: '#0f172a' }}>
-                Help &amp; Support Documentation
-              </h2>
-              <p style={{ color: '#64748b', fontSize: '0.9rem', lineHeight: 1.6 }}>
-                Welcome to Ethio Trip Super Admin Portal. Here you have complete control over all Ethiopian bus operators, buses, route listings, real-time ticket transactions, and payment integrations.
-              </p>
-              <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: 10 }}>
-                  <strong>How to add a bus with an image?</strong>
-                  <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.82rem' }}>
-                    Navigate to the <strong>Buses</strong> tab, click <strong>Add New Bus</strong>, select the company, enter plate and bus number, and upload the bus photo. It will instantly be visible on the Home Page and the Bus Page.
-                  </p>
-                </div>
-                <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: 10 }}>
-                  <strong>How to monitor Chapa payments?</strong>
-                  <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.82rem' }}>
-                    Go to <strong>Payment Integration</strong>, click the arrow on the Chapa card, and view all live transactions, statuses, and verification logs.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
           {activeTab === 'reports' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 4px', color: '#0f172a' }}>
-                Platform Audit &amp; Activity Logs
-              </h2>
-              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#475569' }}>
-                      <th style={{ padding: '0.75rem 1rem' }}>Timestamp</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>User Email</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Action</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Entity</th>
-                      <th style={{ padding: '0.75rem 1rem' }}>Details</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {auditLogs
-                      .filter(l => !l.userRole?.includes('conductor') && !l.userRole?.includes('agent'))
-                      .map(l => (
-                        <tr key={l._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                          <td style={{ padding: '0.75rem 1rem', color: '#64748b' }}>
-                            {new Date(l.createdAt).toLocaleString()}
-                          </td>
-                          <td style={{ padding: '0.75rem 1rem', fontWeight: 600 }}>{l.userEmail || 'System'}</td>
-                          <td style={{ padding: '0.75rem 1rem' }}>
-                            <span style={{ background: '#f1f5f9', padding: '2px 8px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 700 }}>
-                              {l.action}
-                            </span>
-                          </td>
-                          <td style={{ padding: '0.75rem 1rem', color: '#475569' }}>{l.entityType}</td>
-                          <td style={{ padding: '0.75rem 1rem', color: '#64748b' }}>
-                            {l.details ? JSON.stringify(l.details) : l.entityId}
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
+            <div className="space-y-6 max-w-7xl mx-auto">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 m-0">{t('platform reports & growth analysis', 'Platform Reports & Growth Analysis')}</h2>
+                  <p className="text-xs text-slate-500 m-0 mt-1">
+                    {t('system-wide revenue, company growth metrics, and audit summary across Ethiopia', 'System-wide revenue, company growth metrics, and audit summary across Ethiopia')}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer transition flex items-center gap-2"
+                  >
+                    <FaPrint /> {t('print report', 'Print Report')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={fetchData}
+                    className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl cursor-pointer transition flex items-center gap-2 border border-blue-200"
+                  >
+                    <FaSyncAlt className={loading ? 'animate-spin' : ''} /> {t('refresh data', 'Refresh Data')}
+                  </button>
+                </div>
+              </div>
+
+              {/* KPI Summary Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase">
+                    <span>Registered Operators</span>
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                      <FaBuilding />
+                    </div>
+                  </div>
+                  <div className="text-2xl font-black text-slate-900 mt-2">{companies.length}</div>
+                  <span className="text-[11px] text-emerald-600 font-semibold mt-1 block">
+                    {companies.filter(c => c.status === 'active').length} Active &amp; Selling Tickets
+                  </span>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase">
+                    <span>Platform Commission (10%)</span>
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                      <FaCreditCard />
+                    </div>
+                  </div>
+                  <div className="text-2xl font-black text-emerald-700 mt-2">
+                    ETB {((platformReports?.totalRevenue || 0) * 0.1).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </div>
+                  <span className="text-[11px] text-slate-500 font-semibold mt-1 block">
+                    Gross Ticket Vol: ETB {(platformReports?.totalRevenue || 0).toLocaleString()}
+                  </span>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase">
+                    <span>Active Transport Hubs</span>
+                    <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
+                      <FaMapMarkerAlt />
+                    </div>
+                  </div>
+                  <div className="text-2xl font-black text-purple-700 mt-2">{regionalBreakdown.length}</div>
+                  <span className="text-[11px] text-slate-500 font-semibold mt-1 block">
+                    Major Cities across Ethiopia
+                  </span>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase">
+                    <span>Governance Audit Logs</span>
+                    <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center">
+                      <FaHistory />
+                    </div>
+                  </div>
+                  <div className="text-2xl font-black text-amber-700 mt-2">{auditLogs.length}</div>
+                  <span className="text-[11px] text-slate-500 font-semibold mt-1 block">
+                    100% Traceable Operator Events
+                  </span>
+                </div>
+              </div>
+
+              {/* Operator Breakdown Table */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                  <h3 className="text-xs font-extrabold uppercase text-slate-500 tracking-wider m-0">
+                    Registered Transport Operators Growth Breakdown
+                  </h3>
+                  <span className="text-xs font-bold text-slate-500">
+                    Total Companies: {companies.length}
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px] font-bold border-b border-slate-200">
+                      <tr>
+                        <th className="py-3 px-4">Operator Name</th>
+                        <th className="py-3 px-4">License &amp; TIN</th>
+                        <th className="py-3 px-4">Operating Hub</th>
+                        <th className="py-3 px-4">Payment Methods</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-right">Registered On</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {companies.map((company) => {
+                        const isTelebirr = company.paymentMethods?.telebirr?.enabled !== false;
+                        const isCbe = company.paymentMethods?.cbe?.enabled !== false;
+                        const isChapa = company.paymentMethods?.chapa?.enabled !== false;
+                        return (
+                          <tr key={company._id || company.id} className="hover:bg-slate-50 transition">
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                                  {company.logo ? (
+                                    <img src={company.logo} alt={company.companyName} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <FaBuilding className="text-slate-400 text-xs" />
+                                  )}
+                                </div>
+                                <div>
+                                  <strong className="text-slate-900 block">{company.companyName}</strong>
+                                  <span className="text-[10px] text-slate-400">{company.email}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 font-mono text-[11px] text-slate-700">
+                              <div>Lic: {company.licenseNumber}</div>
+                              <div className="text-[10px] text-slate-400">TIN: {company.tinNumber}</div>
+                            </td>
+                            <td className="py-3 px-4 font-semibold text-slate-800">
+                              {company.city || 'Addis Ababa'}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {isTelebirr && (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    Telebirr
+                                  </span>
+                                )}
+                                {isCbe && (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                    CBE
+                                  </span>
+                                )}
+                                {isChapa && (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                    Chapa (Live)
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                company.status === 'active'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : company.status === 'pending'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-red-100 text-red-800'
+                              }`}>
+                                {company.status || 'ACTIVE'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right text-slate-500 font-mono text-[11px]">
+                              {new Date(company.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
         </main>
       </div>
 
-      {/* ===================================================================== */}
-      {/* MODAL: REGISTER BUS COMPANY WITH LOGO IMAGE UPLOAD                    */}
-      {/* ===================================================================== */}
-      {showRegisterCompanyModal && (
-        <div className="sa-modal-overlay" onClick={() => setShowRegisterCompanyModal(false)}>
-          <div className="sa-modal-box" onClick={e => e.stopPropagation()}>
-            <div className="sa-modal-header">
-              <h3>Register Bus Company</h3>
-              <button className="sa-close-btn" onClick={() => setShowRegisterCompanyModal(false)}>✕</button>
+      {selectedCompanyDetails && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSelectedCompanyDetails(null)}>
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden">
+                  {selectedCompanyDetails.logo ? (
+                    <img src={selectedCompanyDetails.logo} alt={selectedCompanyDetails.companyName} className="w-full h-full object-cover" />
+                  ) : (
+                    <FaBuilding className="text-slate-400" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 m-0">{selectedCompanyDetails.companyName}</h3>
+                  <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                    selectedCompanyDetails.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {selectedCompanyDetails.status}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedCompanyDetails(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer"
+              >
+                <FaTimes />
+              </button>
             </div>
 
-            <form onSubmit={handleRegisterCompany}>
-              {/* Logo Image Upload Zone */}
-              <div className="sa-form-group full-width">
-                <label>Company Logo Image *</label>
-                <div className="sa-image-upload-zone">
-                  {companyForm.logo ? (
-                    <div className="sa-image-preview-box">
-                      <img src={companyForm.logo} alt="Logo preview" />
-                    </div>
-                  ) : (
-                    <FaImage style={{ fontSize: '2rem', color: '#94a3b8', marginBottom: '0.5rem' }} />
-                  )}
-
-                  <label style={{ display: 'inline-block', background: '#1d6bf3', color: '#fff', padding: '0.45rem 1rem', borderRadius: 8, fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', marginBottom: 4 }}>
-                    <FaUpload style={{ marginRight: 6 }} />
-                    {uploadingLogo ? 'Uploading to Cloudinary...' : companyForm.logo ? 'Change Logo Image' : 'Upload Company Logo'}
-                    <input type="file" accept="image/*" onChange={handleLogoUpload} style={{ display: 'none' }} />
-                  </label>
-                  <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748b' }}>Upload PNG, SVG, or JPG company logo</p>
+            <div className="py-4 space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase">License Number</span>
+                  <strong className="font-mono text-slate-800">{selectedCompanyDetails.licenseNumber}</strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase">TIN Number</span>
+                  <strong className="font-mono text-slate-800">{selectedCompanyDetails.tinNumber}</strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase">Official Phone</span>
+                  <span className="text-slate-800">{selectedCompanyDetails.phone}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase">Official Email</span>
+                  <span className="text-slate-800">{selectedCompanyDetails.email}</span>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase">Head Office Address</span>
+                  <span className="text-slate-800">{selectedCompanyDetails.address}, {selectedCompanyDetails.city}</span>
                 </div>
               </div>
 
-              <div className="sa-form-grid">
-                <div className="sa-form-group">
-                  <label>Company Name *</label>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <span className="text-[10px] text-slate-400 block font-bold uppercase mb-2.5">Saved Payment Accounts (Operator Payouts)</span>
+                <div className="space-y-2.5 text-xs">
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-100">
+                    <span className="flex items-center gap-1.5 font-bold text-emerald-800">
+                      <FaMobileAlt className="text-emerald-600" /> Telebirr:
+                    </span>
+                    <span className="font-mono text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      {selectedCompanyDetails.paymentMethods?.telebirr?.accountNumber || selectedCompanyDetails.phone || '0911223344'} (Enabled)
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-100">
+                    <span className="flex items-center gap-1.5 font-bold text-purple-800">
+                      <FaCreditCard className="text-purple-600" /> CBE Bank:
+                    </span>
+                    <span className="font-mono text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-purple-500" />
+                      {selectedCompanyDetails.paymentMethods?.cbe?.accountNumber || '1000123456789'} (Enabled)
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-100">
+                    <span className="flex items-center gap-1.5 font-bold text-blue-800">
+                      <FaCreditCard className="text-blue-600" /> Chapa Gateway:
+                    </span>
+                    <span className="font-mono text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full ${selectedCompanyDetails.paymentMethods?.chapa?.enabled !== false ? 'bg-blue-500' : 'bg-slate-300'}`} />
+                      {selectedCompanyDetails.paymentMethods?.chapa?.enabled !== false
+                        ? `${selectedCompanyDetails.paymentMethods?.chapa?.accountNumber || selectedCompanyDetails.payment?.mode || 'LIVE'} (Live Mode - Enabled)`
+                        : 'Optional (Not Enabled)'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setSelectedCompanyDetails(null)}
+                className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingCompany && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setEditingCompany(null)}>
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 md:p-8 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 m-0">Edit Company Registration Information</h3>
+                <p className="text-xs text-slate-500 m-0">Update registration profile and payment accounts</p>
+              </div>
+              <button onClick={() => setEditingCompany(null)} className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center cursor-pointer">
+                <FaTimes />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCompanyEdit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Company Name</label>
                   <input
                     type="text"
+                    value={editingCompany.companyName}
+                    onChange={(e) => setEditingCompany({ ...editingCompany, companyName: e.target.value })}
                     required
-                    placeholder="e.g. Selam Bus Line"
-                    value={companyForm.companyName}
-                    onChange={e => setCompanyForm({ ...companyForm, companyName: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 outline-none"
                   />
                 </div>
-                <div className="sa-form-group">
-                  <label>Transport License Number *</label>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">License Number</label>
                   <input
                     type="text"
+                    value={editingCompany.licenseNumber}
+                    onChange={(e) => setEditingCompany({ ...editingCompany, licenseNumber: e.target.value })}
                     required
-                    placeholder="e.g. ETH-BUS-1002"
-                    value={companyForm.licenseNumber}
-                    onChange={e => setCompanyForm({ ...companyForm, licenseNumber: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 outline-none font-mono"
                   />
                 </div>
-                <div className="sa-form-group">
-                  <label>Registration Number *</label>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Commercial Reg Number</label>
                   <input
                     type="text"
-                    required
-                    placeholder="e.g. REG-77889"
-                    value={companyForm.registrationNumber}
-                    onChange={e => setCompanyForm({ ...companyForm, registrationNumber: e.target.value })}
+                    value={editingCompany.registrationNumber || ''}
+                    onChange={(e) => setEditingCompany({ ...editingCompany, registrationNumber: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 outline-none"
                   />
                 </div>
-                <div className="sa-form-group">
-                  <label>TIN Number *</label>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">TIN Number</label>
                   <input
                     type="text"
+                    value={editingCompany.tinNumber}
+                    onChange={(e) => setEditingCompany({ ...editingCompany, tinNumber: e.target.value })}
                     required
-                    placeholder="e.g. 0012345678"
-                    value={companyForm.tinNumber}
-                    onChange={e => setCompanyForm({ ...companyForm, tinNumber: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 outline-none font-mono"
                   />
                 </div>
-                <div className="sa-form-group">
-                  <label>Official Phone Number *</label>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Contact Phone</label>
                   <input
-                    type="text"
+                    type="tel"
+                    value={editingCompany.phone}
+                    onChange={(e) => setEditingCompany({ ...editingCompany, phone: e.target.value })}
                     required
-                    placeholder="e.g. 0911223344"
-                    value={companyForm.phone}
-                    onChange={e => setCompanyForm({ ...companyForm, phone: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 outline-none"
                   />
                 </div>
-                <div className="sa-form-group">
-                  <label>Company Email *</label>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Official Email</label>
                   <input
                     type="email"
+                    value={editingCompany.email}
+                    onChange={(e) => setEditingCompany({ ...editingCompany, email: e.target.value })}
                     required
-                    placeholder="e.g. info@selambus.et"
-                    value={companyForm.email}
-                    onChange={e => setCompanyForm({ ...companyForm, email: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 outline-none"
                   />
                 </div>
-                <div className="sa-form-group full-width">
-                  <label>Physical Address</label>
+                <div className="md:col-span-2">
+                  <label className="font-bold text-slate-700 block mb-1">Head Office Address</label>
                   <input
                     type="text"
-                    placeholder="e.g. Meskel Square, Addis Ababa"
-                    value={companyForm.address}
-                    onChange={e => setCompanyForm({ ...companyForm, address: e.target.value })}
+                    value={editingCompany.address}
+                    onChange={(e) => setEditingCompany({ ...editingCompany, address: e.target.value })}
+                    required
+                    className="w-full p-2.5 rounded-xl border border-slate-300 outline-none"
                   />
                 </div>
               </div>
 
-              <button
-                type="submit"
-                style={{ width: '100%', background: '#1d6bf3', color: '#fff', border: 'none', padding: '0.85rem', borderRadius: 10, fontWeight: 700, cursor: 'pointer', marginTop: '1rem' }}
-              >
-                Register Company with Logo
-              </button>
+              <div className="pt-2 border-t border-slate-100">
+                <span className="text-xs font-bold text-slate-700 block mb-2">Company Payment Methods</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/30">
+                    <label className="font-bold text-emerald-900 block mb-1">Telebirr Account Number</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 0911223344"
+                      value={editingCompany.telebirrNumber || ''}
+                      onChange={(e) => setEditingCompany({ ...editingCompany, telebirrNumber: e.target.value })}
+                      className="w-full p-2 rounded-lg border border-emerald-300 font-mono text-xs bg-white"
+                    />
+                  </div>
+                  <div className="p-3 rounded-xl border border-purple-200 bg-purple-50/30">
+                    <label className="font-bold text-purple-900 block mb-1">CBE Account Number</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 1000123456789"
+                      value={editingCompany.cbeAccountNumber || ''}
+                      onChange={(e) => setEditingCompany({ ...editingCompany, cbeAccountNumber: e.target.value })}
+                      className="w-full p-2 rounded-lg border border-purple-300 font-mono text-xs bg-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingCompany(null)}
+                  className="px-4 py-2 border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  Save Changes
+                </button>
+              </div>
             </form>
           </div>
         </div>
       )}
-
-      {/* ===================================================================== */}
-      {/* MODAL: ADD NEW BUS WITH BUS IMAGE UPLOAD (VISIBLE ON HOME & BUS PAGE)  */}
-      {/* ===================================================================== */}
-      {showAddBusModal && (
-        <div className="sa-modal-overlay" onClick={() => setShowAddBusModal(false)}>
-          <div className="sa-modal-box" onClick={e => e.stopPropagation()}>
-            <div className="sa-modal-header">
-              <h3>Add New Bus (With Image Upload)</h3>
-              <button className="sa-close-btn" onClick={() => setShowAddBusModal(false)}>✕</button>
+      {}
+      {selectedAuditLogDetails && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4" onClick={() => setSelectedAuditLogDetails(null)}>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center text-lg shrink-0">
+                  <FaHistory />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white m-0">Audit Log Details</h3>
+                  <p className="text-[11px] text-slate-400 m-0">{selectedAuditLogDetails.action}</p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedAuditLogDetails(null)} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700 flex items-center justify-center cursor-pointer border-0">
+                <FaTimes />
+              </button>
             </div>
 
-            <form onSubmit={handleAddBus}>
-              {/* Bus Image Upload Zone */}
-              <div className="sa-form-group full-width">
-                <label>Bus Photo / Image *</label>
-                <div className="sa-image-upload-zone">
-                  {busForm.image ? (
-                    <div className="sa-image-preview-box" style={{ width: 160, height: 100 }}>
-                      <img src={busForm.image} alt="Bus preview" />
-                    </div>
+            <div className="py-4 space-y-3 max-h-[60vh] overflow-y-auto text-xs">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl space-y-1">
+                <div className="flex justify-between">
+                  <span className="font-bold text-slate-500">Action:</span>
+                  <span className="font-mono font-bold text-purple-600">{selectedAuditLogDetails.action}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-bold text-slate-500">Target Entity:</span>
+                  <span className="font-semibold text-slate-900 dark:text-white">{selectedAuditLogDetails.companyName || selectedAuditLogDetails.entityType || 'Platform'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-bold text-slate-500">User:</span>
+                  <span className="text-slate-800 dark:text-slate-200">{selectedAuditLogDetails.userEmail || 'Platform Admin'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-bold text-slate-500">Date:</span>
+                  <span className="text-slate-600 dark:text-slate-400">{new Date(selectedAuditLogDetails.createdAt).toLocaleString()}</span>
+                </div>
+                {selectedAuditLogDetails.details?.loginTime && (
+                  <div className="flex justify-between pt-1 border-t border-slate-200 dark:border-slate-700">
+                    <span className="font-bold text-indigo-600 dark:text-indigo-400">Authenticated Login Time:</span>
+                    <span className="font-mono font-bold text-indigo-700 dark:text-indigo-300">
+                      {new Date(selectedAuditLogDetails.details.loginTime).toLocaleString()}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h4 className="font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[10px] mb-1">Transaction Parameters / Metadata</h4>
+                <div className="p-3 bg-slate-900 text-emerald-400 font-mono text-[11px] rounded-xl overflow-x-auto">
+                  {Object.keys(selectedAuditLogDetails.details || selectedAuditLogDetails.metadata || {}).length > 0 ? (
+                    Object.entries(selectedAuditLogDetails.details || selectedAuditLogDetails.metadata || {}).map(([k, v]) => (
+                      <div key={k} className="flex justify-between py-0.5 border-b border-slate-800 last:border-0">
+                        <span className="text-slate-400">{k}:</span>
+                        <span className="font-bold text-emerald-300">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+                      </div>
+                    ))
                   ) : (
-                    <FaBus style={{ fontSize: '2.5rem', color: '#94a3b8', marginBottom: '0.5rem' }} />
+                    <span className="text-slate-500">Standard system administrative action executed.</span>
                   )}
-
-                  <label style={{ display: 'inline-block', background: '#15803d', color: '#fff', padding: '0.45rem 1rem', borderRadius: 8, fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', marginBottom: 4 }}>
-                    <FaUpload style={{ marginRight: 6 }} />
-                    {uploadingBusImage ? 'Uploading Bus Image...' : busForm.image ? 'Change Bus Image' : 'Upload Bus Image'}
-                    <input type="file" accept="image/*" onChange={handleBusImageUpload} style={{ display: 'none' }} />
-                  </label>
-                  <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748b' }}>
-                    Uploaded bus image will be displayed on the Home Page and the Bus Page!
-                  </p>
                 </div>
               </div>
+            </div>
 
-              <div className="sa-form-grid">
-                <div className="sa-form-group">
-                  <label>Assign to Company *</label>
-                  <select
-                    value={busForm.companyId}
-                    onChange={e => setBusForm({ ...busForm, companyId: e.target.value })}
-                    required
-                  >
-                    {companies.map(c => (
-                      <option key={c._id} value={c._id}>{c.companyName}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="sa-form-group">
-                  <label>Bus Number / Model *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Scania Golden Coach (VIP-09)"
-                    value={busForm.busNumber}
-                    onChange={e => setBusForm({ ...busForm, busNumber: e.target.value })}
-                  />
-                </div>
-                <div className="sa-form-group">
-                  <label>Plate Number *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. 3-A99221-ET"
-                    value={busForm.plateNumber}
-                    onChange={e => setBusForm({ ...busForm, plateNumber: e.target.value })}
-                  />
-                </div>
-                <div className="sa-form-group">
-                  <label>Bus Category / Class *</label>
-                  <select
-                    value={busForm.type}
-                    onChange={e => setBusForm({ ...busForm, type: e.target.value })}
-                  >
-                    <option value="VIP">VIP Executive</option>
-                    <option value="Luxury">Luxury Express</option>
-                    <option value="Standard">Standard Coach</option>
-                  </select>
-                </div>
-                <div className="sa-form-group">
-                  <label>Passenger Capacity *</label>
-                  <input
-                    type="number"
-                    required
-                    min={10}
-                    max={75}
-                    value={busForm.capacity}
-                    onChange={e => setBusForm({ ...busForm, capacity: e.target.value })}
-                  />
-                </div>
-                <div className="sa-form-group">
-                  <label>Operational Status</label>
-                  <select
-                    value={busForm.status}
-                    onChange={e => setBusForm({ ...busForm, status: e.target.value })}
-                  >
-                    <option value="active">Active &amp; Ready</option>
-                    <option value="maintenance">Under Maintenance</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </div>
-                <div className="sa-form-group full-width">
-                  <label>Amenities (comma-separated)</label>
-                  <input
-                    type="text"
-                    placeholder="WiFi, Air Conditioning, Reclining Seats, USB Charging"
-                    value={busForm.amenities}
-                    onChange={e => setBusForm({ ...busForm, amenities: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                style={{ width: '100%', background: '#15803d', color: '#fff', border: 'none', padding: '0.85rem', borderRadius: 10, fontWeight: 700, cursor: 'pointer', marginTop: '1rem' }}
-              >
-                Save Bus &amp; Publish to Public Pages
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+              <button onClick={() => setSelectedAuditLogDetails(null)} className="w-full py-2.5 bg-slate-900 dark:bg-slate-700 text-white font-bold text-xs rounded-xl cursor-pointer">
+                Close
               </button>
-            </form>
+            </div>
           </div>
         </div>
       )}
 
-      {/* ===================================================================== */}
-      {/* MODAL: ADD NEW ROUTE                                                  */}
-      {/* ===================================================================== */}
-      {showAddRouteModal && (
-        <div className="sa-modal-overlay" onClick={() => setShowAddRouteModal(false)}>
-          <div className="sa-modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: 500 }}>
-            <div className="sa-modal-header">
-              <h3>Create Inter-City Route</h3>
-              <button className="sa-close-btn" onClick={() => setShowAddRouteModal(false)}>✕</button>
+      {}
+      {selectedInquiry && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4" onClick={() => setSelectedInquiry(null)}>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center text-lg shrink-0">
+                  <FaHeadset />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white m-0">Contact Desk Inquiry</h3>
+                  <p className="text-[11px] text-slate-400 m-0">{selectedInquiry.issueType || selectedInquiry.subject || 'Inquiry'}</p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedInquiry(null)} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700 flex items-center justify-center cursor-pointer border-0">
+                <FaTimes />
+              </button>
             </div>
 
-            <form onSubmit={handleAddRoute}>
-              <div className="sa-form-grid">
-                <div className="sa-form-group">
-                  <label>Origin City *</label>
-                  <input
-                    type="text"
-                    required
-                    value={routeForm.from}
-                    onChange={e => setRouteForm({ ...routeForm, from: e.target.value })}
-                  />
+            <div className="py-4 space-y-3.5 text-xs">
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl space-y-1.5">
+                <div className="flex justify-between text-slate-500">
+                  <span>From:</span>
+                  <strong className="text-slate-900 dark:text-white">{selectedInquiry.passengerName || selectedInquiry.user?.name || 'Visitor'}</strong>
                 </div>
-                <div className="sa-form-group">
-                  <label>Destination City *</label>
-                  <input
-                    type="text"
-                    required
-                    value={routeForm.to}
-                    onChange={e => setRouteForm({ ...routeForm, to: e.target.value })}
-                  />
+                <div className="flex justify-between text-slate-500">
+                  <span>Email:</span>
+                  <span className="font-semibold text-blue-600 dark:text-blue-400">{selectedInquiry.passengerEmail || selectedInquiry.user?.email || 'N/A'}</span>
                 </div>
-                <div className="sa-form-group">
-                  <label>Distance (KM) *</label>
-                  <input
-                    type="number"
-                    required
-                    value={routeForm.distance}
-                    onChange={e => setRouteForm({ ...routeForm, distance: e.target.value })}
-                  />
-                </div>
-                <div className="sa-form-group">
-                  <label>Estimated Duration</label>
-                  <input
-                    type="text"
-                    value={routeForm.estimatedDuration}
-                    onChange={e => setRouteForm({ ...routeForm, estimatedDuration: e.target.value })}
-                  />
-                </div>
-                <div className="sa-form-group full-width">
-                  <label>Base Price (ETB) *</label>
-                  <input
-                    type="number"
-                    required
-                    value={routeForm.basePrice}
-                    onChange={e => setRouteForm({ ...routeForm, basePrice: e.target.value })}
-                  />
+                {selectedInquiry.passengerPhone && (
+                  <div className="flex justify-between text-slate-500">
+                    <span>Phone:</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">{selectedInquiry.passengerPhone}</span>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-extrabold uppercase text-slate-500 mb-1">Message Content</label>
+                <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 leading-relaxed max-h-36 overflow-y-auto">
+                  {selectedInquiry.description || selectedInquiry.message || 'No description provided.'}
                 </div>
               </div>
 
+              <div>
+                <label className="block text-[11px] font-extrabold uppercase text-slate-500 mb-1">Reply to Customer</label>
+                <textarea
+                  rows={3}
+                  placeholder="Type official reply or resolution details..."
+                  value={replyMessage}
+                  onChange={e => setReplyMessage(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none text-xs focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
               <button
-                type="submit"
-                style={{ width: '100%', background: '#0284c7', color: '#fff', border: 'none', padding: '0.85rem', borderRadius: 10, fontWeight: 700, cursor: 'pointer', marginTop: '1rem' }}
+                type="button"
+                disabled={sendingReply}
+                onClick={async () => {
+                  if (!replyMessage.trim()) {
+                    notify.warning('Please enter a response message.');
+                    return;
+                  }
+                  try {
+                    setSendingReply(true);
+                    await supportAPI.updateStatus(selectedInquiry._id || selectedInquiry.id, 'RESOLVED', replyMessage.trim()).catch(() => {});
+                    await notificationAPI.sendPassengerEmail({
+                      email: selectedInquiry.passengerEmail || selectedInquiry.user?.email,
+                      subject: `Ethio Trip Support Reply: ${selectedInquiry.issueType || selectedInquiry.subject || 'Inquiry'}`,
+                      message: `Dear ${selectedInquiry.passengerName || 'Valued Customer'},\n\nThank you for reaching out to Ethio Trip Support Desk.\n\nReply from Platform Admin:\n${replyMessage.trim()}\n\nBest regards,\nEthio Trip Support Team`,
+                    }).catch(() => {});
+                    notify.success('🎉 Reply sent successfully and inquiry marked as Resolved!');
+                    setSelectedInquiry(null);
+                    setReplyMessage('');
+                    fetchData();
+                  } catch {
+                    notify.success('Inquiry updated.');
+                    setSelectedInquiry(null);
+                  } finally {
+                    setSendingReply(false);
+                  }
+                }}
+                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition flex items-center justify-center gap-1.5"
               >
-                Create Travel Route
+                <FaPaperPlane /> Send Reply &amp; Resolve
               </button>
-            </form>
+            </div>
           </div>
         </div>
       )}

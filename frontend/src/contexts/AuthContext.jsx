@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authAPI } from '../utils/api';
+import { storage, migrateLegacyStorage } from '../utils/storage';
 
 const AuthContext = createContext(null);
 
@@ -8,45 +9,83 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const loadUser = async () => {
-      const savedToken = localStorage.getItem('ethiobus_token');
-      const savedUser = localStorage.getItem('ethiobus_user');
-      if (savedToken && savedUser) {
-        try {
-          setUser(JSON.parse(savedUser));
-          setToken(savedToken);
-        } catch (error) {
-          console.error('Session load failed:', error);
-          logout();
-        }
-      }
-      setLoading(false);
-    };
-    loadUser();
-  }, []);
-
-  const login = (userData, authToken) => {
-    setUser(userData);
-    setToken(authToken);
-    localStorage.setItem('ethiobus_user', JSON.stringify(userData));
-    localStorage.setItem('ethiobus_token', authToken);
-  };
-
-  const logout = () => {
+  const logout = useCallback((reason) => {
     setUser(null);
     setToken(null);
-    // Clear auth tokens
-    localStorage.removeItem('ethiobus_user');
-    localStorage.removeItem('ethiobus_token');
-    authAPI.logout().catch(console.error);
-  };
+    storage.clearAuth();
+    if (reason) console.warn(`[Auth] Session ended: ${reason}`);
+  }, []);
 
-  const updateUser = (updatedData) => {
-    const newUser = { ...user, ...updatedData };
-    setUser(newUser);
-    localStorage.setItem('ethiobus_user', JSON.stringify(newUser));
-  };
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadUser = async () => {
+      migrateLegacyStorage();
+
+      const savedToken = storage.getToken();
+      const savedUser = storage.getUser();
+
+      if (!savedToken || !savedUser) {
+        setLoading(false);
+        return;
+      }
+
+      let parsed = null;
+      try {
+        parsed = JSON.parse(savedUser);
+      } catch {
+        logout('corrupt stored session');
+        setLoading(false);
+        return;
+      }
+
+      setUser(parsed);
+      setToken(savedToken);
+
+      try {
+        const { user: fresh } = await authAPI.getProfile();
+        if (cancelled) return;
+        setUser(fresh);
+        storage.setUser(JSON.stringify(fresh));
+      } catch {
+        if (cancelled) return;
+        logout('token rejected by server');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadUser();
+    return () => { cancelled = true; };
+  }, [logout]);
+
+  useEffect(() => {
+    const handleUnauthorized = () => logout('401 from server');
+    window.addEventListener('ethiotrip:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('ethiotrip:unauthorized', handleUnauthorized);
+  }, [logout]);
+
+  const login = useCallback((userData, authToken) => {
+    setUser(userData);
+    setToken(authToken);
+    storage.setUser(JSON.stringify(userData));
+    storage.setToken(authToken);
+    if (userData?.preferredLanguage) {
+      storage.setLanguage(userData.preferredLanguage);
+    }
+  }, []);
+
+  const updateUser = useCallback((updatedData) => {
+    setUser((prev) => {
+      const next = { ...prev, ...updatedData };
+      storage.setUser(JSON.stringify(next));
+      return next;
+    });
+    if (updatedData?.preferredLanguage) {
+      storage.setLanguage(updatedData.preferredLanguage);
+      authAPI.updateProfile({ preferredLanguage: updatedData.preferredLanguage }).catch(() => {});
+    }
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, token, loading, login, logout, updateUser }}>

@@ -1,10 +1,11 @@
 const Review = require('../models/Review');
 const Company = require('../models/Company');
 const Booking = require('../models/Booking');
+const { BOOKING_STATUS, PAYMENT_STATUS } = require('../constants/statuses');
 
-// @desc    Get company reviews
-// @route   GET /api/reviews/company/:companyId
-// @access  Public
+const PAID_STATES = [PAYMENT_STATUS.PAID, 'completed', 'PAID'];
+const REVIEWABLE_BOOKING_STATES = [BOOKING_STATUS.COMPLETED, BOOKING_STATUS.CONFIRMED, 'completed', 'confirmed'];
+
 const getCompanyReviews = async (req, res, next) => {
   try {
     const reviews = await Review.find({ companyId: req.params.companyId })
@@ -16,9 +17,6 @@ const getCompanyReviews = async (req, res, next) => {
   }
 };
 
-// @desc    Create review for completed travel
-// @route   POST /api/reviews
-// @access  Private (Passenger)
 const createReview = async (req, res, next) => {
   try {
     const { bookingId, rating, comment, categories } = req.body;
@@ -29,12 +27,16 @@ const createReview = async (req, res, next) => {
     const booking = await Booking.findById(bookingId);
     if (!booking) return res.status(404).json({ message: 'Booking not found' });
 
-    if (booking.user.toString() !== req.user._id.toString()) {
+    if (!booking.user || booking.user.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'You can only review your own completed trip' });
     }
 
-    if (booking.paymentStatus !== 'completed') {
-      return res.status(400).json({ message: 'You can only review completed trips' });
+    if (!PAID_STATES.includes(booking.paymentStatus)) {
+      return res.status(400).json({ message: 'You can only review trips that have been paid for' });
+    }
+
+    if (!REVIEWABLE_BOOKING_STATES.includes(booking.status)) {
+      return res.status(400).json({ message: 'You can only review trips that are not cancelled or refunded' });
     }
 
     const existing = await Review.findOne({ user: req.user._id, booking: bookingId });
@@ -51,7 +53,6 @@ const createReview = async (req, res, next) => {
       categories: categories || {},
     });
 
-    // Recalculate Company average rating
     const allCompanyReviews = await Review.find({ companyId: booking.companyId });
     const avgRating = allCompanyReviews.reduce((sum, r) => sum + r.rating, 0) / allCompanyReviews.length;
 

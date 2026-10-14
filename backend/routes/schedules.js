@@ -12,14 +12,16 @@ const {
 } = require('../controllers/scheduleController');
 const { protect, optionalProtect, authorize } = require('../middleware/auth');
 
+const ROLES = require('../constants/roles');
+
 router.get('/', optionalProtect, getSchedules);
 router.get('/search', optionalProtect, searchSchedules);
-router.get('/my-assigned', protect, authorize('conductor', 'company_admin', 'super_admin', 'admin'), getMyAssignedSchedules);
-router.get('/:id', getScheduleById);
-router.get('/:id/seats', getSeatMap);
-router.post('/', protect, authorize('company_admin', 'super_admin', 'admin'), createSchedule);
-router.put('/:id', protect, authorize('company_admin', 'super_admin', 'admin'), updateSchedule);
-router.put('/:id/assign-conductor', protect, authorize('company_admin', 'super_admin', 'admin'), assignConductor);
-router.delete('/:id', protect, authorize('company_admin', 'super_admin', 'admin'), deleteSchedule);
+router.get('/my-assigned', protect, authorize(ROLES.CONDUCTOR, ROLES.COMPANY_ADMIN, ROLES.SUPER_ADMIN), getMyAssignedSchedules);
+router.get('/:id', optionalProtect, getScheduleById);
+router.get('/:id/seats', optionalProtect, getSeatMap);
+router.post('/', protect, authorize(ROLES.COMPANY_ADMIN, ROLES.SUPER_ADMIN), createSchedule);
+router.put('/:id', protect, authorize(ROLES.COMPANY_ADMIN, ROLES.SUPER_ADMIN), updateSchedule);
+router.put('/:id/assign-conductor', protect, authorize(ROLES.COMPANY_ADMIN, ROLES.SUPER_ADMIN), assignConductor);
+router.delete('/:id', protect, authorize(ROLES.COMPANY_ADMIN, ROLES.SUPER_ADMIN), deleteSchedule);
 
 module.exports = router;

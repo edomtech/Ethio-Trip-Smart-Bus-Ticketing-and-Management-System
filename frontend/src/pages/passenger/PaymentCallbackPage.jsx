@@ -31,7 +31,7 @@ const PaymentCallbackPage = () => {
           setSuccess(true);
           setMessage('Payment successfully verified!');
           setDetails(res);
-          setShowTicketModal(true); // Automatically open E-Ticket Modal on payment completion!
+          setShowTicketModal(true);  
         } else {
           setSuccess(false);
           setMessage(res.message || 'Payment verification failed or was canceled.');
@@ -48,7 +48,6 @@ const PaymentCallbackPage = () => {
     verifyPayment();
   }, [searchParams]);
 
-  // Format booking object for TicketModal
   const rawBooking = (details?.booking && typeof details.booking === 'object')
     ? details.booking
     : (details?.payment?.booking && typeof details.payment.booking === 'object')
@@ -73,166 +72,68 @@ const PaymentCallbackPage = () => {
   } : null;
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '20px',
-      fontFamily: 'system-ui, -apple-system, sans-serif'
-    }}>
-      <div style={{
-        background: '#ffffff',
-        width: '100%',
-        maxWidth: '520px',
-        borderRadius: '24px',
-        padding: '36px 28px',
-        textAlign: 'center',
-        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
-      }}>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-5 font-sans">
+      <div className="bg-white w-full max-w-[520px] rounded-3xl py-9 px-7 text-center shadow-2xl">
         {loading ? (
           <div>
-            <div style={{
-              fontSize: '3rem',
-              color: '#078930',
-              animation: 'spin 1s linear infinite',
-              display: 'inline-block',
-              marginBottom: '16px'
-            }}>
+            <div className="text-5xl text-[#078930] animate-spin inline-block mb-4">
               <FaSpinner />
             </div>
-            <h2 style={{ fontSize: '1.4rem', color: '#0f172a', fontWeight: 800 }}>Verifying Payment</h2>
-            <p style={{ color: '#64748b', fontSize: '0.95rem', marginTop: '8px' }}>Please wait while we confirm your payment with Chapa...</p>
-            <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+            <h2 className="text-[1.4rem] text-slate-900 font-extrabold">Verifying Payment</h2>
+            <p className="text-slate-500 text-[0.95rem] mt-2">Please wait while we confirm your payment with Chapa...</p>
           </div>
         ) : success ? (
           <div>
-            <div style={{
-              width: '80px',
-              height: '80px',
-              background: '#dcfce7',
-              color: '#15803d',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '2.5rem',
-              margin: '0 auto 20px'
-            }}>
+            <div className="w-20 h-20 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-4xl mx-auto mb-5">
               <FaCheckCircle />
             </div>
-            <h2 style={{ fontSize: '1.6rem', color: '#0f172a', fontWeight: 800 }}>Payment Successful!</h2>
-            <p style={{ color: '#475569', fontSize: '0.95rem', marginTop: '8px' }}>{message}</p>
+            <h2 className="text-[1.6rem] text-slate-900 font-extrabold">Payment Successful!</h2>
+            <p className="text-slate-600 text-[0.95rem] mt-2">{message}</p>
 
             {details?.payment?.amount && (
-              <div style={{
-                background: '#f0fdf4',
-                border: '1px solid #bbf7d0',
-                borderRadius: '16px',
-                padding: '16px',
-                margin: '24px 0',
-                textAlign: 'left',
-                fontSize: '0.9rem',
-                color: '#334155'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span style={{ color: '#64748b' }}>Amount Paid:</span>
-                  <strong style={{ color: '#15803d' }}>ETB {details.payment.amount}</strong>
+              <div className="bg-green-50 border border-green-200 rounded-2xl p-4 my-6 text-left text-[0.9rem] text-slate-700">
+                <div className="flex justify-between mb-2">
+                  <span className="text-slate-500">Amount Paid:</span>
+                  <strong className="text-green-700">ETB {details.payment.amount}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span style={{ color: '#64748b' }}>Transaction Ref:</span>
-                  <strong style={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>{details.txRef}</strong>
+                <div className="flex justify-between mb-2">
+                  <span className="text-slate-500">Transaction Ref:</span>
+                  <strong className="text-[0.8rem] font-mono">{details.txRef}</strong>
                 </div>
                 {details.payment?.chapaRef && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#64748b' }}>Chapa Ref:</span>
-                    <strong style={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>{details.payment.chapaRef}</strong>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Chapa Ref:</span>
+                    <strong className="text-[0.8rem] font-mono">{details.payment.chapaRef}</strong>
                   </div>
                 )}
               </div>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div className="flex flex-col gap-3">
               <button
                 onClick={() => setShowTicketModal(true)}
-                style={{
-                  width: '100%',
-                  padding: '14px',
-                  background: 'linear-gradient(135deg, #078930, #056e26)',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '14px',
-                  fontWeight: 800,
-                  fontSize: '1rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px',
-                  boxShadow: '0 4px 14px rgba(7,137,48,0.3)'
-                }}>
+                className="w-full p-3.5 bg-gradient-to-br from-[#078930] to-[#056e26] text-white border-none rounded-2xl font-extrabold text-base cursor-pointer flex items-center justify-center gap-2.5 shadow-[0_4px_14px_rgba(7,137,48,0.3)] hover:brightness-105 transition-all">
                 <FaQrcode /> View & Download E-Ticket with QR Code
               </button>
 
               <button
                 onClick={() => navigate('/passenger/dashboard')}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  background: '#f1f5f9',
-                  color: '#334155',
-                  border: 'none',
-                  borderRadius: '14px',
-                  fontWeight: 700,
-                  fontSize: '0.9rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px'
-                }}>
+                className="w-full p-3 bg-slate-100 text-slate-700 border-none rounded-2xl font-bold text-[0.9rem] cursor-pointer flex items-center justify-center gap-2 hover:bg-slate-200 transition-colors">
                 <FaTicketAlt /> Return to Dashboard
               </button>
             </div>
           </div>
         ) : (
           <div>
-            <div style={{
-              width: '80px',
-              height: '80px',
-              background: '#fee2e2',
-              color: '#b91c1c',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '2.5rem',
-              margin: '0 auto 20px'
-            }}>
+            <div className="w-20 h-20 bg-red-100 text-red-700 rounded-full flex items-center justify-center text-4xl mx-auto mb-5">
               <FaTimesCircle />
             </div>
-            <h2 style={{ fontSize: '1.5rem', color: '#0f172a', fontWeight: 800 }}>Payment Unsuccessful</h2>
-            <p style={{ color: '#64748b', fontSize: '0.95rem', marginTop: '8px' }}>{message}</p>
+            <h2 className="text-[1.5rem] text-slate-900 font-extrabold">Payment Unsuccessful</h2>
+            <p className="text-slate-500 text-[0.95rem] mt-2">{message}</p>
 
             <button
               onClick={() => navigate('/passenger/dashboard')}
-              style={{
-                width: '100%',
-                padding: '14px',
-                background: '#475569',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: '14px',
-                fontWeight: 800,
-                fontSize: '1rem',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '10px',
-                marginTop: '24px'
-              }}>
+              className="w-full p-3.5 bg-slate-600 text-white border-none rounded-2xl font-extrabold text-base cursor-pointer flex items-center justify-center gap-2.5 mt-6 hover:bg-slate-700 transition-colors">
               <FaArrowLeft /> Return to Dashboard
             </button>
           </div>
@@ -250,4 +151,3 @@ const PaymentCallbackPage = () => {
 };
 
 export default PaymentCallbackPage;
-

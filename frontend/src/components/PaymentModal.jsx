@@ -1,17 +1,24 @@
 import React, { useState } from 'react';
 import {
   FaTimes, FaMobileAlt, FaUniversity, FaCreditCard, FaLock,
-  FaCheckCircle, FaBus, FaShieldAlt
+  FaCheckCircle, FaBus, FaShieldAlt, FaUpload, FaImage, FaClock, FaExclamationCircle
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
-import { paymentAPI } from '../utils/api';
+import { paymentAPI, bookingAPI } from '../utils/api';
+import { useTranslation } from '../i18n';
 
 const PaymentModal = ({ booking, onClose, onSuccess, onPaymentSuccess }) => {
+  const { t } = useTranslation();
   const [method, setMethod] = useState('chapa');
   const [phoneNumber, setPhoneNumber] = useState(booking?.passenger?.phone || '0911234567');
   const [accountNumber, setAccountNumber] = useState('1000123456789');
+  const [receiptImage, setReceiptImage] = useState('');
+  const [receiptNote, setReceiptNote] = useState('');
+  const [transactionReference, setTransactionReference] = useState('');
+  const [submittedAmount, setSubmittedAmount] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isReceiptSubmitted, setIsReceiptSubmitted] = useState(false);
   const [txnId, setTxnId] = useState('');
 
   if (!booking) return null;
@@ -25,16 +32,22 @@ const PaymentModal = ({ booking, onClose, onSuccess, onPaymentSuccess }) => {
     ? booking.selectedSeats.join(', ')
     : (booking.selectedSeats || booking.outboundLeg?.seats?.join(', ') || '1');
 
+  const handleReceiptFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be under 5MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setReceiptImage(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handlePay = async (e) => {
     e.preventDefault();
-    if (method === 'telebirr' && !phoneNumber) {
-      toast.error('Please enter your Telebirr mobile number');
-      return;
-    }
-    if (method === 'cbe' && !accountNumber) {
-      toast.error('Please enter your CBE account number');
-      return;
-    }
 
     setIsProcessing(true);
     try {
@@ -50,29 +63,32 @@ const PaymentModal = ({ booking, onClose, onSuccess, onPaymentSuccess }) => {
         }
       }
 
-      // Non-Chapa direct payments (Telebirr / CBE Birr)
-      const res = await paymentAPI.initiate({
-        bookingId: booking._id,
-        amount,
-        method: method === 'telebirr' ? 'Telebirr' : 'CBE Birr',
+      if (!receiptImage) {
+        toast.error('Please upload your payment receipt image before submitting to the agent.');
+        setIsProcessing(false);
+        return;
+      }
+
+      const res = await bookingAPI.uploadReceipt(booking._id, {
+        receiptImage,
+        paymentMethod: method,
+        transactionReference: transactionReference.trim() || undefined,
+        submittedAmount: submittedAmount ? Number(submittedAmount) : amount,
+        receiptNote: receiptNote || `Paid via ${method === 'telebirr' ? 'Telebirr' : 'CBE Birr'} - Ref: ${transactionReference || phoneNumber || accountNumber}`,
       });
 
-      setIsSuccess(true);
-      const generatedTxn = res.transactionId || res.txRef || `ETB-TXN-${Date.now()}`;
-      setTxnId(generatedTxn);
-      toast.success('Payment completed successfully! E-Ticket confirmed.');
+      setIsReceiptSubmitted(true);
+      toast.success('Payment receipt submitted! Sent to agent for review and ticket approval.');
 
-      setTimeout(() => {
-        if (callbackSuccess) {
-          callbackSuccess({
-            ...booking,
-            paymentStatus: 'PAID',
-            status: 'CONFIRMED',
-          });
-        }
-      }, 1200);
+      if (callbackSuccess) {
+        callbackSuccess(res.booking || {
+          ...booking,
+          receiptStatus: 'PENDING',
+          status: 'RECEIPT_SUBMITTED',
+        });
+      }
     } catch (err) {
-      toast.error(err.response?.data?.message || err.message || 'Payment failed. Please try again.');
+      toast.error(err.response?.data?.message || err.message || 'Payment submission failed. Please try again.');
     } finally {
       setIsProcessing(false);
     }
@@ -106,146 +122,121 @@ const PaymentModal = ({ booking, onClose, onSuccess, onPaymentSuccess }) => {
   return (
     <div
       onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(15,23,42,0.8)',
-        backdropFilter: 'blur(6px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1200,
-        padding: '16px',
-        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-      }}
+      className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-[1200] p-4 font-sans"
     >
       <div
         onClick={e => e.stopPropagation()}
-        style={{
-          background: '#ffffff',
-          width: '100%',
-          maxWidth: '480px',
-          maxHeight: '92vh',
-          overflowY: 'auto',
-          borderRadius: '24px',
-          boxShadow: '0 25px 60px rgba(0,0,0,0.35)',
-          border: '1px solid #e2e8f0',
-        }}
+        className="bg-white dark:bg-slate-900 w-full max-w-md max-h-[92vh] overflow-y-auto rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 transition-colors"
       >
-        {/* Header */}
-        <div
-          style={{
-            background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)',
-            padding: '20px 24px',
-            color: '#fff',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
+        {}
+        <div className="bg-gradient-to-r from-blue-900 via-blue-800 to-blue-700 p-5 sm:px-6 text-white flex justify-between items-center">
           <div>
-            <div style={{ fontSize: '0.7rem', fontWeight: 900, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '1px' }}>
-              Secure Payment
+            <div className="text-[11px] font-black text-blue-200 uppercase tracking-wider">
+              {t('secure payment', 'Secure Payment')}
             </div>
-            <h3 style={{ margin: '2px 0 0', fontSize: '1.2rem', fontWeight: 900 }}>
-              Choose Payment Method
+            <h3 className="m-0 mt-0.5 text-lg font-extrabold text-white">
+              {t('choose payment method', 'Choose Payment Method')}
             </h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            style={{
-              background: 'rgba(255,255,255,0.2)',
-              border: 'none',
-              color: '#fff',
-              width: 32,
-              height: 32,
-              borderRadius: '50%',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '0.9rem',
-            }}
+            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center cursor-pointer transition"
           >
             <FaTimes />
           </button>
         </div>
 
-        <div style={{ padding: '20px 24px' }}>
-          {isSuccess ? (
-            <div style={{ textAlign: 'center', padding: '20px 0' }}>
-              <div
-                style={{
-                  width: 60,
-                  height: 60,
-                  background: '#dcfce7',
-                  color: '#16a34a',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '2rem',
-                  margin: '0 auto 14px',
-                }}
+        <div className="p-5 sm:p-6">
+          {isReceiptSubmitted ? (
+            <div className="text-center py-5">
+              <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-3.5 shadow-md shadow-amber-500/20">
+                <FaClock />
+              </div>
+              <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">Receipt Submitted to Agent!</h3>
+              <p className="text-slate-500 dark:text-slate-400 text-xs my-2 max-w-sm mx-auto leading-relaxed">
+                Your payment receipt has been submitted to the ticketing agent. As soon as the agent verifies and approves your receipt, your E-Ticket will be confirmed.
+              </p>
+              <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3.5 rounded-xl text-xs text-left space-y-1 mb-4">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Ticket Ref:</span>
+                  <strong className="text-slate-900 dark:text-white font-mono">{booking.ticketNumber}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Amount:</span>
+                  <strong className="text-emerald-600 font-bold">ETB {amount.toFixed(2)}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Method:</span>
+                  <strong className="text-slate-900 dark:text-white uppercase">{method}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Status:</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-amber-100 text-amber-800">
+                    Awaiting Agent Approval
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs cursor-pointer transition shadow-md shadow-emerald-600/20"
               >
+                Done
+              </button>
+            </div>
+          ) : isSuccess ? (
+            <div className="text-center py-5">
+              <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-3.5 shadow-md shadow-emerald-500/20">
                 <FaCheckCircle />
               </div>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#0f172a' }}>Payment Confirmed</h3>
-              <p style={{ color: '#64748b', fontSize: '0.85rem', margin: '6px 0 16px' }}>
-                Ref: <strong>{txnId}</strong>
+              <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">Payment Confirmed</h3>
+              <p className="text-slate-500 dark:text-slate-400 text-xs my-1.5 mb-4">
+                Ref: <strong className="text-slate-900 dark:text-slate-200 font-mono">{txnId}</strong>
               </p>
-              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '12px', borderRadius: '12px', fontSize: '0.92rem', color: '#334155' }}>
-                Total Paid: <strong style={{ color: '#16a34a' }}>ETB {amount.toFixed(2)}</strong>
+              <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 p-3.5 rounded-xl text-sm text-slate-700 dark:text-slate-300">
+                Total Paid: <strong className="text-emerald-600 dark:text-emerald-400 font-black">ETB {amount.toFixed(2)}</strong>
               </div>
             </div>
           ) : (
             <form onSubmit={handlePay}>
-              {/* Compact Trip Summary with Round-Trip Discount Breakdown */}
+              {}
               {(() => {
                 const isRound = booking.tripType === 'round' || Boolean(booking.returnLeg?.schedule || (booking.returnLeg?.seats && booking.returnLeg.seats.length > 0));
                 const discountAmt = Number(booking.discountAmount) || (isRound ? Math.round((Number(booking.baseFare) || (amount / 0.9)) * 0.1) : 0);
                 const baseFare = Number(booking.baseFare) || (discountAmt > 0 ? amount + discountAmt : amount);
 
                 return (
-                  <div
-                    style={{
-                      background: '#f8fafc',
-                      border: '1.5px solid #e2e8f0',
-                      borderRadius: '14px',
-                      padding: '14px 16px',
-                      marginBottom: '16px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: discountAmt > 0 ? 8 : 0 }}>
+                  <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4 mb-4">
+                    <div className={`flex justify-between items-center ${discountAmt > 0 ? 'mb-2' : ''}`}>
                       <div>
-                        <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span>{operatorName} · Seat {seatsList}</span>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <span>{operatorName} · {t('seat(s)', 'Seat')} {seatsList}</span>
                           {isRound && (
-                            <span style={{ background: '#fef3c7', color: '#92400e', fontSize: '0.65rem', fontWeight: 800, padding: '1px 5px', borderRadius: 4 }}>
-                              Round-Trip
+                            <span className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 text-[10px] font-extrabold px-1.5 py-0.5 rounded">
+                              {t('Round-Trip', 'Round-Trip')}
                             </span>
                           )}
                         </div>
-                        <div style={{ fontWeight: 900, color: '#0f172a', fontSize: '0.98rem' }}>
+                        <div className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base mt-0.5">
                           {routeFrom} → {routeTo}
                         </div>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '0.68rem', color: '#64748b' }}>Amount Due</div>
-                        <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#2563eb' }}>
+                      <div className="text-right">
+                        <div className="text-[10px] text-slate-400 uppercase font-semibold">{t('total amount', 'Amount Due')}</div>
+                        <div className="text-lg font-black text-blue-600 dark:text-blue-400">
                           ETB {amount.toFixed(2)}
                         </div>
                       </div>
                     </div>
 
                     {discountAmt > 0 && (
-                      <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: 8, marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.76rem' }}>
-                        <span style={{ color: '#16a34a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
-                          ✓ 10% Round-Trip Discount Applied
+                      <div className="border-t border-dashed border-slate-300 dark:border-slate-700 pt-2 mt-1 flex justify-between items-center text-xs">
+                        <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                          ✓ {t('10% Round-Trip Discount Applied', '10% Round-Trip Discount Applied')}
                         </span>
-                        <span style={{ color: '#16a34a', fontWeight: 800 }}>
-                          - ETB {discountAmt.toFixed(2)} (Subtotal: ETB {baseFare.toFixed(2)})
+                        <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">
+                          - ETB {discountAmt.toFixed(2)} ({t('Subtotal', 'Subtotal')}: ETB {baseFare.toFixed(2)})
                         </span>
                       </div>
                     )}
@@ -253,145 +244,160 @@ const PaymentModal = ({ booking, onClose, onSuccess, onPaymentSuccess }) => {
                 );
               })()}
 
-              {/* Payment Method Cards */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+              {}
+              <div className="flex flex-col gap-2.5 mb-4">
                 {methods.map(m => {
                   const isSelected = method === m.key;
                   return (
-                    <button
+                    <div
                       key={m.key}
-                      type="button"
                       onClick={() => setMethod(m.key)}
-                      style={{
-                        padding: '12px 14px',
-                        borderRadius: '12px',
-                        border: isSelected ? '2px solid #2563eb' : '1.5px solid #e2e8f0',
-                        background: isSelected ? '#eff6ff' : '#ffffff',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '12px',
-                        transition: 'all 0.15s ease',
-                      }}
+                      className={`flex items-center justify-between p-3.5 rounded-xl border-2 cursor-pointer transition ${
+                        isSelected
+                          ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/40'
+                          : 'border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/80 hover:border-slate-300 dark:hover:border-slate-600'
+                      }`}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div className="flex items-center gap-3">
                         <div
-                          style={{
-                            width: 36,
-                            height: 36,
-                            borderRadius: '10px',
-                            background: isSelected ? '#2563eb' : '#f1f5f9',
-                            color: isSelected ? '#ffffff' : '#2563eb',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '1.1rem',
-                            flexShrink: 0,
-                          }}
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0 ${
+                            isSelected
+                              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                              : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                          }`}
                         >
                           {m.icon}
                         </div>
                         <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.88rem' }}>{m.label}</span>
+                          <div className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+                            {t(m.label, m.label)}
                             {m.badge && (
-                              <span style={{ fontSize: '0.65rem', background: '#dbeafe', color: '#1d4ed8', padding: '2px 6px', borderRadius: 6, fontWeight: 800 }}>
-                                {m.badge}
+                              <span className="bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-[10px] font-bold px-1.5 py-0.5 rounded">
+                                {t(m.badge, m.badge)}
                               </span>
                             )}
                           </div>
-                          <div style={{ fontSize: '0.74rem', color: '#64748b', marginTop: 2 }}>{m.desc}</div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            {t(m.desc, m.desc)}
+                          </div>
                         </div>
                       </div>
-
                       <div
-                        style={{
-                          width: 18,
-                          height: 18,
-                          borderRadius: '50%',
-                          border: `2px solid ${isSelected ? '#2563eb' : '#cbd5e1'}`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0,
-                        }}
+                        className={`w-4.5 h-4.5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                          isSelected
+                            ? 'border-blue-600 bg-blue-600'
+                            : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
+                        }`}
                       >
-                        {isSelected && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#2563eb' }} />}
+                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
 
-              {method === 'telebirr' && (
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ fontSize: '0.78rem', fontWeight: 800, color: '#334155', display: 'block', marginBottom: '6px' }}>
-                    Telebirr Phone Number
-                  </label>
-                  <input
-                    type="text"
-                    value={phoneNumber}
-                    onChange={e => setPhoneNumber(e.target.value)}
-                    placeholder="0911XXXXXX"
-                    style={{
-                      width: '100%',
-                      padding: '11px 13px',
-                      borderRadius: '10px',
-                      border: '1.5px solid #cbd5e1',
-                      fontSize: '0.9rem',
-                      outline: 'none',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-              )}
+              {}
+              {method !== 'chapa' && (
+                <div className="space-y-3.5 mb-4 p-4 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40">
+                  <div className="text-xs space-y-1">
+                    <strong className="text-amber-900 dark:text-amber-300 block font-bold">
+                      {method === 'telebirr' ? '📱 Telebirr Transfer Instructions' : '🏦 CBE Bank Transfer Instructions'}
+                    </strong>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 m-0">
+                      {method === 'telebirr'
+                        ? 'Transfer ETB ' + amount.toFixed(2) + ' to Telebirr Number: 0911234567 (Ethio Trip). Then upload the payment confirmation receipt/screenshot below.'
+                        : 'Transfer ETB ' + amount.toFixed(2) + ' to CBE Account: 1000123456789 (Ethio Trip Transport). Then upload the deposit slip/screenshot below.'}
+                    </p>
+                  </div>
 
-              {method === 'cbe' && (
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ fontSize: '0.78rem', fontWeight: 800, color: '#334155', display: 'block', marginBottom: '6px' }}>
-                    CBE Birr Mobile / Account Number
-                  </label>
-                  <input
-                    type="text"
-                    value={accountNumber}
-                    onChange={e => setAccountNumber(e.target.value)}
-                    placeholder="1000XXXXXXXXX"
-                    style={{
-                      width: '100%',
-                      padding: '11px 13px',
-                      borderRadius: '10px',
-                      border: '1.5px solid #cbd5e1',
-                      fontSize: '0.9rem',
-                      outline: 'none',
-                      boxSizing: 'border-box',
-                    }}
-                  />
+                  {}
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
+                      Upload Payment Receipt *
+                    </label>
+
+                    {receiptImage ? (
+                      <div className="relative rounded-xl overflow-hidden border-2 border-emerald-500 bg-slate-900 max-h-48 flex items-center justify-center group">
+                        <img src={receiptImage} alt="Uploaded receipt preview" className="max-h-44 object-contain" />
+                        <button
+                          type="button"
+                          onClick={() => setReceiptImage('')}
+                          className="absolute top-2 right-2 bg-rose-600 hover:bg-rose-700 text-white p-1.5 rounded-lg text-xs font-bold cursor-pointer transition"
+                        >
+                          <FaTimes /> Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-emerald-500 rounded-xl cursor-pointer bg-white dark:bg-slate-800 transition">
+                        <FaUpload className="text-2xl text-slate-400 mb-1.5" />
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                          Click to select receipt screenshot/photo
+                        </span>
+                        <span className="text-[10px] text-slate-400 mt-0.5">PNG, JPG up to 5MB</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleReceiptFileChange}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                  </div>
+
+                  {}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
+                        Transaction Reference ID
+                      </label>
+                      <input
+                        type="text"
+                        value={transactionReference}
+                        onChange={e => setTransactionReference(e.target.value)}
+                        placeholder="e.g. TXN9876543210"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
+                        Paid Amount (ETB)
+                      </label>
+                      <input
+                        type="number"
+                        value={submittedAmount}
+                        onChange={e => setSubmittedAmount(e.target.value)}
+                        placeholder={amount.toFixed(2)}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
+                      />
+                    </div>
+                  </div>
+
+                  {}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
+                      Additional Note / Remarks (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={receiptNote}
+                      onChange={e => setReceiptNote(e.target.value)}
+                      placeholder="e.g. Paid from Abyssinia / Telebirr confirmation code"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
+                    />
+                  </div>
                 </div>
               )}
 
               <button
                 type="submit"
                 disabled={isProcessing}
-                style={{
-                  width: '100%',
-                  padding: '14px',
-                  background: 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '12px',
-                  fontWeight: 900,
-                  fontSize: '0.95rem',
-                  cursor: isProcessing ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  boxShadow: '0 6px 18px rgba(37,99,235,0.3)',
-                }}
+                className={`w-full py-3.5 px-4 text-white rounded-xl font-extrabold text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition ${
+                  method === 'chapa'
+                    ? 'bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 shadow-blue-600/25'
+                    : 'bg-gradient-to-r from-emerald-700 to-emerald-600 hover:from-emerald-600 hover:to-emerald-500 shadow-emerald-600/25'
+                }`}
               >
-                <FaLock /> {isProcessing ? 'Connecting…' : method === 'chapa' ? `Pay ETB ${amount.toFixed(2)} with Chapa →` : `Confirm & Pay ETB ${amount.toFixed(2)}`}
+                <FaLock /> {isProcessing ? t('Processing...', 'Processing…') : method === 'chapa' ? `${t('pay with chapa', 'Pay with Chapa')} (ETB ${amount.toFixed(2)}) →` : `Send Receipt to Agent for Approval (ETB ${amount.toFixed(2)})`}
               </button>
             </form>
           )}

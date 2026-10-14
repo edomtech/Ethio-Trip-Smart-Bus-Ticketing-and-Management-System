@@ -2,12 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FaBus, FaUsers, FaUserTie, FaRoute, FaCalendarAlt, FaTicketAlt,
-  FaCreditCard, FaChartBar, FaUser, FaSignOutAlt, FaSearch,
-  FaBell, FaBars, FaArrowUp, FaPlus, FaBuilding, FaExchangeAlt, FaUserCheck,
-  FaCogs, FaClock, FaHeadset, FaTag, FaClipboardList, FaCheckCircle, FaExclamationTriangle, FaTimesCircle, FaSync,
+  FaCreditCard, FaChartBar, FaUser, FaSignOutAlt,
+  FaBars, FaBuilding, FaExchangeAlt, FaTag, FaClipboardList,
   FaChevronDown
 } from 'react-icons/fa';
-import { Line, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement,
   ArcElement, Title, Tooltip, Legend
@@ -17,9 +15,12 @@ import {
   busAPI, routeAPI, scheduleAPI, bookingAPI, userAPI,
   reportAPI, companyAPI, supportAPI, conductorReportAPI, discountAPI
 } from '../../utils/api';
-import { useTranslation } from '../../i18n.jsx';
+import { isRevenueBearing, bookingAmount } from '../../utils/bookingStatus';
+import { useTranslation } from '../../i18n';
 import LanguageSelector from '../../components/LanguageSelector';
 import NotificationPanel from '../../components/NotificationPanel';
+import ThemeToggle from '../../components/ThemeToggle';
+import { toast } from 'react-toastify';
 
 import AdminBuses from './modules/AdminBuses';
 import AdminRoutes from './modules/AdminRoutes';
@@ -42,9 +43,9 @@ const AdminDashboard = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 1024 : false));
 
-  // Data States
   const [company, setCompany] = useState(null);
   const [buses, setBuses] = useState([]);
   const [routes, setRoutes] = useState([]);
@@ -55,16 +56,13 @@ const AdminDashboard = () => {
   const [discounts, setDiscounts] = useState([]);
   const [conductorReports, setConductorReports] = useState([]);
   const [supportTickets, setSupportTickets] = useState([]);
+  const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  // Booking filtering on dashboard overview
-  const [bkDateFilter, setBkDateFilter] = useState('');
-  const [bkStatusFilter, setBkStatusFilter] = useState('all');
 
   const fetchAdminData = async () => {
     setLoading(true);
     try {
-      const [compRes, bList, rList, sList, bkList, uList, aList, dList, crList, spList] = await Promise.all([
+      const [compRes, bList, rList, sList, bkList, uList, aList, dList, crList, spList, overviewRes] = await Promise.all([
         companyAPI.getMyCompany().catch(() => ({ company: null })),
         busAPI.getAll().catch(() => []),
         routeAPI.getAll().catch(() => []),
@@ -75,6 +73,7 @@ const AdminDashboard = () => {
         discountAPI.getAll().catch(() => []),
         conductorReportAPI.getAll().catch(() => []),
         supportAPI.getAll().catch(() => []),
+        reportAPI.getOverview().catch(() => null),
       ]);
 
       setCompany(compRes?.company || user?.companyId);
@@ -87,9 +86,10 @@ const AdminDashboard = () => {
       setDiscounts(Array.isArray(dList) ? dList : []);
       setConductorReports(Array.isArray(crList) ? crList : []);
       setSupportTickets(Array.isArray(spList) ? spList : []);
+      setOverview(overviewRes || null);
     } catch (err) {
       console.error(err);
-      toast.error('Failed to load company admin data');
+      toast.error(t('admin.failedLoadData', 'Failed to load company admin data'));
     } finally {
       setLoading(false);
     }
@@ -101,13 +101,12 @@ const AdminDashboard = () => {
 
   const handleLogout = () => {
     logout();
-    toast.success('Logged out successfully');
+    toast.success(t('auth.logoutSuccess', 'Logged out successfully'));
     navigate('/');
   };
 
-  const companyName = company?.companyName || user?.companyId?.companyName || 'Company Fleet';
+  const companyName = company?.companyName || user?.companyId?.companyName || t('admin.companyFleet', 'Company Fleet');
 
-  // Calculations for Section 7 Summary Cards & Overview
   const todayStr = new Date().toISOString().split('T')[0];
   const todayTrips = schedules.filter(s => s.date === todayStr);
   const activeBuses = buses.filter(b => b.status === 'active');
@@ -115,48 +114,89 @@ const AdminDashboard = () => {
   const confirmedBookings = bookings.filter(b => b.status === 'CONFIRMED' || b.status === 'confirmed');
   const refundRequests = bookings.filter(b => b.refundStatus && b.refundStatus !== 'NONE');
 
-  // Exact 14 Sidebar Items as per Section 7 Specification
+  const totalRevenue = overview?.totalRevenue
+    ?? bookings
+      .filter(b => b.paymentStatus === 'PAID' || b.paymentStatus === 'paid')
+      .reduce((s, b) => s + (Number(b.totalPrice) || Number(b.totalAmount) || 0), 0);
+
+  const passengerStats = React.useMemo(() => {
+    const passengerMap = new Map();
+    let seatsCount = 0;
+
+    bookings.forEach((b) => {
+      const email = b.passenger?.email || (b.user && b.user.email);
+      const phone = b.passenger?.phone || (b.user && b.user.phone);
+      const name = b.passenger?.name || (b.user && b.user.name);
+      const key = (email || phone || b.user?._id || b.user || name || b._id)?.toString().toLowerCase().trim();
+
+      if (key && !passengerMap.has(key)) {
+        passengerMap.set(key, {
+          name: name || 'Passenger',
+          email: email || '',
+          phone: phone || '',
+        });
+      }
+
+      const seats = Array.isArray(b.selectedSeats) && b.selectedSeats.length > 0
+        ? b.selectedSeats.length
+        : Array.isArray(b.outboundLeg?.seats) && b.outboundLeg.seats.length > 0
+          ? b.outboundLeg.seats.length
+          : 1;
+      seatsCount += seats;
+    });
+
+    return {
+      uniquePassengers: passengerMap.size,
+      totalSeats: seatsCount,
+    };
+  }, [bookings]);
+
+  const totalBookingsCount = overview?.totalBookings ?? bookings.length;
+  const totalPassengerCount = passengerStats.uniquePassengers > 0
+    ? passengerStats.uniquePassengers
+    : (overview?.totalPassengers || users.length || passengerStats.totalSeats);
+  const activeBusCount = overview?.activeBuses ?? (activeBuses.length || buses.length);
+  const confirmedBookingCount = overview?.bookingsBreakdown?.confirmed ?? confirmedBookings.length;
+  const todayRevenueCount = overview?.todayRevenue ?? 0;
+
   const navItems = [
-    { id: 'dashboard', label: t('nav.dashboard', 'Dashboard'), icon: <FaChartBar /> },
-    { id: 'agents', label: t('nav.agent', 'Ticket Agents'), icon: <FaUserTie /> },
-    { id: 'passengers', label: t('nav.passenger', 'Passengers'), icon: <FaUsers /> },
-    { id: 'buses', label: t('nav.buses', 'Buses'), icon: <FaBus /> },
-    { id: 'routes', label: t('nav.routes', 'Routes'), icon: <FaRoute /> },
-    { id: 'schedules', label: t('nav.schedules', 'Schedules'), icon: <FaCalendarAlt /> },
-    { id: 'bookings', label: t('nav.bookings', 'Bookings'), icon: <FaTicketAlt /> },
-    { id: 'payments', label: t('common.price', 'Payments'), icon: <FaCreditCard /> },
-    { id: 'refunds', label: t('nav.cancellationRefund', 'Cancellation & Refunds'), icon: <FaExchangeAlt />, badge: refundRequests.filter(r => r.refundStatus === 'PENDING').length },
-    { id: 'discounts', label: 'Discounts', icon: <FaTag /> },
-    { id: 'support', label: t('nav.support', 'Customer Support'), icon: <FaHeadset />, badge: supportTickets.filter(s => s.status === 'OPEN').length },
-    { id: 'conductor_reports', label: 'Conductor Reports', icon: <FaClipboardList />, badge: conductorReports.filter(c => c.status === 'OPEN').length },
-    { id: 'reports', label: t('nav.reports', 'Reports'), icon: <FaChartBar /> },
-    { id: 'profile', label: t('common.profile', 'Profile'), icon: <FaUser /> },
+    { id: 'dashboard', label: t('admin.dashboard', 'Dashboard'), icon: <FaChartBar /> },
+    { id: 'agents', label: t('admin.staffs', 'Staffs'), icon: <FaUserTie /> },
+    { id: 'passengers', label: t('admin.passengers', 'Passengers'), icon: <FaUsers /> },
+    { id: 'buses', label: t('admin.buses', 'Buses'), icon: <FaBus /> },
+    { id: 'routes', label: t('admin.routes', 'Routes'), icon: <FaRoute /> },
+    { id: 'schedules', label: t('admin.schedules', 'Schedules'), icon: <FaCalendarAlt /> },
+    { id: 'bookings', label: t('admin.bookings', 'Bookings'), icon: <FaTicketAlt /> },
+    { id: 'payments', label: t('admin.payments', 'Payments'), icon: <FaCreditCard /> },
+    { id: 'refunds', label: t('admin.refunds', 'Cancellation & Refunds'), icon: <FaExchangeAlt />, badge: refundRequests.filter(r => r.refundStatus === 'PENDING').length },
+    { id: 'discounts', label: t('admin.discounts', 'Discounts'), icon: <FaTag /> },
+    { id: 'conductor_reports', label: t('admin.conductorReports', 'Conductor Reports'), icon: <FaClipboardList />, badge: conductorReports.filter(c => c.status === 'OPEN').length },
+    { id: 'reports', label: t('admin.reports', 'Reports'), icon: <FaChartBar /> },
   ];
 
   return (
-    <div className={`eb-admin-wrap ${!sidebarOpen ? 'sidebar-closed' : ''}`}>
-      <div className={`eb-sidebar-overlay ${sidebarOpen ? 'show-mobile' : ''}`} onClick={() => setSidebarOpen(false)} />
+    <div className="flex h-screen bg-slate-100 font-poppins text-slate-900 overflow-hidden">
+      <div className={`${sidebarOpen ? 'fixed inset-0 bg-black/50 z-[99] backdrop-blur-sm lg:hidden' : 'hidden'}`} onClick={() => setSidebarOpen(false)} />
 
-      {/* Sidebar */}
-      <aside className={`eb-admin-sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
-        <div className="eb-as-brand">
-          <div className="eb-as-brand-icon"><FaBus /></div>
-          <div>
-            <h3>{companyName}</h3>
-            <p>Company Admin Portal</p>
+      <aside className={`bg-gradient-to-b from-[#041f14] via-[#083321] to-[#02120b] text-white flex flex-col fixed top-0 bottom-0 left-0 z-[100] shadow-[4px_0_25px_rgba(0,0,0,0.15)] w-[265px] h-screen overflow-y-auto transition-transform duration-250 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="flex items-center gap-3.5 px-6 pt-6 pb-5 border-b border-white/[0.08] shrink-0">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white flex items-center justify-center text-[1.35rem] shadow-[0_4px_14px_rgba(16,185,129,0.4)] shrink-0"><FaBus /></div>
+          <div className="min-w-0">
+            <h3 className="text-[1.1rem] font-black m-0 text-white tracking-tight truncate">{companyName}</h3>
+            <p className="text-[0.7rem] text-emerald-200 font-medium m-0 mt-0.5">{t('admin.portal', 'Company Admin')}</p>
           </div>
         </div>
 
-        <nav className="eb-as-nav">
+        <nav className="py-4 px-3 flex flex-col gap-1 flex-1 overflow-y-auto">
           {navItems.map(item => (
             <button
               key={item.id}
-              className={`eb-as-nav-item ${activeTab === item.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(item.id)}
+              className={`flex items-center gap-3.5 w-full px-4 py-2.5 rounded-xl border-none text-[0.88rem] font-semibold cursor-pointer text-left transition-all duration-200 ${activeTab === item.id ? 'bg-emerald-600/30 text-white font-extrabold shadow-[0_4px_12px_rgba(0,0,0,0.15)]' : 'bg-transparent text-slate-400 hover:bg-white/[0.07] hover:text-white'}`}
+              onClick={() => { setActiveTab(item.id); if (window.innerWidth < 1024) setSidebarOpen(false); }}
             >
-              {item.icon} <span>{item.label}</span>
+              <span className="shrink-0">{item.icon}</span> <span className="truncate">{item.label}</span>
               {item.badge > 0 && (
-                <span style={{ marginLeft: 'auto', background: '#ef4444', color: '#fff', fontSize: '0.7rem', padding: '2px 6px', borderRadius: 10, fontWeight: 800 }}>
+                <span className="ml-auto bg-red-500 text-white text-[0.7rem] py-0.5 px-1.5 rounded-[10px] font-extrabold shrink-0">
                   {item.badge}
                 </span>
               )}
@@ -164,255 +204,343 @@ const AdminDashboard = () => {
           ))}
         </nav>
 
-        <div className="eb-as-footer">
-          <button className="eb-as-nav-item" onClick={handleLogout} style={{ color: '#fca5a5' }}>
-            <FaSignOutAlt /> <span>Logout</span>
+        <div className="p-4 border-t border-white/[0.08] flex flex-col gap-1.5 shrink-0">
+          <button className="flex items-center gap-3.5 w-full px-4 py-3 rounded-xl border-none bg-transparent text-red-300 hover:text-red-200 hover:bg-white/[0.07] text-[0.9rem] font-semibold cursor-pointer text-left transition-all" onClick={handleLogout}>
+            <FaSignOutAlt /> <span>{t('common.logout', 'Logout')}</span>
           </button>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="eb-admin-main">
-        {/* Top Navigation Bar */}
-        <header className="eb-admin-header">
-          <div className="eb-ah-left">
+      <main className={`flex-1 flex flex-col h-screen overflow-hidden min-w-0 transition-all duration-250 ease-in-out ${sidebarOpen ? 'lg:ml-[265px]' : 'ml-0'}`}>
+        <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-3.5 flex justify-between items-center w-full shrink-0 z-[90] shadow-[0_2px_10px_rgba(0,0,0,0.02)] gap-3 sm:gap-5">
+          <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
             <button
-              className="eb-menu-btn"
+              className="w-[38px] h-[38px] rounded-xl bg-slate-50 border border-slate-200 text-slate-500 flex items-center justify-center text-lg cursor-pointer transition-all hover:bg-emerald-50 hover:border-emerald-600 hover:text-emerald-600 shrink-0"
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              title="Toggle Menu"
+              title={t('common.menu', 'Toggle Menu')}
             >
               <FaBars />
             </button>
-            <div className="eb-topbar-breadcrumb">
-              <span style={{ color: '#10b981', display: 'flex', alignItems: 'center' }}>
+            <div className="flex items-center gap-2 text-[0.85rem] font-bold text-slate-700 truncate">
+              <span className="text-emerald-500 flex items-center shrink-0">
                 {navItems.find((n) => n.id === activeTab)?.icon}
               </span>
-              <span>{navItems.find((n) => n.id === activeTab)?.label}</span>
-            </div>
-            <div className="eb-search-box">
-              <FaSearch style={{ color: '#94a3b8' }} />
-              <input type="text" placeholder={`Search ${companyName} fleet, routes, trips...`} />
+              <span className="truncate">{navItems.find((n) => n.id === activeTab)?.label}</span>
             </div>
           </div>
 
-          <div className="eb-ah-right">
-            <div className="eb-header-date-badge">
-              <FaCalendarAlt style={{ color: '#10b981' }} />
+          <div className="ml-auto flex items-center gap-2 sm:gap-3.5 shrink-0">
+            <div className="hidden xl:flex items-center gap-1.5 text-[0.76rem] text-slate-500 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl font-bold whitespace-nowrap">
+              <FaCalendarAlt className="text-emerald-500" />
               <span>{new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
             </div>
 
-            <div className="eb-company-badge">
-              <FaBuilding /> {companyName}
+            <div className="hidden sm:flex items-center gap-1.5 bg-emerald-100 text-green-800 border border-emerald-200 px-3 py-1 rounded-lg text-[0.75rem] font-extrabold whitespace-nowrap">
+              <FaBuilding /> <span className="max-w-[120px] truncate">{companyName}</span>
             </div>
 
+            <ThemeToggle />
             <LanguageSelector />
 
             <NotificationPanel role="company_admin" onViewAll={() => setActiveTab('support')} />
 
-            <div className="eb-admin-user" onClick={() => setActiveTab('profile')} title="View Profile">
-              <div className="eb-user-avatar">
-                {(user?.name || 'Admin').replace(/\s*\([^)]*\)/g, '').replace(/\b(Passenger|Super Admin|Company Admin|Admin|Ticket Agent|Agent|Conductor|Staff)\b/gi, '').trim()[0]?.toUpperCase() || 'A'}
+            <div className="relative">
+              <div
+                className="flex items-center gap-2 py-1 pl-1 pr-2 sm:pr-3 rounded-full bg-slate-50 border border-slate-200 cursor-pointer transition-all hover:bg-slate-100 hover:border-slate-300"
+                onClick={() => setProfileDropdownOpen(prev => !prev)}
+                title={t('admin.profile', 'View Profile')}
+              >
+                <div className="w-8 sm:w-9 h-8 sm:h-9 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 text-white flex items-center justify-center font-extrabold text-[0.85rem] sm:text-[0.95rem] shadow-[0_2px_8px_rgba(16,185,129,0.3)] shrink-0 overflow-hidden">
+                  {user?.avatar ? <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" /> : ((user?.name || 'Admin').replace(/\s*\([^)]*\)/g, '').replace(/\b(Passenger|Super Admin|Company Admin|Admin|Ticket Agent|Agent|Conductor|Staff)\b/gi, '').trim()[0]?.toUpperCase() || 'A')}
+                </div>
+                <span className="hidden sm:inline text-[0.85rem] font-bold text-slate-900 max-w-[100px] truncate">
+                  {(user?.name || '').replace(/\s*\([^)]*\)/g, '').replace(/\b(Passenger|Super Admin|Company Admin|Admin|Ticket Agent|Agent|Conductor|Staff)\b/gi, '').trim() || 'Admin'}
+                </span>
               </div>
-              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>
-                {(user?.name || '').replace(/\s*\([^)]*\)/g, '').replace(/\b(Passenger|Super Admin|Company Admin|Admin|Ticket Agent|Agent|Conductor|Staff)\b/gi, '').trim() || 'Admin'}
-              </span>
+              {profileDropdownOpen && (
+                <div className="absolute top-12 right-0 w-52 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 z-[1200] overflow-hidden" onMouseLeave={() => setProfileDropdownOpen(false)}>
+                  <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 text-white flex items-center justify-center font-black text-sm shrink-0 overflow-hidden">
+                      {user?.avatar ? <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" /> : ((user?.name || 'Admin')[0]?.toUpperCase() || 'A')}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-900 dark:text-white m-0 truncate">{user?.name || 'Company Admin'}</p>
+                      <p className="text-[10px] text-slate-400 m-0">{t('admin.portal', 'Company Admin')}</p>
+                    </div>
+                  </div>
+                  <div className="p-2">
+                    <button
+                      type="button"
+                      onClick={() => { setActiveTab('profile'); setProfileDropdownOpen(false); }}
+                      className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors cursor-pointer flex items-center gap-2"
+                    >
+                      <FaUser className="text-emerald-600" /> {t('admin.editProfile', 'Edit Profile')}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
 
-        {/* Content Body */}
-        <div className="eb-admin-content">
-          {/* ═══════════════════════════════════════════════════════════════
-              1. DASHBOARD OVERVIEW (Matching Screenshot)
-             ═══════════════════════════════════════════════════════════════ */}
+        <div className="p-4 sm:p-6 lg:p-8 flex-1 overflow-y-auto">
           {activeTab === 'dashboard' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
-              {/* ═══════════════════════════════════════════════════════════════
-                  ROW 1: 4 Large Metric Cards (Real Company Data)
-                  ═══════════════════════════════════════════════════════════════ */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '18px' }}>
-                {/* Card 1: Total Revenue */}
-                <div style={{ background: '#ffffff', borderRadius: '16px', padding: '22px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.02)' }}>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                    Total Revenue
+            <div className="flex flex-col gap-[22px]">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-[18px]">
+                <div className="bg-white rounded-2xl p-[22px] border border-slate-200 shadow-[0_1px_4px_rgba(0,0,0,0.02)]">
+                  <div className="text-[0.72rem] font-extrabold text-slate-500 uppercase tracking-[0.4px]">
+                    {t('admin.totalRevenue', 'Total Revenue')}
                   </div>
-                  <div style={{ fontSize: '1.65rem', fontWeight: 900, color: '#0f172a', margin: '4px 0 2px', lineHeight: 1.2 }}>
-                    Birr {bookings.filter(b => b.status === 'confirmed' || b.paymentStatus === 'paid').reduce((s, b) => s + (Number(b.totalPrice) || Number(b.totalAmount) || 0), 0).toLocaleString()}
+                  <div className="text-[1.65rem] font-black text-slate-900 my-1 mb-0.5 leading-[1.2]">
+                    Birr {Number(totalRevenue).toLocaleString()}
                   </div>
-                  <div style={{ fontSize: '0.74rem', fontWeight: 700, color: bookings.length > 0 ? '#10b981' : '#94a3b8' }}>
-                    {bookings.length > 0 ? 'From confirmed bookings' : 'No revenue yet'}
+                  <div className={`text-[0.74rem] font-bold ${totalRevenue > 0 ? 'text-emerald-500' : 'text-slate-400'}`}>
+                    {totalRevenue > 0
+                      ? `Br ${Number(todayRevenueCount).toLocaleString()} ${t('common.today', 'today')}`
+                      : t('admin.noRevenueYet', 'No revenue yet')}
                   </div>
                 </div>
 
-                {/* Card 2: Total Bookings */}
                 <div
                   onClick={() => setActiveTab('bookings')}
-                  style={{ background: '#ffffff', borderRadius: '16px', padding: '22px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.02)', cursor: 'pointer' }}
+                  className="bg-white rounded-2xl p-[22px] border border-slate-200 shadow-[0_1px_4px_rgba(0,0,0,0.02)] cursor-pointer"
                 >
-                  <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                    Total Bookings
+                  <div className="text-[0.72rem] font-extrabold text-slate-500 uppercase tracking-[0.4px]">
+                    {t('admin.totalBookings', 'Total Bookings')}
                   </div>
-                  <div style={{ fontSize: '1.65rem', fontWeight: 900, color: '#0f172a', margin: '4px 0 2px', lineHeight: 1.2 }}>
-                    {bookings.length.toLocaleString()}
+                  <div className="text-[1.65rem] font-black text-slate-900 my-1 mb-0.5 leading-[1.2]">
+                    {totalBookingsCount.toLocaleString()}
                   </div>
-                  <div style={{ fontSize: '0.74rem', fontWeight: 700, color: bookings.length > 0 ? '#10b981' : '#94a3b8' }}>
-                    {bookings.length > 0 ? `${confirmedBookings.length} confirmed` : 'No bookings yet'}
+                  <div className={`text-[0.74rem] font-bold ${totalBookingsCount > 0 ? 'text-emerald-500' : 'text-slate-400'}`}>
+                    {totalBookingsCount > 0 ? `${confirmedBookingCount} ${t('common.confirmed', 'confirmed')}` : t('admin.noBookingsYet', 'No bookings yet')}
                   </div>
                 </div>
 
-                {/* Card 3: Active Buses */}
                 <div
                   onClick={() => setActiveTab('buses')}
-                  style={{ background: '#ffffff', borderRadius: '16px', padding: '22px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.02)', cursor: 'pointer' }}
+                  className="bg-white rounded-2xl p-[22px] border border-slate-200 shadow-[0_1px_4px_rgba(0,0,0,0.02)] cursor-pointer"
                 >
-                  <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                    Active Buses
+                  <div className="text-[0.72rem] font-extrabold text-slate-500 uppercase tracking-[0.4px]">
+                    {t('admin.activeBuses', 'Active Buses')}
                   </div>
-                  <div style={{ fontSize: '1.65rem', fontWeight: 900, color: '#0f172a', margin: '4px 0 2px', lineHeight: 1.2 }}>
-                    {activeBuses.length || buses.length}
+                  <div className="text-[1.65rem] font-black text-slate-900 my-1 mb-0.5 leading-[1.2]">
+                    {activeBusCount.toLocaleString()}
                   </div>
-                  <div style={{ fontSize: '0.74rem', fontWeight: 700, color: buses.length > 0 ? '#10b981' : '#94a3b8' }}>
-                    {buses.length > 0 ? `${buses.length} total in fleet` : 'No buses added yet'}
+                  <div className={`text-[0.74rem] font-bold ${buses.length > 0 ? 'text-emerald-500' : 'text-slate-400'}`}>
+                    {buses.length > 0 ? `${buses.length} ${t('admin.totalInFleet', 'total in fleet')}` : t('admin.noBusesYet', 'No buses added yet')}
                   </div>
                 </div>
 
-                {/* Card 4: Total Passengers */}
                 <div
                   onClick={() => setActiveTab('passengers')}
-                  style={{ background: '#ffffff', borderRadius: '16px', padding: '22px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.02)', cursor: 'pointer' }}
+                  className="bg-white rounded-2xl p-[22px] border border-slate-200 shadow-[0_1px_4px_rgba(0,0,0,0.02)] cursor-pointer hover:border-emerald-300 hover:shadow-md transition-all"
                 >
-                  <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                    Total Passengers
+                  <div className="text-[0.72rem] font-extrabold text-slate-500 uppercase tracking-[0.4px]">
+                    {t('admin.totalPassengers', 'Total Passengers')}
                   </div>
-                  <div style={{ fontSize: '1.65rem', fontWeight: 900, color: '#0f172a', margin: '4px 0 2px', lineHeight: 1.2 }}>
-                    {users.length.toLocaleString()}
+                  <div className="text-[1.65rem] font-black text-slate-900 my-1 mb-0.5 leading-[1.2]">
+                    {totalPassengerCount.toLocaleString()}
                   </div>
-                  <div style={{ fontSize: '0.74rem', fontWeight: 700, color: users.length > 0 ? '#10b981' : '#94a3b8' }}>
-                    {users.length > 0 ? `${users.length} registered` : 'No passengers yet'}
+                  <div className={`text-[0.74rem] font-bold ${totalPassengerCount > 0 ? 'text-emerald-500' : 'text-slate-400'}`}>
+                    {totalPassengerCount > 0
+                      ? `${passengerStats.totalSeats > totalPassengerCount ? `${passengerStats.totalSeats} seats booked` : `${totalPassengerCount} booked`}`
+                      : t('admin.noPassengersYet', 'No passengers yet')}
                   </div>
                 </div>
               </div>
 
-              {/* ═══════════════════════════════════════════════════════════════
-                  ROW 2: 2 Charts Grid (Revenue Overview / Bookings Overview)
-                  ═══════════════════════════════════════════════════════════════ */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
-                {/* Chart 1: Revenue Overview */}
-                <div style={{ background: '#ffffff', borderRadius: '18px', padding: '22px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                    <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#0f172a' }}>
-                      Revenue Overview
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-[18px]">
+                <div className="bg-white rounded-[18px] p-[22px] border border-slate-200">
+                  <div className="flex justify-between items-center mb-3.5">
+                    <h3 className="m-0 text-[0.98rem] font-extrabold text-slate-900">
+                      {t('admin.revenueOverview', 'Revenue Overview')}
                     </h3>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#475569', background: '#f8fafc', border: '1px solid #e2e8f0', padding: '3px 8px', borderRadius: '6px', fontWeight: 700 }}>
-                      <span>This Year</span>
-                      <FaChevronDown style={{ fontSize: '0.6rem' }} />
+                    <div className="flex items-center gap-1.5 text-[0.75rem] text-slate-600 bg-slate-50 border border-slate-200 py-[3px] px-2 rounded-md font-bold">
+                      <span>{t('common.thisYear', 'This Year')}</span>
+                      <FaChevronDown className="text-[0.6rem]" />
                     </div>
                   </div>
 
-                  {/* SVG Bar Chart */}
-                  <div style={{ width: '100%', height: '170px', position: 'relative' }}>
+                  <div className="w-full h-[170px] relative">
                     {(() => {
-                      const totalRev = bookings
-                        .filter(b => b.status === 'confirmed' || b.paymentStatus === 'paid')
-                        .reduce((sum, b) => sum + (Number(b.totalPrice) || Number(b.totalAmount) || 0), 0);
-                      const monthlyRevBars = [50, 70, 66, 84, 74, 88, 95, 108].map(h =>
-                        totalRev > 0 ? h : 0
-                      );
+                      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                      const now = new Date();
+                      const dynamicMonths = [];
+                      for (let i = 7; i >= 0; i--) {
+                        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                        dynamicMonths.push({
+                          label: monthNames[d.getMonth()],
+                          year: d.getFullYear(),
+                          monthIndex: d.getMonth(),
+                        });
+                      }
+
+                      const monthlyStats = dynamicMonths.map(m => {
+                        const monthBookings = bookings.filter(b => {
+                          const rawD = b.createdAt || b.bookingDate || b.date;
+                          if (!rawD) return false;
+                          const bDate = new Date(rawD);
+                          return bDate.getFullYear() === m.year && bDate.getMonth() === m.monthIndex;
+                        });
+                        const confirmed = monthBookings.filter(isRevenueBearing);
+                        const rev = confirmed.reduce((sum, b) => sum + bookingAmount(b), 0);
+                        return {
+                          label: m.label,
+                          count: monthBookings.length,
+                          revenue: rev,
+                        };
+                      });
+
+                      const maxRev = Math.max(...monthlyStats.map(s => s.revenue), 1000);
+                      const hasRevenue = monthlyStats.some(s => s.revenue > 0);
+                      const xPositions = [50, 92, 134, 176, 218, 260, 302, 344];
+
                       return (
-                        <svg viewBox="0 0 400 130" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
-                          <text x="24" y="10" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">Birr (ETB)</text>
-                          <text x="24" y="22" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">2.5M</text>
-                          <text x="24" y="44" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">2M</text>
-                          <text x="24" y="66" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">1.5M</text>
-                          <text x="24" y="88" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">1M</text>
-                          <text x="24" y="110" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">500K</text>
-                          <text x="24" y="125" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">0</text>
-                          <line x1="32" y1="20" x2="390" y2="20" stroke="#f1f5f9" strokeDasharray="3 3" />
-                          <line x1="32" y1="42" x2="390" y2="42" stroke="#f1f5f9" strokeDasharray="3 3" />
-                          <line x1="32" y1="64" x2="390" y2="64" stroke="#f1f5f9" strokeDasharray="3 3" />
-                          <line x1="32" y1="86" x2="390" y2="86" stroke="#f1f5f9" strokeDasharray="3 3" />
-                          <line x1="32" y1="108" x2="390" y2="108" stroke="#f1f5f9" strokeDasharray="3 3" />
-                          {[50, 92, 134, 176, 218, 260, 302, 344].map((x, i) => (
-                            <rect key={i} x={x} y={125 - monthlyRevBars[i]} width="18" height={monthlyRevBars[i]} rx="3" fill={totalRev > 0 ? '#3b82f6' : '#e2e8f0'} />
-                          ))}
-                        </svg>
+                        <>
+                          <svg viewBox="0 0 400 130" className="w-full h-full overflow-visible">
+                            <text x="24" y="10" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">Birr (ETB)</text>
+                            <text x="24" y="22" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">{Math.round(maxRev).toLocaleString()}</text>
+                            <text x="24" y="48" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">{Math.round(maxRev * 0.75).toLocaleString()}</text>
+                            <text x="24" y="74" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">{Math.round(maxRev * 0.5).toLocaleString()}</text>
+                            <text x="24" y="100" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">{Math.round(maxRev * 0.25).toLocaleString()}</text>
+                            <text x="24" y="125" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">0</text>
+                            <line x1="32" y1="20" x2="390" y2="20" stroke="#f1f5f9" strokeDasharray="3 3" />
+                            <line x1="32" y1="46" x2="390" y2="46" stroke="#f1f5f9" strokeDasharray="3 3" />
+                            <line x1="32" y1="72" x2="390" y2="72" stroke="#f1f5f9" strokeDasharray="3 3" />
+                            <line x1="32" y1="98" x2="390" y2="98" stroke="#f1f5f9" strokeDasharray="3 3" />
+                            <line x1="32" y1="125" x2="390" y2="125" stroke="#f1f5f9" />
+                            {monthlyStats.map((s, i) => {
+                              const barHeight = hasRevenue && s.revenue > 0
+                                ? Math.max(8, Math.round((s.revenue / maxRev) * 100))
+                                : (bookings.length > 0 ? [35, 55, 45, 68, 60, 75, 85, 95][i] : 4);
+                              return (
+                                <rect
+                                  key={i}
+                                  x={xPositions[i]}
+                                  y={125 - barHeight}
+                                  width="18"
+                                  height={barHeight}
+                                  rx="3"
+                                  fill={hasRevenue || bookings.length > 0 ? '#3b82f6' : '#e2e8f0'}
+                                >
+                                  <title>{s.label}: Birr {s.revenue.toLocaleString()}</title>
+                                </rect>
+                              );
+                            })}
+                          </svg>
+                          <div className="flex justify-between pl-12 pr-[22px] mt-1 text-[0.7rem] text-slate-400 font-semibold">
+                            {monthlyStats.map((s, i) => (
+                              <span key={i}>{s.label}</span>
+                            ))}
+                          </div>
+                        </>
                       );
                     })()}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '48px', paddingRight: '22px', marginTop: '4px', fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>
-                      <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span>
-                    </div>
                   </div>
                 </div>
 
-                {/* Chart 2: Bookings Overview */}
-                <div style={{ background: '#ffffff', borderRadius: '18px', padding: '22px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                    <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#0f172a' }}>
-                      Bookings Overview
+                <div className="bg-white rounded-[18px] p-[22px] border border-slate-200">
+                  <div className="flex justify-between items-center mb-3.5">
+                    <h3 className="m-0 text-[0.98rem] font-extrabold text-slate-900">
+                      {t('admin.bookingsOverview', 'Bookings Overview')}
                     </h3>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#10b981', fontWeight: 700 }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
-                      <span>Bookings</span>
+                    <div className="flex items-center gap-1.5 text-[0.75rem] text-emerald-500 font-bold">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      <span>{t('admin.bookings', 'Bookings')}</span>
                     </div>
                   </div>
 
-                  <div style={{ width: '100%', height: '170px', position: 'relative' }}>
-                    <svg viewBox="0 0 400 130" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
-                      <text x="24" y="20" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">800</text>
-                      <text x="24" y="50" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">600</text>
-                      <text x="24" y="80" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">400</text>
-                      <text x="24" y="105" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">200</text>
-                      <text x="24" y="125" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">0</text>
-                      <line x1="32" y1="18" x2="390" y2="18" stroke="#f1f5f9" strokeDasharray="3 3" />
-                      <line x1="32" y1="48" x2="390" y2="48" stroke="#f1f5f9" strokeDasharray="3 3" />
-                      <line x1="32" y1="78" x2="390" y2="78" stroke="#f1f5f9" strokeDasharray="3 3" />
-                      <line x1="32" y1="103" x2="390" y2="103" stroke="#f1f5f9" strokeDasharray="3 3" />
-                      {bookings.length > 0 ? (
+                  <div className="w-full h-[170px] relative">
+                    {(() => {
+                      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                      const now = new Date();
+                      const dynamicMonths = [];
+                      for (let i = 7; i >= 0; i--) {
+                        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                        dynamicMonths.push({
+                          label: monthNames[d.getMonth()],
+                          year: d.getFullYear(),
+                          monthIndex: d.getMonth(),
+                        });
+                      }
+
+                      const monthlyStats = dynamicMonths.map(m => {
+                        const monthBookings = bookings.filter(b => {
+                          const rawD = b.createdAt || b.bookingDate || b.date;
+                          if (!rawD) return false;
+                          const bDate = new Date(rawD);
+                          return bDate.getFullYear() === m.year && bDate.getMonth() === m.monthIndex;
+                        });
+                        return {
+                          label: m.label,
+                          count: monthBookings.length,
+                        };
+                      });
+
+                      const maxCount = Math.max(...monthlyStats.map(s => s.count), 10);
+                      const hasBookings = monthlyStats.some(s => s.count > 0);
+                      const xPositions = [50, 92, 134, 176, 218, 260, 302, 344];
+
+                      const points = monthlyStats.map((s, i) => {
+                        const x = xPositions[i];
+                        const cy = hasBookings && s.count > 0
+                          ? 125 - Math.max(8, Math.round((s.count / maxCount) * 100))
+                          : (bookings.length > 0 ? [105, 90, 102, 82, 88, 65, 58, 30][i] : 125);
+                        return [x, cy];
+                      });
+
+                      const polyPoints = points.map(p => `${p[0]},${p[1]}`).join(' ');
+
+                      return (
                         <>
-                          <polyline
-                            points="50,105 92,90 134,102 176,82 218,88 260,65 302,58 360,30"
-                            fill="none"
-                            stroke="#10b981"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                          {[[50,105],[92,90],[134,102],[176,82],[218,88],[260,65],[302,58],[360,30]].map(([cx,cy],i) => (
-                            <circle key={i} cx={cx} cy={cy} r="3.5" fill="#10b981" stroke="#ffffff" strokeWidth="1.5" />
-                          ))}
+                          <svg viewBox="0 0 400 130" className="w-full h-full overflow-visible">
+                            <text x="24" y="20" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">{maxCount}</text>
+                            <text x="24" y="50" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">{Math.round(maxCount * 0.75)}</text>
+                            <text x="24" y="80" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">{Math.round(maxCount * 0.5)}</text>
+                            <text x="24" y="105" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">{Math.round(maxCount * 0.25)}</text>
+                            <text x="24" y="125" fontSize="7" fill="#94a3b8" fontWeight="600" textAnchor="end">0</text>
+                            <line x1="32" y1="18" x2="390" y2="18" stroke="#f1f5f9" strokeDasharray="3 3" />
+                            <line x1="32" y1="48" x2="390" y2="48" stroke="#f1f5f9" strokeDasharray="3 3" />
+                            <line x1="32" y1="78" x2="390" y2="78" stroke="#f1f5f9" strokeDasharray="3 3" />
+                            <line x1="32" y1="103" x2="390" y2="103" stroke="#f1f5f9" strokeDasharray="3 3" />
+                            <polyline
+                              points={polyPoints}
+                              fill="none"
+                              stroke="#10b981"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            {points.map(([cx, cy], i) => (
+                              <circle key={i} cx={cx} cy={cy} r="3.5" fill="#10b981" stroke="#ffffff" strokeWidth="1.5">
+                                <title>{monthlyStats[i].label}: {monthlyStats[i].count} bookings</title>
+                              </circle>
+                            ))}
+                          </svg>
+                          <div className="flex justify-between pl-10 pr-5 mt-1 text-[0.7rem] text-slate-400 font-semibold">
+                            {monthlyStats.map((s, i) => (
+                              <span key={i}>{s.label}</span>
+                            ))}
+                          </div>
                         </>
-                      ) : (
-                        <>
-                          <line x1="30" y1="125" x2="390" y2="125" stroke="#10b981" strokeWidth="2" strokeDasharray="4 4" />
-                          {[50,92,134,176,218,260,302,360].map((cx,i) => (
-                            <circle key={i} cx={cx} cy={125} r="3" fill="#10b981" />
-                          ))}
-                        </>
-                      )}
-                    </svg>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '40px', paddingRight: '20px', marginTop: '4px', fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>
-                      <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span>
-                    </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
 
-              {/* ═══════════════════════════════════════════════════════════════
-                  ROW 3: 2 Tables (Top Performing Routes / Recent Bookings)
-                  ═══════════════════════════════════════════════════════════════ */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
-                {/* Left: Top Performing Routes */}
-                <div style={{ background: '#ffffff', borderRadius: '18px', padding: '22px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#0f172a' }}>
-                      Top Performing Routes
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-[18px]">
+                <div className="bg-white rounded-[18px] p-[22px] border border-slate-200">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="m-0 text-[0.98rem] font-extrabold text-slate-900">
+                      {t('admin.topRoutes', 'Top Performing Routes')}
                     </h3>
                     <button
                       type="button"
                       onClick={() => setActiveTab('routes')}
-                      style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer' }}
+                      className="bg-transparent border-none text-blue-600 text-[0.78rem] font-bold cursor-pointer hover:underline"
                     >
-                      View All
+                      {t('common.viewAll', 'View All')}
                     </button>
                   </div>
 
@@ -432,19 +560,19 @@ const AdminDashboard = () => {
 
                     if (topRoutes.length === 0) {
                       return (
-                        <div style={{ textAlign: 'center', padding: '24px 0', color: '#94a3b8', fontSize: '0.8rem' }}>
-                          No booking data yet. Routes will appear here as bookings are made.
+                        <div className="text-center py-6 text-slate-400 text-[0.8rem]">
+                          {t('admin.noBookingDataYet', 'No booking data yet. Routes will appear here as bookings are made.')}
                         </div>
                       );
                     }
                     return (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      <div className="flex flex-col gap-3.5">
                         {topRoutes.map((r, i) => (
-                          <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem' }}>
-                            <span style={{ fontWeight: 700, color: '#0f172a' }}>{r.from} → {r.to}</span>
-                            <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
-                              <span style={{ color: '#64748b', fontSize: '0.78rem' }}>{r.count} Bookings</span>
-                              <strong style={{ color: '#0f172a', minWidth: '85px', textAlign: 'right' }}>
+                          <div key={i} className="flex items-center justify-between text-[0.82rem]">
+                            <span className="font-bold text-slate-900">{r.from} → {r.to}</span>
+                            <div className="flex gap-6 items-center">
+                              <span className="text-slate-500 text-[0.78rem]">{r.count} {t('admin.bookings', 'Bookings')}</span>
+                              <strong className="text-slate-900 min-w-[85px] text-right">
                                 Birr {r.revenue.toLocaleString()}
                               </strong>
                             </div>
@@ -455,57 +583,58 @@ const AdminDashboard = () => {
                   })()}
                 </div>
 
-                {/* Right: Recent Bookings */}
-                <div style={{ background: '#ffffff', borderRadius: '18px', padding: '22px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#0f172a' }}>
-                      Recent Bookings
+                <div className="bg-white rounded-[18px] p-[22px] border border-slate-200">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="m-0 text-[0.98rem] font-extrabold text-slate-900">
+                      {t('admin.recentBookings', 'Recent Bookings Activity')}
                     </h3>
                     <button
                       type="button"
                       onClick={() => setActiveTab('bookings')}
-                      style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer' }}
+                      className="bg-transparent border-none text-blue-600 text-[0.78rem] font-bold cursor-pointer hover:underline"
                     >
-                      View All
+                      {t('common.viewAll', 'View All')}
                     </button>
                   </div>
 
                   {bookings.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '24px 0', color: '#94a3b8', fontSize: '0.8rem' }}>
-                      No bookings recorded yet for your company.
+                    <div className="text-center py-6 text-slate-400 text-[0.8rem]">
+                      {t('admin.noBookingsRecorded', 'No bookings recorded yet for your company.')}
                     </div>
                   ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                    <table className="w-full border-collapse text-[0.78rem]">
                       <thead>
-                        <tr style={{ textAlign: 'left', color: '#64748b', borderBottom: '1px solid #f1f5f9' }}>
-                          <th style={{ paddingBottom: '8px', fontWeight: 600 }}>Booking ID</th>
-                          <th style={{ paddingBottom: '8px', fontWeight: 600 }}>Route</th>
-                          <th style={{ paddingBottom: '8px', fontWeight: 600 }}>Date</th>
-                          <th style={{ paddingBottom: '8px', fontWeight: 600 }}>Amount</th>
-                          <th style={{ paddingBottom: '8px', fontWeight: 600 }}>Status</th>
+                        <tr className="text-left text-slate-500 border-b border-slate-100">
+                          <th className="pb-2 font-semibold">{t('ticket.ticketNo', 'Booking ID')}</th>
+                          <th className="pb-2 font-semibold">{t('ticket.route', 'Route')}</th>
+                          <th className="pb-2 font-semibold">{t('common.date', 'Date')}</th>
+                          <th className="pb-2 font-semibold">{t('common.amount', 'Amount')}</th>
+                          <th className="pb-2 font-semibold">{t('common.status', 'Status')}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {bookings.slice(0, 4).map((b) => (
-                          <tr key={b._id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                            <td style={{ padding: '8px 0', fontWeight: 700, color: '#0f172a' }}>
+                          <tr key={b._id} className="border-b border-slate-50">
+                            <td className="py-2 font-bold text-slate-900">
                               {b.ticketNumber || 'BK-' + b._id?.slice(-6).toUpperCase()}
                             </td>
-                            <td style={{ padding: '8px 0', color: '#334155' }}>
+                            <td className="py-2 text-slate-700">
                               {b.schedule?.route?.from || 'Origin'} → {b.schedule?.route?.to || 'Destination'}
                             </td>
-                            <td style={{ padding: '8px 0', color: '#64748b' }}>
+                            <td className="py-2 text-slate-500">
                               {b.schedule?.date || (b.createdAt && b.createdAt.split('T')[0]) || 'Recent'}
                             </td>
-                            <td style={{ padding: '8px 0', fontWeight: 700, color: '#0f172a' }}>
+                            <td className="py-2 font-bold text-slate-900">
                               Birr {(Number(b.totalPrice) || Number(b.totalAmount) || 0).toLocaleString()}
                             </td>
-                            <td style={{ padding: '8px 0' }}>
-                              <span style={{
-                                background: b.status === 'confirmed' || b.status === 'CONFIRMED' ? '#ecfdf5' : b.status === 'cancelled' || b.status === 'CANCELLED' ? '#fef2f2' : '#fffbeb',
-                                color: b.status === 'confirmed' || b.status === 'CONFIRMED' ? '#10b981' : b.status === 'cancelled' || b.status === 'CANCELLED' ? '#ef4444' : '#d97706',
-                                fontSize: '0.68rem', fontWeight: 700, padding: '2px 7px', borderRadius: '50px'
-                              }}>
+                            <td className="py-2">
+                              <span className={`text-[0.68rem] font-bold py-0.5 px-[7px] rounded-full ${
+                                b.status === 'confirmed' || b.status === 'CONFIRMED'
+                                  ? 'bg-emerald-50 text-emerald-500'
+                                  : b.status === 'cancelled' || b.status === 'CANCELLED'
+                                  ? 'bg-red-50 text-red-500'
+                                  : 'bg-amber-50 text-amber-600'
+                              }`}>
                                 {b.status}
                               </span>
                             </td>
@@ -519,7 +648,6 @@ const AdminDashboard = () => {
             </div>
           )}
 
-          {/* Sub-module Views */}
           {activeTab === 'agents' && <AdminAgents />}
           {activeTab === 'passengers' && <AdminPassengers />}
           {activeTab === 'buses' && <AdminBuses />}
@@ -529,7 +657,6 @@ const AdminDashboard = () => {
           {activeTab === 'payments' && <AdminPayments />}
           {activeTab === 'refunds' && <CompanyRefunds />}
           {activeTab === 'discounts' && <AdminDiscounts />}
-          {activeTab === 'support' && <CustomerSupport />}
           {activeTab === 'conductor_reports' && <AdminConductorReports />}
           {activeTab === 'reports' && <GenerateReports />}
           {activeTab === 'profile' && <AdminProfile />}

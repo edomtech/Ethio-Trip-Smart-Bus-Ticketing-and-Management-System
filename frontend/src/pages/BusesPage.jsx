@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaBus, FaSearch, FaShieldAlt, FaStar, FaUser, FaCheckCircle, FaFilter } from 'react-icons/fa';
+import { FaBus, FaSearch, FaFilter } from 'react-icons/fa';
 import MainLayout from '../layouts/MainLayout';
 import { busAPI } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
-import { useTranslation } from '../i18n.jsx';
-import { toast } from 'react-toastify';
+import { useTranslation } from '../i18n';
 
-// Map bus company → local uploaded bus image
 const COMPANY_BUS_IMAGES = {
   'Selam Bus Line': '/images/selam_bus.png',
   'Selam Bus': '/images/selam_bus.png',
-  'Ethio Bus': '/images/ethio_bus.png',
+  'Sky Bus': '/images/sky_bus_real.webp',
+  'Sky Bus Line': '/images/sky_bus_real.webp',
   'Zemen Bus': '/images/zemen_bus.png',
   'Zemen Express': '/images/zemen_bus.png',
   'Abay Bus': '/images/abay_bus.png',
@@ -34,12 +33,12 @@ const FALLBACK_BUSES = [
   },
   {
     _id: 'b2',
-    busNumber: 'Ethio Express Liner',
+    busNumber: 'Sky Express Coach',
     plateNumber: '3-B20202-ET',
     type: 'Luxury',
     capacity: 45,
-    image: '/images/ethio_bus.png',
-    companyId: { companyName: 'Ethio Bus', rating: 4.7, logo: '/logos/ethio_bus.png' },
+    image: '/images/sky_bus_real.webp',
+    companyId: { companyName: 'Sky Bus Line', rating: 4.8, logo: '/logos/sky_bus.png' },
     status: 'active',
     features: ['Air Conditioning', 'WiFi', 'USB Charging', 'Water'],
   },
@@ -79,10 +78,10 @@ const FALLBACK_BUSES = [
 ];
 
 const TYPE_COLORS = {
-  VIP:      { bg: '#fef3c7', color: '#d97706' },
-  Luxury:   { bg: '#ede9fe', color: '#7c3aed' },
-  Executive:{ bg: '#e0e7ff', color: '#4338ca' },
-  Standard: { bg: '#f1f5f9', color: '#475569' },
+  VIP:       'bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300',
+  Luxury:    'bg-purple-100 text-purple-700 dark:bg-purple-950/70 dark:text-purple-300',
+  Executive: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300',
+  Standard:  'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
 };
 
 const BusesPage = () => {
@@ -110,10 +109,8 @@ const BusesPage = () => {
     loadBuses();
   }, []);
 
-  // Display all active buses without arbitrarily hiding multiple fleet vehicles per company
   const displayBuses = buses && buses.length > 0 ? buses : FALLBACK_BUSES;
 
-  // Derive companies list for filter
   const companies = [...new Set(displayBuses.map(b => b.companyId?.companyName).filter(Boolean))];
 
   const filtered = displayBuses.filter(b => {
@@ -127,7 +124,6 @@ const BusesPage = () => {
   });
 
   const getBusImage = (bus) => {
-    // If the bus has an uploaded image (Cloudinary or Base64 or URL), prioritize it!
     if (bus.image && bus.image.trim()) {
       return bus.image;
     }
@@ -137,7 +133,8 @@ const BusesPage = () => {
     }
     const searchStr = `${bus.busNumber || ''} ${compName || ''}`.toLowerCase();
     if (searchStr.includes('selam')) return '/images/selam_bus.png';
-    if (searchStr.includes('ethio')) return '/images/ethio_bus.png';
+    if (searchStr.includes('sky')) return '/images/sky_bus_real.webp';
+    if (searchStr.includes('ethio')) return '/images/sky_bus_real.webp';
     if (searchStr.includes('zemen')) return '/images/zemen_bus.png';
     if (searchStr.includes('abay')) return '/images/abay_bus.png';
     if (searchStr.includes('habesha')) return '/images/habesha_bus.png';
@@ -145,125 +142,116 @@ const BusesPage = () => {
   };
 
   const handleBook = (bus) => {
-    if (!user) { toast.info('Please log in to book a seat'); navigate('/login'); }
+    if (!user) { navigate('/login'); }
     else navigate('/passenger/dashboard');
   };
 
   return (
     <MainLayout>
-      <div className="buses-page-container">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 font-poppins text-slate-900 dark:text-slate-100 transition-colors duration-200">
 
-        {/* ── Hero ── */}
-        <section className="buses-hero">
-          <div className="buses-hero-content">
-            <div className="buses-badge"><FaBus /> {t('home.pill', 'Inter-City Fleet Directory')}</div>
-            <h1>{t('buses.title', 'Ethiopian Bus Fleet & Operators')}</h1>
-            <p>{t('buses.subtitle', 'Browse luxury coaches, executive buses, and scheduled express vehicles across participating transport providers.')}</p>
+        {}
+        <div className="flex items-center gap-3.5 mb-6 pb-4 border-b border-slate-200 dark:border-slate-800">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl shrink-0">
+            <FaBus />
           </div>
-        </section>
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white m-0">
+              {t('buses.title', 'Ethiopian Bus Fleet & Operators')}
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 m-0 mt-0.5">
+              {t('buses.subtitle', 'Browse luxury coaches, executive buses, and scheduled express vehicles across participating transport providers.')}
+            </p>
+          </div>
+        </div>
 
-        {/* ── Filters ── */}
-        <section className="buses-filter-bar">
-          <div className="buses-search-box">
-            <FaSearch className="search-icon" />
+        {}
+        <section className="flex flex-col md:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm mb-8">
+          <div className="relative flex items-center w-full md:w-80">
+            <FaSearch className="absolute left-3.5 text-slate-400 text-xs pointer-events-none" />
             <input
               type="text"
-              placeholder={t('common.search', 'Search bus name or operator...')}
+              placeholder={t('buses.searchPlaceholder', 'Search bus name or operator...')}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
             />
           </div>
 
-          <div className="buses-filter-group">
-            <div className="filter-item">
-              <label><FaFilter /> Type</label>
-              <select value={selectedType} onChange={e => setSelectedType(e.target.value)}>
-                <option value="all">All Types</option>
-                <option value="VIP">VIP</option>
-                <option value="Luxury">Luxury</option>
-                <option value="Executive">Executive</option>
-                <option value="Standard">Standard</option>
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+              <FaFilter className="text-emerald-600" />
+              <span>{t('buses.type', 'Type')}</span>
+              <select
+                value={selectedType}
+                onChange={e => setSelectedType(e.target.value)}
+                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-900 dark:text-white outline-none cursor-pointer"
+              >
+                <option value="all" className="dark:bg-slate-900">{t('buses.allTypes', 'All Types')}</option>
+                <option value="VIP" className="dark:bg-slate-900">{t('buses.vip', 'VIP')}</option>
+                <option value="Luxury" className="dark:bg-slate-900">{t('buses.luxury', 'Luxury')}</option>
+                <option value="Executive" className="dark:bg-slate-900">{t('buses.executive', 'Executive')}</option>
+                <option value="Standard" className="dark:bg-slate-900">{t('buses.standard', 'Standard')}</option>
               </select>
             </div>
 
-            <div className="filter-item">
-              <label><FaBus /> Operator</label>
-              <select value={selectedCompany} onChange={e => setSelectedCompany(e.target.value)}>
-                <option value="all">All Companies</option>
-                {companies.map(c => <option key={c} value={c}>{c}</option>)}
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+              <FaBus className="text-emerald-600" />
+              <span>{t('buses.operator', 'Operator')}</span>
+              <select
+                value={selectedCompany}
+                onChange={e => setSelectedCompany(e.target.value)}
+                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-900 dark:text-white outline-none cursor-pointer"
+              >
+                <option value="all" className="dark:bg-slate-900">{t('buses.allCompanies', 'All Companies')}</option>
+                {companies.map(c => <option key={c} value={c} className="dark:bg-slate-900">{c}</option>)}
               </select>
             </div>
           </div>
         </section>
 
-        {/* ── Grid ── */}
-        <section className="buses-grid-section">
+        {}
+        <section>
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '60px', color: '#64748b', fontSize: '1rem' }}>
-              <FaBus style={{ fontSize: 48, marginBottom: 12, opacity: 0.3 }} />
-              <p>Loading bus fleet...</p>
+            <div className="text-center py-16 text-slate-400">
+              <FaBus className="text-5xl mx-auto mb-3 opacity-30 animate-pulse" />
+              <p className="text-sm font-semibold">{t('buses.loadingFleet', 'Loading bus fleet...')}</p>
             </div>
           ) : filtered.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>
-              No buses found matching your search.
+            <div className="text-center py-16 text-slate-400">
+              <p className="text-sm font-semibold">{t('buses.noBusesFound', 'No buses found matching your search.')}</p>
             </div>
           ) : (
-            <div className="buses-grid">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {filtered.map(bus => {
                 const typeStyle = TYPE_COLORS[bus.type] || TYPE_COLORS.Standard;
                 return (
-                  <div key={bus._id} className="bus-card">
-
-                    {/* ── Bus Image ── */}
-                    <div className="bus-card-image-wrap">
+                  <div
+                    key={bus._id}
+                    className="bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between"
+                  >
+                    {}
+                    <div className="relative h-52 bg-slate-900 overflow-hidden">
                       <img
                         src={getBusImage(bus)}
                         alt={`${bus.companyId?.companyName || 'Bus'} – ${bus.busNumber}`}
-                        className="bus-card-image"
+                        className="w-full h-full object-cover"
                         onError={e => { e.target.src = '/images/selam_bus.png'; }}
                       />
                       <span
-                        className="bus-type-badge"
-                        style={{ background: typeStyle.bg, color: typeStyle.color }}
+                        className={`absolute top-3 right-3 text-xs font-extrabold px-2.5 py-1 rounded-full shadow-md ${typeStyle || 'bg-slate-100 text-slate-700'}`}
                       >
-                        {bus.type}
+                        {t(`buses.${bus.type?.toLowerCase()}`, bus.type)}
                       </span>
                     </div>
 
-                    {/* ── Card Body ── */}
-                    <div className="bus-card-body">
-                      <div className="bus-company-tag">
-                        <FaBus className="bus-icon" />
+                    {}
+                    <div className="p-5">
+                      <div className="inline-flex items-center gap-1.5 text-[11px] font-extrabold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-lg mb-3">
+                        <FaBus />
                         <span>{bus.companyId?.companyName || 'Inter-City Operator'}</span>
                       </div>
-
-                      <h3>{bus.busNumber}</h3>
-                      {bus.plateNumber && (
-                        <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 700, marginTop: '-6px', marginBottom: '8px' }}>
-                          Plate: <span style={{ color: '#0f172a', letterSpacing: '0.5px' }}>{bus.plateNumber}</span>
-                        </div>
-                      )}
-
-                      <div className="bus-meta-row">
-                        <span><FaUser /> {bus.capacity} Seats</span>
-                        <span><FaShieldAlt style={{ color: '#16a34a' }} /> Verified</span>
-                      </div>
-
-                      <div className="bus-features-tags">
-                        {(bus.features || bus.amenities || ['Air Conditioning', 'Reclining Seats']).slice(0, 4).map((f, i) => (
-                          <span key={i} className="feature-pill"><FaCheckCircle /> {f}</span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* ── Card Footer ── */}
-                    <div className="bus-card-footer">
-                      <div className="bus-rating">
-                        <FaStar style={{ color: '#eab308' }} /> {bus.companyId?.rating || 4.8} / 5.0
-                      </div>
-                      <button className="btn-book-bus" onClick={() => handleBook(bus)}>
-                        Book This Bus
-                      </button>
+                      <h3 className="text-base font-black text-slate-900 dark:text-white m-0">{bus.busNumber}</h3>
                     </div>
 
                   </div>

@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { conductorReportAPI } from '../../../utils/api';
 import { toast } from 'react-toastify';
-import {
-  FaClipboardList, FaCheckCircle, FaHourglassHalf, FaTimesCircle,
-  FaSearch, FaFilter, FaBus, FaUser, FaTicketAlt, FaRoute, FaSync
-} from 'react-icons/fa';
 import DataTable from '../../../components/DataTable';
-import AdminPageHeader from '../../../components/AdminPageHeader';
+import { useTranslation } from '../../../i18n';
 
 const AdminConductorReports = () => {
+  const { t } = useTranslation();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -22,9 +19,8 @@ const AdminConductorReports = () => {
     try {
       const data = await conductorReportAPI.getAll();
       setReports(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Error fetching conductor reports:', err);
-      toast.error('Failed to load conductor problem reports');
+    } catch {
+      toast.error(t('conductor.reportLoadFailed', 'Failed to load conductor problem reports'));
     } finally {
       setLoading(false);
     }
@@ -38,12 +34,12 @@ const AdminConductorReports = () => {
     setUpdating(true);
     try {
       await conductorReportAPI.updateStatus(reportId, newStatus, resolutionNotes.trim() || undefined);
-      toast.success(`Report status updated to ${newStatus}`);
+      toast.success(`${t('conductor.reportStatusUpdated', 'Report status updated to')} ${newStatus}`);
       setSelectedReport(null);
       setResolutionNotes('');
       fetchReports();
     } catch (err) {
-      toast.error(err.message || 'Failed to update report status');
+      toast.error(err.message || t('conductor.reportUpdateFailed', 'Failed to update report status'));
     } finally {
       setUpdating(false);
     }
@@ -62,122 +58,84 @@ const AdminConductorReports = () => {
     return matchStatus && matchSearch;
   });
 
-  const newCount = reports.filter((r) => r.status === 'OPEN').length;
-  const underReviewCount = reports.filter((r) => r.status === 'UNDER_REVIEW').length;
-  const resolvedCount = reports.filter((r) => r.status === 'RESOLVED' || r.status === 'CLOSED').length;
-
   return (
     <div>
-      <AdminPageHeader
-        category="FIELD OPERATIONS & LOGS"
-        title="Conductor Problem Reports"
-        icon={<FaClipboardList />}
-        subtitle="Review and resolve operational anomalies, fare irregularities, ticket disputes, and passenger incidents reported by active conductors."
-        stats={[
-          { label: 'Total Reports', value: reports.length, color: '#0284c7' },
-          { label: 'New Issues', value: newCount, color: '#dc2626' },
-          { label: 'Under Review', value: underReviewCount, color: '#d97706' },
-          { label: 'Resolved / Closed', value: resolvedCount, color: '#16a34a' },
-        ]}
-        actions={
-          <button onClick={fetchReports} className="eb-btn-secondary-header">
-            <FaSync className={loading ? 'fa-spin' : ''} /> Refresh Logs
-          </button>
-        }
-      />
-
-      {/* Reports Table */}
       <DataTable
         columns={[
           {
-            header: 'Date / Time',
+            header: t('conductor.dateTime', 'Date / Time'),
             render: (r) => (
-              <span style={{ fontSize: '0.8rem', color: '#64748b', whiteSpace: 'nowrap' }}>
+              <span className="text-[0.8rem] text-slate-500 whitespace-nowrap">
                 {new Date(r.createdAt).toLocaleString()}
               </span>
             ),
           },
           {
-            header: 'Conductor',
+            header: t('conductor.conductor', 'Conductor'),
             render: (r) => (
               <div>
-                <div style={{ fontWeight: 700, color: '#0f172a' }}>{r.conductorId?.name || 'Conductor'}</div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{r.conductorId?.phone || r.conductorId?.email}</div>
+                <div className="font-bold text-slate-900">{r.conductorId?.name || t('conductor.conductor', 'Conductor')}</div>
+                <div className="text-xs text-slate-500">{r.conductorId?.phone || r.conductorId?.email}</div>
               </div>
             ),
           },
           {
-            header: 'Category & Trip',
+            header: t('conductor.categoryTrip', 'Category & Trip'),
             render: (r) => (
               <div>
-                <div style={{ fontWeight: 800, color: '#2563eb' }}>{r.category}</div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                  {r.tripId ? `Trip: ${r.tripId}` : ''} {r.busId?.busNumber ? `• Bus: ${r.busId.busNumber}` : ''}
+                <div className="font-extrabold text-blue-600">{r.category}</div>
+                <div className="text-xs text-slate-500">
+                  {r.tripId ? `${t('conductor.trip', 'Trip')}: ${r.tripId}` : ''} {r.busId?.busNumber ? `• ${t('admin.bus', 'Bus')}: ${r.busId.busNumber}` : ''}
                 </div>
               </div>
             ),
           },
           {
-            header: 'Passenger / Ticket',
+            header: t('conductor.passengerTicket', 'Passenger / Ticket'),
             render: (r) => (
               <div>
-                <div style={{ fontWeight: 600 }}>{r.passengerName || '—'}</div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{r.ticketNumber || '—'}</div>
+                <div className="font-semibold">{r.passengerName || '—'}</div>
+                <div className="text-xs text-slate-500">{r.ticketNumber || '—'}</div>
               </div>
             ),
           },
           {
-            header: 'Description',
+            header: t('conductor.description', 'Description'),
             render: (r) => (
-              <div style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.82rem' }}>
+              <div className="max-w-[260px] overflow-hidden text-ellipsis whitespace-nowrap text-[0.82rem]">
                 {r.description}
               </div>
             ),
           },
           {
-            header: 'Status',
+            header: t('common.status', 'Status'),
             render: (r) => {
               const isOpen = r.status === 'OPEN';
               const isReview = r.status === 'UNDER_REVIEW';
-              const isResolved = r.status === 'RESOLVED' || r.status === 'CLOSED';
               return (
-                <span
-                  style={{
-                    display: 'inline-block',
-                    padding: '4px 10px',
-                    borderRadius: 20,
-                    fontSize: '0.75rem',
-                    fontWeight: 800,
-                    background: isOpen ? '#fef2f2' : isReview ? '#fffbeb' : '#f0fdf4',
-                    color: isOpen ? '#dc2626' : isReview ? '#d97706' : '#16a34a',
-                    border: `1px solid ${isOpen ? '#fecaca' : isReview ? '#fde68a' : '#bbf7d0'}`,
-                  }}
-                >
+                <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-extrabold border ${
+                  isOpen
+                    ? 'bg-red-50 text-red-600 border-red-200'
+                    : isReview
+                    ? 'bg-amber-50 text-amber-600 border-amber-200'
+                    : 'bg-green-50 text-green-600 border-green-200'
+                }`}>
                   {r.status}
                 </span>
               );
             },
           },
           {
-            header: 'Action',
+            header: t('common.actions', 'Action'),
             render: (r) => (
               <button
                 onClick={() => {
                   setSelectedReport(r);
                   setResolutionNotes(r.resolutionNotes || '');
                 }}
-                style={{
-                  padding: '6px 12px',
-                  background: '#2563eb',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 8,
-                  fontSize: '0.8rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
+                className="px-3 py-1.5 bg-blue-600 text-white border-none rounded-lg text-[0.8rem] font-bold cursor-pointer hover:bg-blue-700 transition-colors"
               >
-                Inspect & Resolve
+                {t('conductor.inspectResolve', 'Inspect & Resolve')}
               </button>
             ),
           },
@@ -186,116 +144,94 @@ const AdminConductorReports = () => {
         loading={loading}
         searchTerm={searchQuery}
         onSearchChange={setSearchQuery}
-        searchPlaceholder="Search category, conductor, passenger, ticket..."
+        searchPlaceholder={t('conductor.searchReportPlaceholder', 'Search category, conductor, passenger, ticket...')}
         actions={
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: 8, border: '1.5px solid #cbd5e1', fontSize: '0.85rem' }}
+            className="px-3 py-2 rounded-lg border-[1.5px] border-slate-300 text-[0.85rem] focus:outline-none focus:border-emerald-600"
           >
-            <option value="all">All Statuses</option>
-            <option value="OPEN">Open Reports</option>
-            <option value="UNDER_REVIEW">Under Review</option>
-            <option value="RESOLVED">Resolved</option>
-            <option value="CLOSED">Closed</option>
+            <option value="all">{t('common.allStatuses', 'All Statuses')}</option>
+            <option value="OPEN">{t('conductor.openReports', 'Open Reports')}</option>
+            <option value="UNDER_REVIEW">{t('conductor.underReview', 'Under Review')}</option>
+            <option value="RESOLVED">{t('conductor.resolved', 'Resolved')}</option>
+            <option value="CLOSED">{t('conductor.closed', 'Closed')}</option>
           </select>
         }
       />
 
-      {/* Inspect & Resolve Modal */}
       {selectedReport && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.6)',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 20,
-          }}
-        >
-          <div
-            style={{
-              background: '#fff',
-              borderRadius: 16,
-              maxWidth: 580,
-              width: '100%',
-              padding: 24,
-              maxHeight: '90vh',
-              overflowY: 'auto',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottom: '1px solid #e2e8f0', paddingBottom: 12 }}>
-              <h3 style={{ margin: 0, fontWeight: 900, fontSize: '1.2rem', color: '#0f172a' }}>
-                Conductor Problem Report
+        <div className="fixed inset-0 bg-black/60 z-[1000] flex items-center justify-center p-5">
+          <div className="bg-white rounded-2xl max-w-[580px] w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4 border-b border-slate-200 pb-3">
+              <h3 className="m-0 font-black text-[1.2rem] text-slate-900">
+                {t('conductor.problemReportTitle', 'Conductor Problem Report')}
               </h3>
               <button
                 onClick={() => setSelectedReport(null)}
-                style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#64748b' }}
+                className="bg-none border-none text-[1.2rem] cursor-pointer text-slate-500 hover:text-slate-700"
               >
                 ✕
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: '0.88rem', color: '#334155' }}>
-              <div style={{ background: '#f8fafc', padding: 12, borderRadius: 10, border: '1px solid #f1f5f9' }}>
-                <div style={{ fontWeight: 800, color: '#2563eb', fontSize: '1rem' }}>{selectedReport.category}</div>
-                <div style={{ fontSize: '0.78rem', color: '#64748b' }}>Reported on: {new Date(selectedReport.createdAt).toLocaleString()}</div>
+            <div className="flex flex-col gap-3 text-[0.88rem] text-slate-700">
+              <div className="bg-slate-50 p-3 rounded-[10px] border border-slate-100">
+                <div className="font-extrabold text-blue-600 text-base">{selectedReport.category}</div>
+                <div className="text-[0.78rem] text-slate-500">{t('conductor.reportedOn', 'Reported on')}: {new Date(selectedReport.createdAt).toLocaleString()}</div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div><strong>Conductor:</strong> {selectedReport.conductorId?.name || '—'}</div>
-                <div><strong>Trip ID:</strong> {selectedReport.tripId || '—'}</div>
-                <div><strong>Passenger:</strong> {selectedReport.passengerName || '—'}</div>
-                <div><strong>Ticket No:</strong> {selectedReport.ticketNumber || '—'}</div>
-                <div><strong>Bus:</strong> {selectedReport.busId?.busNumber || '—'}</div>
-                <div><strong>Status:</strong> {selectedReport.status}</div>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div><strong>{t('conductor.conductor', 'Conductor')}:</strong> {selectedReport.conductorId?.name || '—'}</div>
+                <div><strong>{t('conductor.tripId', 'Trip ID')}:</strong> {selectedReport.tripId || '—'}</div>
+                <div><strong>{t('passenger.passenger', 'Passenger')}:</strong> {selectedReport.passengerName || '—'}</div>
+                <div><strong>{t('ticket.ticketNumber', 'Ticket No')}:</strong> {selectedReport.ticketNumber || '—'}</div>
+                <div><strong>{t('admin.bus', 'Bus')}:</strong> {selectedReport.busId?.busNumber || '—'}</div>
+                <div><strong>{t('common.status', 'Status')}:</strong> {selectedReport.status}</div>
               </div>
 
               <div>
-                <strong>Description from Conductor:</strong>
-                <p style={{ margin: '6px 0 0', padding: 12, background: '#fef2f2', borderRadius: 8, color: '#991b1b', lineHeight: 1.5 }}>
+                <strong>{t('conductor.descFromConductor', 'Description from Conductor')}:</strong>
+                <p className="mt-1.5 p-3 bg-red-50 rounded-lg text-red-800 leading-relaxed">
                   {selectedReport.description}
                 </p>
               </div>
 
               {selectedReport.resolvedBy && (
-                <div style={{ fontSize: '0.8rem', color: '#16a34a', background: '#f0fdf4', padding: 10, borderRadius: 8 }}>
-                  Resolved by {selectedReport.resolvedBy.name} on {new Date(selectedReport.resolvedAt).toLocaleString()}
+                <div className="text-[0.8rem] text-green-600 bg-green-50 p-2.5 rounded-lg">
+                  {t('conductor.resolvedBy', 'Resolved by')} {selectedReport.resolvedBy.name} {t('conductor.on', 'on')} {new Date(selectedReport.resolvedAt).toLocaleString()}
                 </div>
               )}
 
               <div>
-                <label style={{ display: 'block', fontWeight: 700, fontSize: '0.82rem', marginBottom: 6 }}>
-                  Resolution Notes / Action Taken:
+                <label className="block font-bold text-[0.82rem] mb-1.5">
+                  {t('conductor.resolutionNotes', 'Resolution Notes / Action Taken')}:
                 </label>
                 <textarea
                   rows={3}
-                  placeholder="Enter notes on how this problem was handled or resolved..."
+                  placeholder={t('conductor.resolutionPlaceholder', 'Enter notes on how this problem was handled or resolved...')}
                   value={resolutionNotes}
                   onChange={(e) => setResolutionNotes(e.target.value)}
-                  style={{ width: '100%', padding: 10, borderRadius: 8, border: '1.5px solid #cbd5e1', fontSize: '0.85rem' }}
+                  className="w-full p-2.5 rounded-lg border-[1.5px] border-slate-300 text-[0.85rem] focus:outline-none focus:border-emerald-600 resize-none"
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 14 }}>
+              <div className="flex gap-2.5 justify-end mt-3.5">
                 <button
                   type="button"
                   onClick={() => handleUpdateStatus(selectedReport._id, 'UNDER_REVIEW')}
                   disabled={updating}
-                  style={{ padding: '8px 14px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}
+                  className="px-3.5 py-2 bg-amber-500 text-white border-none rounded-lg font-bold cursor-pointer hover:bg-amber-600 transition-colors disabled:opacity-70"
                 >
-                  Mark Under Review
+                  {t('conductor.markReview', 'Mark Under Review')}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleUpdateStatus(selectedReport._id, 'RESOLVED')}
                   disabled={updating}
-                  style={{ padding: '8px 16px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 800, cursor: 'pointer' }}
+                  className="px-4 py-2 bg-green-600 text-white border-none rounded-lg font-extrabold cursor-pointer hover:bg-green-700 transition-colors disabled:opacity-70"
                 >
-                  Mark Resolved
+                  {t('conductor.markResolved', 'Mark Resolved')}
                 </button>
               </div>
             </div>

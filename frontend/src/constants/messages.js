@@ -1,0 +1,298 @@
+const msg = (title, description) => ({ title, description });
+
+export const MESSAGES = {
+  common: {
+    somethingWentWrong: msg('Something Went Wrong', "We couldn't complete your request right now. Please try again."),
+    operationFailed: msg('Action Failed', 'We couldn\'t complete that action. Please try again.'),
+    saved: msg('Changes Saved', 'Your changes have been saved successfully.'),
+    updated: msg('Updated', 'The information has been updated successfully.'),
+    loading: msg('Please Wait', 'This may take a moment.'),
+    required: msg('Required', 'This field is required.'),
+    invalidInput: msg('Invalid Input', 'Please check the value you entered and try again.'),
+    noChanges: msg('Nothing to Save', 'No changes were detected.'),
+    selectFirst: msg('Selection Required', 'Please make a selection before continuing.'),
+    removed: (name) => msg(`${name} Deleted`, `The ${name.toLowerCase()} was successfully removed.`),
+  },
+
+  registration: {
+    fullNameRequired: msg('Full Name Required', 'Please enter your full name.'),
+    fullNameInvalid: msg('Invalid Full Name', 'Please enter a valid full name.'),
+    emailRequired: msg('Email Required', 'Please enter your email address.'),
+    emailInvalid: msg('Invalid Email', 'Please enter a valid email address.'),
+    emailRegistered: msg('Email Already Registered', 'An account with this email already exists. Please sign in instead.'),
+    phoneRequired: msg('Phone Number Required', 'Please enter your phone number.'),
+    phoneInvalid: msg('Invalid Phone Number', 'Please enter a valid Ethiopian phone number.'),
+    nationalIdRequired: msg('National ID Required', 'Please enter your National ID number.'),
+    nationalIdInvalid: msg('Invalid National ID', 'Please enter a valid National ID number.'),
+    passwordRequired: msg('Password Required', 'Please create a password.'),
+    passwordTooShort: msg('Password Too Short', 'Your password must contain at least 8 characters.'),
+    passwordWeak: msg('Weak Password', 'Please include both letters and numbers to strengthen your password.'),
+    confirmRequired: msg('Confirm Password', 'Please confirm your password.'),
+    passwordsDontMatch: msg("Passwords Don't Match", 'Please make sure both passwords are the same.'),
+    termsRequired: msg('Terms Required', 'Please accept the terms and conditions to continue.'),
+    accountCreated: msg('Account Created', 'Your account has been created successfully.'),
+    verificationSent: msg('Verification Code Sent', 'We sent a verification code to your email address. Please check your inbox.'),
+    failed: msg('Registration Failed', 'Please review the information below and try again.'),
+    emailTaken: msg('Email Already Registered', 'This email address is already in use. Please sign in instead.'),
+  },
+
+  login: {
+    emailRequired: msg('Email Required', 'Please enter your email address.'),
+    emailInvalid: msg('Invalid Email', 'Please enter a valid email address.'),
+    passwordRequired: msg('Password Required', 'Please enter your password.'),
+    failed: msg('Login Failed', 'The email or password you entered is incorrect.'),
+    notVerified: msg('Email Not Verified', 'Please verify your email address before signing in.'),
+    verificationPending: msg('Registration Not Complete', 'Your registration is not finished yet. Please enter the verification code we sent to your email.'),
+    welcomeBack: msg('Welcome Back', 'You have successfully signed in.'),
+    googleFailed: msg('Google Sign-In Failed', 'We couldn\'t complete the Google sign-in. Please try again.'),
+    googleCancelled: msg('Google Sign-In Cancelled', 'Google sign-in was cancelled or unavailable.'),
+  },
+
+  verification: {
+    emailRequired: msg('Email Required', 'Please enter your email address.'),
+    codeRequired: msg('Verification Code Required', 'Please enter the 6-digit code we sent to your email.'),
+    codeIncomplete: msg('Incomplete Code', 'Please enter all 6 digits of your verification code.'),
+    codeInvalid: msg('Invalid Verification Code', 'This code is incorrect or has expired. Please check and try again.'),
+    sent: msg('Verification Code Sent', 'We sent a new verification code to your email address. Please check your inbox.'),
+    verified: msg('Email Verified', 'Your email address has been verified successfully.'),
+    failed: msg('Verification Failed', "We couldn't complete email verification. Please try again."),
+    resendTooSoon: msg('Please Wait', 'A code was just sent. Please wait before requesting another one.'),
+    alreadySent: msg('Verification Code Already Sent', 'A verification code was just sent to this email address. Please check your inbox and spam folder.'),
+  },
+
+  booking: {
+    seatRequired: msg('Seat Selection Required', 'Please select a seat before continuing.'),
+    seatUnavailable: msg('Seat Unavailable', 'This seat has already been booked. Please choose another seat.'),
+    scheduleRequired: msg('Schedule Required', 'Please choose a bus schedule first.'),
+    routeRequired: msg('Route Required', 'Please select a departure city and a destination city.'),
+    sameCity: msg('Route Required', 'Departure and destination cities must be different.'),
+    passengerNameRequired: msg('Passenger Name Required', 'Please enter the passenger\'s full name.'),
+    passengerPhoneRequired: msg('Phone Number Required', 'Please enter the passenger\'s phone number.'),
+    confirmed: msg('Booking Confirmed', 'Your booking has been created successfully.'),
+    paymentRequired: msg('Payment Required', 'Please complete your payment to confirm your booking.'),
+    failed: msg('Booking Failed', 'We couldn\'t create your booking. Please review the details and try again.'),
+    failedRoundTrip: msg('Booking Failed', 'We couldn\'t create your round-trip booking. Please review the details and try again.'),
+    seatsSaved: (trip) => msg('Seats Selected', `Your ${trip} seats are selected. Continue to review the booking.`),
+    cancelled: msg('Booking Cancelled', 'The booking has been cancelled and the seats have been released.'),
+    cancelFailed: msg('Cancellation Failed', 'We couldn\'t cancel this booking. Please try again.'),
+    refundSubmitted: msg('Refund Request Submitted', 'Your refund request has been submitted and is awaiting review.'),
+    removeFromView: (tktNo) => msg('Removed from List', `Booking ${tktNo || ''} was removed from this view.`),
+  },
+
+  seatHold: {
+    created: msg('Seat Reserved Temporarily', 'Your selected seat is being held for 10 minutes while you complete payment.'),
+    expired: msg('Seat Hold Expired', 'Your seat reservation has expired. Please select a seat again.'),
+  },
+
+  payment: {
+    proceed: msg('Proceed to Payment', 'Your booking is ready. Continue to Chapa to complete your payment.'),
+    processing: msg('Payment Processing', 'Please wait while we confirm your payment. Do not close this page.'),
+    verifying: msg('Payment Verification', 'Your payment is being verified. Please wait a moment.'),
+    success: msg('Payment Successful', 'Your payment has been confirmed and your ticket is now active.'),
+    failed: msg('Payment Failed', "We couldn't confirm your payment. Please try again."),
+    cancelled: msg('Payment Cancelled', 'The payment was cancelled. Your booking is still awaiting payment.'),
+    required: msg('Payment Required', 'Please complete your payment to activate your ticket.'),
+    receiptRequired: msg('Receipt Required', 'Please upload the payment receipt image.'),
+    referenceRequired: msg('Reference Required', 'Please enter the transaction reference number.'),
+    referenceInvalid: msg('Invalid Reference', 'Please enter a valid transaction reference number.'),
+    amountRequired: msg('Amount Required', 'Please enter the amount you paid.'),
+    submitted: msg('Payment Submitted', 'Your payment details were submitted and are awaiting verification.'),
+    verified: msg('Payment Verified', 'Your payment has been verified and your e-ticket is now active.'),
+    statusUpdated: msg('Payment Status Updated', 'The payment status has been updated successfully.'),
+    receiptReviewLoadFailed: msg('Receipts Not Loaded', "We couldn't load the pending receipts. Please try again."),
+    receiptApproved: (tktNo) => msg('Receipt Approved', `Receipt for ticket #${tktNo || ''} was approved and the active e-ticket was issued.`),
+    receiptApproveFailed: msg('Approval Failed', "We couldn't approve this receipt. Please try again."),
+    receiptRejected: (tktNo) => msg('Receipt Rejected', `Receipt for ticket #${tktNo || ''} was rejected.`),
+    receiptRejectFailed: msg('Rejection Failed', "We couldn't reject this receipt. Please try again."),
+  },
+
+  ticket: {
+    ready: msg('Ticket Ready', 'Your bus ticket has been generated successfully.'),
+    qrReady: msg('QR Ticket Ready', 'Your QR ticket is ready for validation.'),
+    invalid: msg('Invalid Ticket', 'This QR code could not be verified.'),
+    alreadyUsed: msg('Ticket Already Used', 'This ticket has already been validated.'),
+    notActive: msg('Ticket Not Active', 'This ticket is not active yet. Please complete your payment first.'),
+    notFound: msg('Ticket Not Found', 'We couldn\'t find a ticket matching this code.'),
+    downloaded: msg('Download Started', 'Your ticket PDF is being downloaded.'),
+    removeFromView: msg('Removed from List', 'The ticket was removed from your local view.'),
+    boarded: msg('Boarding Confirmed', 'The passenger has been marked as boarded.'),
+  },
+
+  company: {
+    registered: (name) => msg('Company Registered', `"${name}" has been added to the platform.`),
+    registrationFailed: msg('Company Registration Failed', 'Please review the information and try again.'),
+    approved: msg('Company Approved', 'The transport company has been approved successfully.'),
+    suspended: msg('Company Suspended', 'The company has been suspended successfully.'),
+    reactivated: msg('Company Reactivated', 'The company is active again.'),
+    updated: msg('Company Updated', "The company's information has been updated successfully."),
+    statusFailed: msg('Status Update Failed', "We couldn't update the company's status. Please try again."),
+    nameRequired: msg('Company Name Required', 'Please enter the company name.'),
+    emailInvalid: msg('Invalid Email', 'Please enter a valid email address.'),
+    passwordTooShort: msg('Password Too Short', 'Your password must contain at least 8 characters.'),
+    logoUploaded: msg('Logo Uploaded', 'The company logo was uploaded successfully.'),
+    detailsRequired: msg('Company Details Required', 'Please enter the company name, license number, TIN, and email.'),
+    adminRequired: msg('Administrator Details Required', 'Please provide the initial Company Administrator name, email, and password.'),
+    telebirrRequired: msg('Telebirr Number Required', 'Please provide the company Telebirr phone or account number.'),
+    cbeRequired: msg('Bank Account Required', 'Please provide the company CBE bank account number.'),
+  },
+
+  bus: {
+    added: msg('Bus Added', 'The bus has been added successfully.'),
+    updated: msg('Bus Updated', 'The bus information has been updated successfully.'),
+    deleted: (name) => msg('Bus Deleted', name ? `"${name}" was successfully removed.` : 'The bus was successfully removed.'),
+    activated: msg('Bus Activated', 'The bus is now available for use.'),
+    deactivated: msg('Bus Deactivated', 'The bus is no longer available for booking.'),
+    assigned: msg('Bus Assigned', 'The bus has been assigned to the trip.'),
+    imageUploaded: msg('Image Uploaded', 'The bus image has been uploaded successfully.'),
+    imageRequired: msg('Bus Image Required', 'Please upload a bus image.'),
+    saveFailed: msg('Bus Not Saved', 'We couldn\'t save this bus. Please review the details and try again.'),
+    deleteFailed: msg('Delete Failed', "We couldn't delete this bus. Please try again."),
+    plateRequired: msg('Plate Number Required', 'Please enter the bus plate number.'),
+    plateInvalid: msg('Invalid Plate Number', 'Please enter a valid plate number (e.g. AA-12345).'),
+  },
+
+  schedule: {
+    created: msg('Schedule Created', 'The trip schedule has been created successfully.'),
+    updated: msg('Schedule Updated', 'The schedule has been updated successfully.'),
+    deleted: msg('Schedule Deleted', 'The schedule was successfully removed.'),
+    deleteFailed: msg('Delete Failed', "We couldn't delete this schedule. Please try again."),
+    conflict: msg('Schedule Conflict', 'This schedule conflicts with an existing trip. Please review the departure time and bus assignment.'),
+    busRequired: msg('Bus Required', 'Please select a bus from your fleet.'),
+    dateRequired: msg('Departure Date Required', 'Please choose a departure date.'),
+    timeRequired: msg('Departure Time Required', 'Please enter a departure time.'),
+    priceRequired: msg('Ticket Price Required', 'Please enter a valid ticket price.'),
+    saveFailed: msg('Schedule Not Saved', 'We couldn\'t save this schedule. Please review the details and try again.'),
+    departureRequired: msg('Departure Required', 'Please select a departure point.'),
+    arrivalRequired: msg('Arrival Required', 'Please select an arrival point.'),
+  },
+
+  route: {
+    added: msg('Route Added', 'The route has been added to your network.'),
+    updated: msg('Route Updated', 'The route has been updated successfully.'),
+    deleted: msg('Route Deleted', 'The route was successfully removed.'),
+    saveFailed: msg('Route Not Saved', 'We couldn\'t save this route. Please review the details and try again.'),
+    deleteFailed: msg('Delete Failed', "We couldn't delete this route. Please try again."),
+    cityAdded: (city) => msg('City Added', `"${city}" was added to the city list.`),
+  },
+
+  discount: {
+    created: msg('Discount Created', 'The promotional discount has been created successfully.'),
+    updated: msg('Discount Updated', 'The discount has been updated successfully.'),
+    deleted: msg('Discount Deleted', 'The discount was successfully removed.'),
+    deleteFailed: msg('Delete Failed', "We couldn't delete this discount. Please try again."),
+    codeRequired: msg('Discount Code Required', 'Please provide a discount code.'),
+    nameRequired: msg('Promotion Name Required', 'Please provide a promotion name.'),
+    saveFailed: msg('Discount Not Saved', 'We couldn\'t save this discount. Please try again.'),
+  },
+
+  staff: {
+    created: (name, role) => msg(`${role} Created`, `${name}'s account has been created successfully.`),
+    deleted: (name) => msg('Account Deleted', name ? `"${name}" was successfully removed.` : 'The staff account was successfully removed.'),
+    deleteFailed: msg('Delete Failed', "We couldn't delete this staff account. Please try again."),
+    createFailed: msg('Account Not Created', 'We couldn\'t create this account. Please review the details and try again.'),
+  },
+
+  refund: {
+    approved: msg('Refund Approved', 'The refund has been approved and the passenger has been notified.'),
+    rejected: msg('Refund Rejected', 'The refund request has been rejected.'),
+    failed: msg('Refund Update Failed', "We couldn't update this refund. Please try again."),
+    verificationFailed: msg('Verification Failed', 'We couldn\'t verify this refund request. Please try again.'),
+  },
+
+  support: {
+    submitted: msg('Question Submitted', 'Your support question has been submitted successfully.'),
+    replySent: (name) => msg('Reply Sent', `Your reply was sent to ${name}.`),
+    replyRequired: msg('Reply Required', 'Please enter a reply message before sending.'),
+    statusUpdated: msg('Status Updated', 'The conversation status has been updated.'),
+    deleted: msg('Inquiry Deleted', 'The support inquiry was successfully removed.'),
+    deleteFailed: msg('Delete Failed', "We couldn't delete this inquiry. Please try again."),
+    failed: msg('Request Failed', "We couldn't submit your request. Please try again."),
+  },
+
+  profile: {
+    updated: msg('Profile Updated', 'Your profile information has been updated successfully.'),
+    updateFailed: msg('Update Failed', "We couldn't update your profile. Please try again."),
+    passwordChanged: msg('Password Changed', 'Your password has been changed successfully.'),
+    passwordChangeFailed: msg('Password Change Failed', "We couldn't change your password. Please try again."),
+    currentPasswordRequired: msg('Current Password Required', 'Please enter your current password.'),
+    newPasswordRequired: msg('New Password Required', 'Please enter a new password.'),
+    confirmPasswordRequired: msg('Confirm Password', 'Please confirm your new password.'),
+    passwordsDontMatch: msg("Passwords Don't Match", 'Please make sure both passwords are the same.'),
+    passwordTooShort: msg('Password Too Short', 'Your password must contain at least 8 characters.'),
+    currentPasswordWrong: msg('Current Password Incorrect', 'Please enter your current password correctly.'),
+    avatarUploaded: msg('Photo Updated', 'Your profile photo has been updated.'),
+    avatarFailed: msg('Photo Update Failed', "We couldn't upload your photo. Please try again."),
+  },
+
+  settings: {
+    saved: msg('Settings Saved', 'Your settings have been saved successfully.'),
+    saveFailed: msg('Settings Not Saved', "We couldn't save your settings. Please try again."),
+  },
+
+  conductor: {
+    reportFiled: msg('Report Submitted', 'Your problem report has been sent to the company administrator.'),
+    reportRequired: msg('Report Details Required', 'Please describe the problem you experienced.'),
+    tripRequired: msg('Trip Required', 'Please select an assigned trip.'),
+    ticketRequired: msg('Ticket Code Required', 'Please scan or enter a ticket code.'),
+    verified: (name, ticket) => msg('Ticket Verified', `${name}'s ticket ${ticket} is valid for boarding.`),
+    notActive: msg('Ticket Not Active', 'This ticket is not active yet. Payment may be pending.'),
+    invalid: msg('Invalid Ticket', 'This QR code could not be verified.'),
+    alreadyBoarded: msg('Ticket Already Used', 'This ticket has already been validated.'),
+    boarded: msg('Boarding Confirmed', 'The passenger has been marked as boarded.'),
+    boardedFor: (name) => msg('Boarding Confirmed', `${name} has been marked as boarded.`),
+    failed: msg('Action Failed', 'We couldn\'t complete that action. Please try again.'),
+    reportStatusUpdated: (status) => msg('Report Updated', `The report status was updated to ${status}.`),
+  },
+
+  notifications: {
+    markedRead: msg('Marked as Read', 'All notifications have been marked as read.'),
+    deleted: msg('Notification Deleted', 'The notification was successfully removed.'),
+    cleared: msg('Notifications Cleared', 'All notifications have been cleared.'),
+    deleteFailed: msg('Delete Failed', "We couldn't delete this notification. Please try again."),
+    clearFailed: msg('Clear Failed', "We couldn't clear your notifications. Please try again."),
+    noNotifications: msg('No Notifications', 'You have no notifications right now.'),
+  },
+
+  search: {
+    failed: msg('Search Failed', 'We couldn\'t load the available trips. Please try again.'),
+    noResults: msg('No Trips Found', 'No buses match your search. Try different cities or a different date.'),
+    dateRequired: msg('Travel Date Required', 'Please choose a travel date.'),
+  },
+
+  reports: {
+    generated: msg('Report Ready', 'Your report is being prepared.'),
+    pdfReady: msg('PDF Downloaded', 'Your PDF report has been downloaded.'),
+    csvReady: msg('CSV Exported', 'Your CSV export has been downloaded.'),
+    failed: msg('Report Failed', "We couldn't generate the report. Please try again."),
+    loadFailed: msg('Data Load Failed', "We couldn't load this data. Please try again."),
+    empty: msg('No Data Available', 'There is no data to display for this period yet.'),
+  },
+
+  review: {
+    submitted: msg('Review Submitted', 'Thank you for rating your travel experience. Your review has been recorded.'),
+    failed: msg('Review Not Submitted', "We couldn't submit your review. Please try again."),
+    alreadyReviewed: msg('Already Reviewed', 'You have already reviewed this trip.'),
+  },
+
+  network: {
+    offline: msg('No Connection', "We couldn't reach the server. Check your internet connection and try again."),
+    timeout: msg('Request Timed Out', 'The server took too long to respond. Please try again.'),
+    serverError: msg('Server Error', 'The server is having trouble right now. Please try again in a moment.'),
+    unauthorized: msg('Session Expired', 'Your session has expired. Please sign in again.'),
+    forbidden: msg('Access Denied', "You don't have permission to perform this action."),
+    notFound: msg('Not Found', "We couldn't find what you were looking for."),
+    generic: msg('Something Went Wrong', "We couldn't complete your request right now. Please try again later."),
+  },
+
+  upload: {
+    failed: msg('Upload Failed', 'We couldn\'t upload the file. Please try again.'),
+    tooLarge: msg('File Too Large', 'The file is too large. Please choose a smaller file.'),
+    invalidType: msg('Unsupported File', 'This file type is not supported.'),
+    required: msg('File Required', 'Please choose a file to upload.'),
+  },
+};
+
+export const PASSWORD_MIN_LENGTH = 8;
+export const SEAT_HOLD_MINUTES = 10;
+
+export default MESSAGES;

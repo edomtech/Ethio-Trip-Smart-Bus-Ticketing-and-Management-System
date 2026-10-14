@@ -10,25 +10,21 @@ const {
 } = require('../controllers/ticketController');
 const { protect, authorize } = require('../middleware/auth');
 
+const ROLES = require('../constants/roles');
+
 router.use(protect);
 
-// Booking Tickets
 router.get('/booking/:bookingId', getTicketByBooking);
 
-// Trip Passenger Manifest for Agents & Conductors
-router.get('/trip-manifest', authorize('agent', 'company_staff', 'conductor', 'company_admin', 'super_admin', 'admin'), getTripManifest);
+router.get('/trip-manifest', authorize(ROLES.COMPANY_STAFF, ROLES.CONDUCTOR, ROLES.COMPANY_ADMIN, ROLES.SUPER_ADMIN), getTripManifest);
 
-// Agent Ticket Validity Verification (VERIFY / REJECT at Counter)
-router.post('/agent-verify', authorize('agent', 'company_staff', 'company_admin', 'super_admin', 'admin'), agentVerifyTicket);
+router.post('/agent-verify', authorize(ROLES.COMPANY_STAFF, ROLES.COMPANY_ADMIN, ROLES.SUPER_ADMIN), agentVerifyTicket);
 
-// Conductor Boarding Validation (QR Scan / Ticket Search)
-router.post('/conductor-validate', authorize('conductor', 'company_admin', 'super_admin', 'admin'), conductorValidateTicket);
+router.post('/conductor-validate', authorize(ROLES.CONDUCTOR, ROLES.COMPANY_ADMIN, ROLES.SUPER_ADMIN), conductorValidateTicket);
 
-// Conductor Boarding Confirmation
-router.post('/conductor-confirm-boarding', authorize('conductor', 'company_admin', 'super_admin', 'admin'), conductorConfirmBoarding);
+router.post('/conductor-confirm-boarding', authorize(ROLES.CONDUCTOR, ROLES.COMPANY_ADMIN, ROLES.SUPER_ADMIN), conductorConfirmBoarding);
 
-// Legacy Compatibility
-router.post('/verify', authorize('conductor', 'company_admin', 'super_admin', 'admin'), verifyTicket);
-router.get('/verify/:ticketNumber', authorize('conductor', 'company_admin', 'super_admin', 'admin'), verifyTicketByNumber);
+router.post('/verify', authorize(ROLES.CONDUCTOR, ROLES.COMPANY_STAFF, ROLES.COMPANY_ADMIN, ROLES.SUPER_ADMIN), verifyTicket);
+router.get('/verify/:ticketNumber', authorize(ROLES.CONDUCTOR, ROLES.COMPANY_STAFF, ROLES.COMPANY_ADMIN, ROLES.SUPER_ADMIN), verifyTicketByNumber);
 
 module.exports = router;

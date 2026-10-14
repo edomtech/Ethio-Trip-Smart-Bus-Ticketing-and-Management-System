@@ -5,45 +5,111 @@ const dotenv = require('dotenv');
 const helmet = require('helmet');
 const mongoSanitize = require('express-mongo-sanitize');
 const rateLimit = require('express-rate-limit');
+const mongoose = require('mongoose');
 const connectDB = require('./config/db');
+const { getIsConnected } = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
+const { CANONICAL_ROLES } = require('./constants/roles');
+const { PLATFORM, fullName } = require('./constants/branding');
 
 dotenv.config();
+
+if (!process.env.JWT_SECRET || !process.env.JWT_SECRET.trim()) {
+  console.error('❌ FATAL: JWT_SECRET environment variable is missing or empty.');
+  console.error('   Please define a strong JWT_SECRET in backend/.env before running the service.');
+  process.exit(1);
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ── Security & Middleware ───────────────────────────────────────────────────
 app.use(helmet());
-app.use(cors({ origin: process.env.FRONTEND_URL || true, credentials: true }));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS origin ${origin} not allowed`));
+    }
+  },
+  credentials: true,
+}));
+
+app.use('/api/payments', require('./routes/chapaWebhook'));
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('dev'));
 app.use(mongoSanitize());
 
-// Global rate limiter: 1000 req/15 min
+
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { message: 'Too many requests from this IP, please try again later.' },
+  message: { success: false, message: 'Too many requests from this IP, please try again later.' },
 });
 app.use('/api/', globalLimiter);
 
-// Auth rate limiter: max 100 attempts per 15 min per IP
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 25,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { message: 'Too many authentication attempts. Please try again later.' },
+  message: { success: false, message: 'Too many authentication attempts. Please try again later.' },
   skipSuccessfulRequests: true,
 });
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 
-// ── API Routes ───────────────────────────────────────────────────────────────
+const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many verification code requests. Please try again later.' },
+});
+app.use('/api/auth/send-otp', otpLimiter);
+app.use('/api/auth/resend-otp', otpLimiter);
+app.use('/api/auth/verify-otp', otpLimiter);
+app.use('/api/auth/verify-email', otpLimiter);
+
+const healthHandler = (req, res) => {
+  const dbConnected = getIsConnected();
+  const statusCode = dbConnected ? 200 : 503;
+  return res.status(statusCode).json({
+    status: dbConnected ? 'healthy' : 'degraded',
+    service: fullName(),
+    version: '2.0.0',
+    ready: dbConnected,
+    database: dbConnected ? 'connected' : 'disconnected',
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+    roles: CANONICAL_ROLES,
+  });
+};
+
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
+app.get('/', (req, res) =>
+  res.json({
+    message: `${PLATFORM.NAME} API is running`,
+    service: fullName(),
+    version: '2.0.0',
+    status: 'healthy',
+    roles: CANONICAL_ROLES,
+  })
+);
+
 app.use('/api/auth',              require('./routes/auth'));
 app.use('/api/companies',         require('./routes/companies'));
 app.use('/api/users',             require('./routes/users'));
@@ -61,75 +127,89 @@ app.use('/api/conductor-reports', require('./routes/conductorReports'));
 app.use('/api/reports',           require('./routes/reports'));
 app.use('/api/discounts',         require('./routes/discounts'));
 app.use('/api/upload',            require('./routes/upload'));
+app.use('/api/ai',                require('./routes/aiRoutes'));
+app.use('/api/platform-settings', require('./routes/platformSettings'));
 
-// Health check endpoint
-app.get('/', (req, res) =>
-  res.json({
-    message: 'Smart Bus Ticketing and Management API is running',
-    version: '2.0.0',
-    companies: 5,
-    roles: ['super_admin', 'company_admin', 'agent', 'conductor', 'passenger'],
-  })
-);
-
-// 404 handler
 app.use((req, res) =>
-  res.status(404).json({ message: `Route not found - ${req.originalUrl}` })
+  res.status(404).json({ success: false, message: `Route not found - ${req.originalUrl}` })
 );
 
-// Centralized error handler
 app.use(errorHandler);
 
-// ── Start Server ────────────────────────────────────────────────────────────
-const server = app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`   Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
-});
+let server = null;
 
-// Disable timeout to prevent premature request drops (permanent uncrashable connections)
-server.timeout = 0;
-server.keepAliveTimeout = 0;
+const startServer = async () => {
+  try {
+    try {
+      await connectDB();
+    } catch (dbErr) {
+      console.warn('⚠️ MongoDB not immediately reachable. Server starting; reconnecting in background:', dbErr.message);
+    }
 
-// Connect to MongoDB
-connectDB().catch((err) =>
-  console.error('❌ MongoDB initial connection error:', err?.message || err)
-);
+    require('./services/emailService')
+      .verifySmtpConnection()
+      .catch(() => {});
 
-// ── Error & Lifecycle Handling ───────────────────────────────────────────────
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`❌ Port ${PORT} is already in use by another process.`);
-    console.error(`   Please close the other terminal or process using port ${PORT} before starting.`);
-  } else {
-    console.error('❌ Server error:', err.message);
+    server = app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT} [Ready for traffic]`);
+    });
+
+    server.timeout = 30000;
+    server.keepAliveTimeout = 65000;
+
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`❌ Port ${PORT} is already in use by another process.`);
+        console.error(`   Please close the other terminal or process using port ${PORT} before starting.`);
+      } else {
+        console.error('❌ Server error:', err.message);
+      }
+      process.exit(1);
+    });
+  } catch (err) {
+    console.error('❌ Failed to start server:', err.message);
+    process.exit(1);
   }
-  process.exit(1);
-});
+};
 
-// Nodemon restart signal handler (prevents EADDRINUSE during hot reloads)
+const shutdown = async (signal) => {
+  console.log(`\n🛑 Received ${signal}. Shutting down gracefully...`);
+  if (server) {
+    server.close(async () => {
+      console.log('🔒 HTTP server closed.');
+      try {
+        await mongoose.connection.close(false);
+        console.log('🔒 MongoDB connection closed.');
+      } catch (dbErr) {
+        console.error('Error closing MongoDB connection:', dbErr.message);
+      }
+      process.exit(0);
+    });
+  } else {
+    process.exit(0);
+  }
+};
+
 process.once('SIGUSR2', () => {
-  server.close(() => {
-    process.kill(process.pid, 'SIGUSR2');
-  });
+  if (server) {
+    server.close(() => process.kill(process.pid, 'SIGUSR2'));
+  }
 });
 
-process.on('SIGINT', () => {
-  console.log('\n🛑 Shutting down server gracefully...');
-  server.close(() => {
-    process.exit(0);
-  });
-});
-
-process.on('SIGTERM', () => {
-  server.close(() => {
-    process.exit(0);
-  });
-});
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 process.on('unhandledRejection', (reason) => {
-  console.error('⚠️  Unhandled Rejection:', reason);
+  console.error('⚠️  Unhandled Rejection:', reason?.message || reason);
 });
 
 process.on('uncaughtException', (err) => {
   console.error('⚠️  Uncaught Exception:', err.message);
+  shutdown('UNCAUGHT_EXCEPTION');
 });
+
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = { app, startServer };

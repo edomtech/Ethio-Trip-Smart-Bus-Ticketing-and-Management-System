@@ -15,201 +15,156 @@ const PassengerDetailsModal = ({ passenger, trip, onClose, onScanToBoard }) => {
 
   return (
     <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(15, 23, 42, 0.75)',
-        backdropFilter: 'blur(4px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-        padding: '20px',
-      }}
+      className="fixed inset-0 bg-slate-900/75 backdrop-blur-xs flex items-center justify-center z-[1000] p-4 font-sans"
       onClick={onClose}
     >
       <div
-        style={{
-          background: '#ffffff',
-          borderRadius: '24px',
-          maxWidth: '560px',
-          width: '100%',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-          overflow: 'hidden',
-          animation: 'popIn 0.2s ease-out',
-        }}
+        className="bg-white dark:bg-slate-900 rounded-3xl max-w-xl w-full shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        <style>{`@keyframes popIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }`}</style>
-
-        {/* Modal Header */}
-        <div
-          style={{
-            background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)',
-            padding: '20px 24px',
-            color: '#ffffff',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
+        {}
+        <div className="bg-gradient-to-r from-indigo-950 via-indigo-900 to-indigo-950 p-5 sm:px-6 text-white flex justify-between items-center">
           <div>
-            <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '1px', color: '#a5b4fc', fontWeight: 700 }}>
+            <div className="text-[11px] uppercase tracking-wider text-indigo-300 font-bold">
               Passenger Booking Details
             </div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 900, marginTop: '2px', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <FaTicketAlt style={{ color: '#38bdf8' }} /> {passenger.passengerName || 'Passenger'}
+            <div className="text-lg sm:text-xl font-extrabold mt-0.5 flex items-center gap-2">
+              <FaTicketAlt className="text-sky-400" /> {passenger.passengerName || 'Passenger'}
             </div>
           </div>
           <button
             onClick={onClose}
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: '50%',
-              background: 'rgba(255, 255, 255, 0.15)',
-              border: 'none',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-            }}
+            className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center cursor-pointer transition"
           >
             <FaTimes />
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div style={{ padding: '24px', maxHeight: '78vh', overflowY: 'auto' }}>
-          {/* Status Banners */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-            {/* Agent Verification Status */}
+        {}
+        <div className="p-6 max-h-[78vh] overflow-y-auto space-y-5">
+          {}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {}
             <div
-              style={{
-                padding: '12px 14px',
-                borderRadius: 12,
-                background: isAgentVerified ? '#f0fdf4' : '#fffbeb',
-                border: `1.5px solid ${isAgentVerified ? '#bbf7d0' : '#fde68a'}`,
-              }}
+              className={`p-3.5 rounded-xl border ${
+                isAgentVerified
+                  ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60'
+                  : 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/60'
+              }`}
             >
-              <div style={{ fontSize: '0.7rem', color: isAgentVerified ? '#166534' : '#92400e', fontWeight: 700, textTransform: 'uppercase' }}>
+              <div className={`text-[11px] font-bold uppercase ${isAgentVerified ? 'text-emerald-800 dark:text-emerald-300' : 'text-amber-800 dark:text-amber-300'}`}>
                 Agent Verification
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: '0.92rem', color: isAgentVerified ? '#16a34a' : '#d97706', marginTop: 2 }}>
+              <div className={`flex items-center gap-1.5 font-extrabold text-sm mt-0.5 ${isAgentVerified ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
                 {isAgentVerified ? <FaCheckCircle /> : <FaExclamationTriangle />}
                 {passenger.verificationStatus || 'PENDING'}
               </div>
-              <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 4 }}>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                 {isAgentVerified ? `Verified by ${passenger.verifiedBy?.name || 'Counter Agent'}` : 'Requires verification at ticket counter'}
               </div>
             </div>
 
-            {/* Boarding Status */}
+            {}
             <div
-              style={{
-                padding: '12px 14px',
-                borderRadius: 12,
-                background: isBoarded ? '#e0e7ff' : '#f8fafc',
-                border: `1.5px solid ${isBoarded ? '#c7d2fe' : '#e2e8f0'}`,
-              }}
+              className={`p-3.5 rounded-xl border ${
+                isBoarded
+                  ? 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800/60'
+                  : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700/60'
+              }`}
             >
-              <div style={{ fontSize: '0.7rem', color: isBoarded ? '#3730a3' : '#475569', fontWeight: 700, textTransform: 'uppercase' }}>
+              <div className={`text-[11px] font-bold uppercase ${isBoarded ? 'text-indigo-800 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400'}`}>
                 Boarding Status
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: '0.92rem', color: isBoarded ? '#4f46e5' : '#64748b', marginTop: 2 }}>
+              <div className={`flex items-center gap-1.5 font-extrabold text-sm mt-0.5 ${isBoarded ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400'}`}>
                 {isBoarded ? <FaCheckCircle /> : <FaBus />}
                 {passenger.boardingStatus || 'NOT_BOARDED'}
               </div>
-              <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 4 }}>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                 {isBoarded ? `Boarded ${passenger.boardedAt ? new Date(passenger.boardedAt).toLocaleTimeString() : 'at departure'}` : 'Awaiting ticket scan to board'}
               </div>
             </div>
           </div>
 
-          {/* Passenger Info Grid */}
-          <div style={{ background: '#f8fafc', borderRadius: 16, border: '1px solid #e2e8f0', padding: 18, marginBottom: 20 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
+          {}
+          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/60 p-4.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div>
-                <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700 }}>Passenger Full Name</div>
-                <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <FaUser style={{ color: '#6366f1' }} /> {passenger.passengerName}
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 font-bold">Passenger Full Name</div>
+                <div className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5 mt-0.5">
+                  <FaUser className="text-indigo-500" /> {passenger.passengerName}
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700 }}>Contact Phone</div>
-                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <FaPhone style={{ color: '#10b981' }} /> {passenger.passengerPhone || passenger.user?.phone || '0911223344'}
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 font-bold">Contact Phone</div>
+                <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5 mt-0.5">
+                  <FaPhone className="text-emerald-500" /> {passenger.passengerPhone || passenger.user?.phone || '0911223344'}
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700 }}>Assigned Seat</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#4f46e5' }}>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 font-bold">Assigned Seat</div>
+                <div className="text-lg font-black text-indigo-600 dark:text-indigo-400 mt-0.5">
                   Seat {passenger.seatNumber}
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700 }}>Ticket Number</div>
-                <div style={{ fontSize: '0.92rem', fontWeight: 800, fontFamily: 'monospace', color: '#0f172a' }}>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 font-bold">Ticket Number</div>
+                <div className="text-sm font-bold font-mono text-slate-900 dark:text-white mt-0.5">
                   {passenger.ticketNumber}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Trip & Route Details */}
-          <div style={{ background: '#ffffff', borderRadius: 16, border: '1px solid #e2e8f0', padding: 18, marginBottom: 20 }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <FaBus style={{ color: '#4f46e5' }} /> Trip &amp; Travel Information
+          {}
+          <div className="bg-white dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700/60 p-4.5">
+            <div className="text-xs font-extrabold text-slate-600 dark:text-slate-300 uppercase mb-3 flex items-center gap-1.5">
+              <FaBus className="text-indigo-600 dark:text-indigo-400" /> Trip &amp; Travel Information
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Route</div>
-                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
+                <div className="text-[11px] text-slate-400">Route</div>
+                <div className="font-bold text-slate-900 dark:text-white text-sm">
                   {trip?.route?.from || 'Addis Ababa'} → {trip?.route?.to || 'Destination'}
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Date &amp; Departure</div>
-                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
+                <div className="text-[11px] text-slate-400">Date &amp; Departure</div>
+                <div className="font-bold text-slate-900 dark:text-white text-sm">
                   {trip?.date || 'Today'} ({trip?.departureTime || '06:00 AM'})
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Bus / Coach</div>
-                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
+                <div className="text-[11px] text-slate-400">Bus / Coach</div>
+                <div className="font-bold text-slate-900 dark:text-white text-sm">
                   {trip?.bus?.busNumber || 'Assigned Coach'}
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Ticket Fare</div>
-                <div style={{ fontWeight: 900, color: '#16a34a', fontSize: '0.95rem' }}>
+                <div className="text-[11px] text-slate-400">Ticket Fare</div>
+                <div className="font-black text-emerald-600 dark:text-emerald-400 text-sm">
                   ETB {passenger.price || trip?.price || 950} (PAID)
                 </div>
               </div>
             </div>
           </div>
 
-          {/* QR Code & Scan Prompt */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 18, background: '#f8fafc', borderRadius: 16, border: '1px dashed #cbd5e1', padding: 16 }}>
-            <div style={{ background: '#fff', padding: 8, borderRadius: 12, border: '1px solid #e2e8f0', flexShrink: 0 }}>
+          {}
+          <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 p-4">
+            <div className="bg-white p-2 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
               <QRCodeSVG value={qrString} size={76} level="M" />
             </div>
             <div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0f172a' }}>
+              <div className="text-sm font-bold text-slate-900 dark:text-white">
                 Digital Boarding Pass QR
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2, lineHeight: 1.4 }}>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
                 {isBoarded
                   ? 'Passenger is boarded. This boarding pass is marked as used.'
                   : isAgentVerified
@@ -220,20 +175,11 @@ const PassengerDetailsModal = ({ passenger, trip, onClose, onScanToBoard }) => {
           </div>
         </div>
 
-        {/* Modal Actions Footer */}
-        <div style={{ background: '#f8fafc', borderTop: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        {}
+        <div className="bg-slate-50 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-700/60 px-6 py-4 flex justify-between items-center">
           <button
             onClick={onClose}
-            style={{
-              padding: '10px 18px',
-              borderRadius: 10,
-              background: '#ffffff',
-              border: '1.5px solid #cbd5e1',
-              color: '#475569',
-              fontWeight: 700,
-              fontSize: '0.88rem',
-              cursor: 'pointer',
-            }}
+            className="px-4.5 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-bold text-xs cursor-pointer transition"
           >
             Close
           </button>
@@ -244,20 +190,11 @@ const PassengerDetailsModal = ({ passenger, trip, onClose, onScanToBoard }) => {
                 onClose();
                 if (onScanToBoard) onScanToBoard(passenger);
               }}
-              style={{
-                padding: '10px 20px',
-                borderRadius: 10,
-                background: isAgentVerified ? '#4f46e5' : '#64748b',
-                border: 'none',
-                color: '#ffffff',
-                fontWeight: 800,
-                fontSize: '0.88rem',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                boxShadow: isAgentVerified ? '0 4px 12px rgba(79, 70, 229, 0.3)' : 'none',
-              }}
+              className={`px-5 py-2.5 rounded-xl font-bold text-xs text-white flex items-center gap-2 cursor-pointer transition shadow-md ${
+                isAgentVerified
+                  ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/25'
+                  : 'bg-slate-600 hover:bg-slate-700'
+              }`}
             >
               <FaQrcode /> Scan QR to Confirm Boarding
             </button>

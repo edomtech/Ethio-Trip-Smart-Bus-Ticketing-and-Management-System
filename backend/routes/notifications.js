@@ -6,8 +6,11 @@ const {
   markAllAsRead,
   deleteNotification,
   clearAllNotifications,
+  sendPassengerEmail,
+  sendTicketEmailToPassenger,
 } = require('../controllers/notificationController');
-const { protect } = require('../middleware/auth');
+const { protect, authorize } = require('../middleware/auth');
+const ROLES = require('../constants/roles');
 
 router.use(protect);
 router.get('/', getMyNotifications);
@@ -16,5 +19,7 @@ router.delete('/clear-all', clearAllNotifications);
 router.put('/:id/read', markAsRead);
 router.delete('/:id', deleteNotification);
 
-module.exports = router;
+router.post('/send-passenger-email', authorize(ROLES.COMPANY_STAFF, ROLES.COMPANY_ADMIN, ROLES.SUPER_ADMIN), sendPassengerEmail);
+router.post('/send-ticket-email', authorize(ROLES.COMPANY_STAFF, ROLES.COMPANY_ADMIN, ROLES.SUPER_ADMIN), sendTicketEmailToPassenger);
 
+module.exports = router;

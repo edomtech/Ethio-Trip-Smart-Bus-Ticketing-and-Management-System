@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { FaPlus, FaEdit, FaTrash, FaTimes, FaSave, FaTag, FaPercentage, FaCheckCircle, FaTimesCircle } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaTimes, FaSave } from 'react-icons/fa';
 import { discountAPI } from '../../../utils/api';
-import { toast } from 'react-toastify';
 import DataTable from '../../../components/DataTable';
-import AdminPageHeader from '../../../components/AdminPageHeader';
+import { useNotification } from '../../../contexts/NotificationContext';
+import { MESSAGES } from '../../../constants/messages';
+import { useTranslation } from '../../../i18n';
 
 const EMPTY = {
   code: '',
@@ -13,14 +14,19 @@ const EMPTY = {
   tripType: 'round',
   minAmount: 0,
   isActive: true,
+  holidayTag: 'None',
+  showOnHomePage: false,
 };
 
 const AdminDiscounts = () => {
+  const { t } = useTranslation();
+  const notify = useNotification();
   const [discounts, setDiscounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   const load = async () => {
@@ -29,7 +35,7 @@ const AdminDiscounts = () => {
       const data = await discountAPI.getAll();
       setDiscounts(data || []);
     } catch (err) {
-      toast.error('Failed to load discounts');
+      notify.notifyError(err, MESSAGES.reports?.loadFailed || t('admin.loadFailed', 'Failed to load data'));
     } finally {
       setLoading(false);
     }
@@ -38,7 +44,7 @@ const AdminDiscounts = () => {
   useEffect(() => { load(); }, []);
 
   const openAdd = () => {
-    setForm({ ...EMPTY, code: `ROUND${Math.floor(10 + Math.random() * 90)}` });
+    setForm({ ...EMPTY, code: `OFFER${Math.floor(100 + Math.random() * 900)}` });
     setModal('add');
   };
 
@@ -51,42 +57,61 @@ const AdminDiscounts = () => {
       tripType: d.tripType,
       minAmount: d.minAmount,
       isActive: d.isActive,
+      holidayTag: d.holidayTag || 'None',
+      showOnHomePage: Boolean(d.showOnHomePage),
     });
     setModal(d);
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!form.code || !form.name) {
-      toast.error('Please provide discount code and promotion name');
+    if (!form.code?.trim()) {
+      notify.warning(MESSAGES.discount?.codeRequired || t('forms.required', 'Required'));
+      return;
+    }
+    if (!form.name?.trim()) {
+      notify.warning(MESSAGES.discount?.nameRequired || t('forms.required', 'Required'));
       return;
     }
     setSaving(true);
     try {
       if (modal === 'add') {
         await discountAPI.create(form);
-        toast.success('Promotional discount created successfully!');
       } else {
         await discountAPI.update(modal._id, form);
-        toast.success('Discount updated successfully!');
       }
       setModal(null);
       load();
     } catch (err) {
-      toast.error(err.message || 'Failed to save discount');
+      notify.notifyError(err, MESSAGES.discount?.saveFailed || t('common.error', 'Error'));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this discount offer?')) return;
+  const handleDelete = async (discount) => {
+    const id = discount?._id;
+    const name = discount?.name || discount?.code || '';
+
+    const confirmed = await notify.confirm({
+      title: t('admin.deleteDiscountTitle', 'Delete Discount?'),
+      message: `${t('admin.confirmDelete', 'Are you sure you want to delete')} ${name ? `"${name}"` : t('admin.thisDiscount', 'this discount offer')}?`,
+      description: t('admin.deleteDiscountDesc', 'Passengers will no longer be able to use this promotion code. This action cannot be undone.'),
+      confirmLabel: t('common.delete', 'Delete'),
+      cancelLabel: t('common.cancel', 'Cancel'),
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
+    setDeletingId(id);
     try {
       await discountAPI.delete(id);
-      toast.success('Discount deleted');
+      setDiscounts((prev) => prev.filter((d) => d._id !== id));
       load();
     } catch (err) {
-      toast.error(err.message || 'Delete failed');
+      notify.notifyError(err, MESSAGES.discount?.deleteFailed || t('common.error', 'Error'));
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -98,223 +123,151 @@ const AdminDiscounts = () => {
 
   const columns = [
     {
-      header: 'Promo Code',
+      header: t('admin.promoCode', 'Promo Code'),
       render: (d) => (
-        <span style={{ fontWeight: 800, color: '#4338ca', background: '#e0e7ff', padding: '4px 10px', borderRadius: '6px', fontSize: '0.85rem', fontFamily: 'monospace' }}>
+        <span className="font-extrabold text-indigo-700 bg-indigo-100 px-2.5 py-1 rounded-md text-[0.85rem] font-mono">
           {d.code}
         </span>
       ),
     },
     {
-      header: 'Promotion Name',
+      header: t('admin.promotionName', 'Promotion Name'),
       render: (d) => (
         <div>
-          <div style={{ fontWeight: 700, color: '#0f172a' }}>{d.name}</div>
-          <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-            {d.tripType === 'round' ? '🔄 Round-Trip Bookings Only' : '✈️ All Trip Types'}
+          <div className="font-bold text-slate-900">{d.name}</div>
+          <div className="text-xs text-slate-500">
+            {d.tripType === 'round' ? `🔄 ${t('admin.roundTripOnly', 'Round-Trip Bookings Only')}` : `✈️ ${t('admin.allTripTypes', 'All Trip Types')}`}
           </div>
         </div>
       ),
     },
     {
-      header: 'Discount Amount',
+      header: t('admin.discountAmount', 'Discount Amount'),
       render: (d) => (
-        <span style={{ fontWeight: 800, color: '#059669', fontSize: '0.9rem' }}>
-          {d.discountType === 'percentage' ? `${d.discountValue}% OFF` : `ETB ${d.discountValue} FLAT OFF`}
+        <span className="font-extrabold text-emerald-600 text-[0.9rem]">
+          {d.discountType === 'percentage' ? `${d.discountValue}% ${t('admin.off', 'OFF')}` : `ETB ${d.discountValue} ${t('admin.flatOff', 'FLAT OFF')}`}
         </span>
       ),
     },
     {
-      header: 'Min Booking Fare',
-      render: (d) => <span style={{ fontWeight: 600, color: '#334155' }}>ETB {d.minAmount || 0}</span>,
+      header: t('admin.minFare', 'Min Booking Fare'),
+      render: (d) => <span className="font-semibold text-slate-700">ETB {d.minAmount || 0}</span>,
     },
     {
-      header: 'Status',
+      header: t('common.status', 'Status'),
       render: (d) => (
-        <span style={{
-          padding: '3px 8px',
-          borderRadius: '6px',
-          fontSize: '11px',
-          fontWeight: 700,
-          background: d.isActive ? '#dcfce7' : '#fee2e2',
-          color: d.isActive ? '#15803d' : '#b91c1c',
-        }}>
-          {d.isActive ? 'ACTIVE' : 'INACTIVE'}
+        <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+          d.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+        }`}>
+          {d.isActive ? t('common.active', 'ACTIVE') : t('common.inactive', 'INACTIVE')}
         </span>
       ),
     },
     {
-      header: 'Actions',
+      header: t('common.actions', 'Actions'),
       render: (d) => (
-        <div className="eb-action-group">
-          <button onClick={() => openEdit(d)} className="eb-btn-action eb-btn-edit">
-            <FaEdit /> Edit
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => openEdit(d)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 text-[0.76rem] font-bold cursor-pointer border-none transition-colors">
+            <FaEdit /> {t('common.edit', 'Edit')}
           </button>
-          <button onClick={() => handleDelete(d._id)} className="eb-btn-action eb-btn-delete">
-            <FaTrash /> Del
+          <button onClick={() => handleDelete(d)} disabled={deletingId === d._id} aria-label={`Delete discount ${d.code || ''}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-[0.76rem] font-bold cursor-pointer border-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+            <FaTrash /> {deletingId === d._id ? t('common.loading', 'Deleting…') : t('common.delete', 'Del')}
           </button>
         </div>
       ),
     },
   ];
 
-  const activeCount = discounts.filter((d) => d.isActive).length;
-  const roundTripCount = discounts.filter((d) => d.tripType === 'round' && d.isActive).length;
-
   return (
     <div>
-      <AdminPageHeader
-        category="MARKETING & PROMOTIONS"
-        title="Promotions & Discounts"
-        icon={<FaTag />}
-        subtitle="Manage promotional discount codes, round-trip automatic savers, percentage cuts, and minimum fare thresholds."
-        stats={[
-          { label: 'Total Discounts', value: discounts.length, color: '#0284c7' },
-          { label: 'Active Promotions', value: activeCount, color: '#16a34a' },
-          { label: 'Round-Trip Savers', value: roundTripCount, color: '#7c3aed' },
-        ]}
-        actions={
-          <button onClick={openAdd} className="eb-btn-primary-header">
-            <FaPlus /> Create Promotion
-          </button>
-        }
-      />
-
       <DataTable
         columns={columns}
         data={filteredDiscounts}
         loading={loading}
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
-        searchPlaceholder="Search promo codes or names..."
-        emptyMessage="No discounts configured. Click 'Add Discount' to create your first round-trip promotion."
+        searchPlaceholder={t('admin.searchPromoPlaceholder', 'Search promo codes or names...')}
+        emptyMessage={t('admin.noDiscountsFound', "No discounts configured. Click 'Add Discount' to create your first round-trip promotion.")}
         actions={
-          <button onClick={openAdd} className="eb-btn-primary-header" style={{ padding: '8px 14px', fontSize: '0.82rem' }}>
-            <FaPlus /> Add Discount
+          <button onClick={openAdd} className="inline-flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-emerald-500 to-emerald-700 text-white border-none rounded-xl font-extrabold text-[0.82rem] cursor-pointer shadow-[0_3px_10px_rgba(16,185,129,0.3)] transition-all hover:-translate-y-px">
+            <FaPlus /> {t('admin.addDiscount', 'Add Discount')}
           </button>
         }
       />
 
       {modal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15,7,40,.6)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '20px',
-          }}
-        >
-          <div
-            style={{
-              background: '#fff',
-              borderRadius: '18px',
-              width: '100%',
-              maxWidth: '480px',
-              overflow: 'hidden',
-              boxShadow: '0 20px 50px rgba(0,0,0,.2)',
-            }}
-          >
-            <div
-              style={{
-                background: 'linear-gradient(135deg,#4f46e5,#3730a3)',
-                padding: '18px 22px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
+        <div className="fixed inset-0 bg-[#0f0728]/60 flex items-center justify-center z-[1000] p-5">
+          <div className="bg-white rounded-[18px] w-full max-w-[480px] overflow-hidden shadow-2xl">
+            <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 px-5 py-[18px] flex justify-between items-center">
               <div>
-                <div style={{ color: '#c7d2fe', fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase' }}>
-                  Promotions &amp; Discounts
+                <div className="text-indigo-200 text-[0.7rem] font-extrabold uppercase">
+                  {t('admin.promotionsDiscounts', 'Promotions & Discounts')}
                 </div>
-                <h3 style={{ color: '#fff', margin: 0, fontWeight: 800 }}>
-                  {modal === 'add' ? 'Create Promotional Discount' : 'Edit Discount'}
+                <h3 className="text-white m-0 font-extrabold">
+                  {modal === 'add' ? t('admin.createDiscount', 'Create Promotional Discount') : t('admin.editDiscount', 'Edit Discount')}
                 </h3>
               </div>
               <button
                 onClick={() => setModal(null)}
-                style={{
-                  background: 'rgba(255,255,255,.15)',
-                  border: 'none',
-                  color: '#fff',
-                  width: 30,
-                  height: 30,
-                  borderRadius: '50%',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+                className="bg-white/15 border-none text-white w-[30px] h-[30px] rounded-full cursor-pointer flex items-center justify-center hover:bg-white/25 transition-colors"
               >
                 <FaTimes />
               </button>
             </div>
-            <form onSubmit={handleSave} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <form onSubmit={handleSave} className="p-5 flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px' }}>
-                    Discount Code
-                  </label>
+                  <label className="text-[0.75rem] font-bold text-slate-500 block mb-1">{t('admin.promoCode', 'Discount Code')}</label>
                   <input
                     type="text"
                     value={form.code}
                     onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
-                    placeholder="ROUNDTRIP10"
+                    placeholder=""
                     required
-                    style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', fontWeight: 800, textTransform: 'uppercase' }}
+                    className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-lg text-[0.9rem] font-extrabold uppercase focus:outline-none focus:border-indigo-400"
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px' }}>
-                    Eligible Trip Type
-                  </label>
+                  <label className="text-[0.75rem] font-bold text-slate-500 block mb-1">{t('admin.eligibleTripType', 'Eligible Trip Type')}</label>
                   <select
                     value={form.tripType}
                     onChange={(e) => setForm({ ...form, tripType: e.target.value })}
-                    style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem' }}
+                    className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-lg text-[0.9rem] focus:outline-none focus:border-indigo-400"
                   >
-                    <option value="round">Round-Trip Only</option>
-                    <option value="all">All Trips (One-Way &amp; Round)</option>
-                    <option value="oneway">One-Way Only</option>
+                    <option value="round">{t('admin.roundTripOnly', 'Round-Trip Only')}</option>
+                    <option value="all">{t('admin.allTripTypes', 'All Trips (One-Way & Round)')}</option>
+                    <option value="oneway">{t('admin.oneWayOnly', 'One-Way Only')}</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px' }}>
-                  Promotion / Offer Name
-                </label>
+                <label className="text-[0.75rem] font-bold text-slate-500 block mb-1">{t('admin.promotionName', 'Promotion / Offer Name')}</label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="e.g. 10% Round-Trip Traveler Saver"
+                  placeholder=""
                   required
-                  style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem' }}
+                  className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-lg text-[0.9rem] focus:outline-none focus:border-indigo-400"
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px' }}>
-                    Discount Calculation
-                  </label>
+                  <label className="text-[0.75rem] font-bold text-slate-500 block mb-1">{t('admin.calculation', 'Discount Calculation')}</label>
                   <select
                     value={form.discountType}
                     onChange={(e) => setForm({ ...form, discountType: e.target.value })}
-                    style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem' }}
+                    className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-lg text-[0.9rem] focus:outline-none focus:border-indigo-400"
                   >
-                    <option value="percentage">Percentage (% Off)</option>
-                    <option value="fixed">Fixed Amount (ETB Off)</option>
+                    <option value="percentage">{t('admin.percentageOff', 'Percentage (% Off)')}</option>
+                    <option value="fixed">{t('admin.fixedOff', 'Fixed Amount (ETB Off)')}</option>
                   </select>
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px' }}>
-                    {form.discountType === 'percentage' ? 'Percentage (% Value)' : 'Fixed Amount (ETB)'}
+                  <label className="text-[0.75rem] font-bold text-slate-500 block mb-1">
+                    {form.discountType === 'percentage' ? t('admin.percentageVal', 'Percentage (% Value)') : t('admin.fixedVal', 'Fixed Amount (ETB)')}
                   </label>
                   <input
                     type="number"
@@ -322,14 +275,14 @@ const AdminDiscounts = () => {
                     onChange={(e) => setForm({ ...form, discountValue: e.target.value })}
                     required
                     min="1"
-                    style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', fontWeight: 700 }}
+                    className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-lg text-[0.9rem] font-bold focus:outline-none focus:border-indigo-400"
                   />
                 </div>
               </div>
 
               <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px' }}>
-                  Minimum Total Fare Threshold (ETB)
+                <label className="text-[0.75rem] font-bold text-slate-500 block mb-1">
+                  {t('admin.minTotalFare', 'Minimum Total Fare Threshold (ETB)')}
                 </label>
                 <input
                   type="number"
@@ -337,58 +290,70 @@ const AdminDiscounts = () => {
                   onChange={(e) => setForm({ ...form, minAmount: e.target.value })}
                   placeholder="0"
                   min="0"
-                  style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem' }}
+                  className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-lg text-[0.9rem] focus:outline-none focus:border-indigo-400"
                 />
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                <input
-                  type="checkbox"
-                  id="activeCheck"
-                  checked={form.isActive}
-                  onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-                />
-                <label htmlFor="activeCheck" style={{ fontSize: '0.85rem', fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
-                  Active discount (applied automatically to round-trip bookings)
+              <div>
+                <label className="text-[0.75rem] font-bold text-amber-600 block mb-1">
+                  🎉 {t('admin.holidayTag', 'Holiday Ceremony Tag / Special Event')}
                 </label>
+                <select
+                  value={form.holidayTag}
+                  onChange={(e) => setForm({ ...form, holidayTag: e.target.value, showOnHomePage: e.target.value !== 'None' ? true : form.showOnHomePage })}
+                  className="w-full px-3 py-2 border-[1.5px] border-amber-200 bg-amber-50/50 rounded-lg text-[0.9rem] font-bold focus:outline-none focus:border-amber-500"
+                >
+                  <option value="None">{t('admin.noneRegular', 'None (Regular Discount)')}</option>
+                  <option value="Easter">{t('admin.easterOffer', 'Easter Special Offer (ፋሲካ)')}</option>
+                  <option value="Christmas">{t('admin.christmasOffer', 'Christmas Special Offer (ገና)')}</option>
+                  <option value="New Year">{t('admin.newYearOffer', 'New Year Special Offer (እንቁጣጣሽ)')}</option>
+                  <option value="Eid">{t('admin.eidOffer', 'Eid Mubarak Offer (ኢድ)')}</option>
+                  <option value="Epiphany / Timket">{t('admin.timketOffer', 'Epiphany / Timket Offer (ጥምቀት)')}</option>
+                  <option value="Holiday Special">{t('admin.otherHolidayOffer', 'Other Holiday Ceremony')}</option>
+                </select>
               </div>
 
-              <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+              <div className="space-y-2 mt-1">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="showOnHomeCheck"
+                    checked={form.showOnHomePage}
+                    onChange={(e) => setForm({ ...form, showOnHomePage: e.target.checked })}
+                    className="w-4 h-4 text-emerald-600 rounded"
+                  />
+                  <label htmlFor="showOnHomeCheck" className="text-[0.85rem] font-bold text-emerald-700 cursor-pointer">
+                    ✨ {t('admin.showOnHome', 'Display this special offer banner on the Home Page')}
+                  </label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="activeCheck"
+                    checked={form.isActive}
+                    onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+                    className="w-4 h-4 text-indigo-600 rounded"
+                  />
+                  <label htmlFor="activeCheck" className="text-[0.85rem] font-semibold text-slate-700 cursor-pointer">
+                    {t('admin.activeDiscountNotice', 'Active discount (applied automatically to bookings)')}
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex gap-2.5 mt-3">
                 <button
                   type="button"
                   onClick={() => setModal(null)}
-                  style={{
-                    flex: 1,
-                    padding: '11px',
-                    border: '1.5px solid #e2e8f0',
-                    borderRadius: '8px',
-                    background: '#fff',
-                    color: '#64748b',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
+                  className="flex-1 py-2.5 border-[1.5px] border-slate-200 rounded-lg bg-white text-slate-500 font-bold cursor-pointer hover:bg-slate-50 transition-colors"
                 >
-                  Cancel
+                  {t('common.cancel', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  style={{
-                    flex: 2,
-                    padding: '11px',
-                    border: 'none',
-                    borderRadius: '8px',
-                    background: '#4f46e5',
-                    color: '#fff',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                  }}
+                  className="flex-[2] py-2.5 border-none rounded-lg bg-indigo-600 text-white font-extrabold cursor-pointer flex items-center justify-center gap-1.5 hover:bg-indigo-700 transition-colors disabled:opacity-70"
                 >
-                  <FaSave /> {saving ? 'Saving...' : modal === 'add' ? 'Save Promotion' : 'Update Discount'}
+                  <FaSave /> {saving ? t('common.saving', 'Saving...') : modal === 'add' ? t('admin.savePromotion', 'Save Promotion') : t('admin.updateDiscount', 'Update Discount')}
                 </button>
               </div>
             </form>

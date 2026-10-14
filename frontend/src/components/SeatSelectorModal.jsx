@@ -6,8 +6,8 @@ import {
 import { toast } from 'react-toastify';
 import { bookingAPI, scheduleAPI } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from '../i18n';
 
-// Map bus type / operator to high-quality coach bus image
 const BUS_IMAGES = {
   VIP: '/images/bus_selam_vip.jpg',
   Luxury: '/images/bus_selam_luxury.jpg',
@@ -16,7 +16,6 @@ const BUS_IMAGES = {
   default: '/images/hero_bus_clean.jpg',
 };
 
-// Exact 45-Seat Bus Layout matching the reference screenshot
 const ROWS = [
   { key: 1,  left: [1],       right: [2, 3] },
   { key: 2,  left: [4, 5],    right: [6, 7] },
@@ -37,7 +36,7 @@ const SeatSelectorModal = ({
   onClose,
   onBookingComplete,
   onConfirmBooking,
-  onSeatsSelectedOnly, // Optional callback for multi-step round trip
+  onSeatsSelectedOnly,  
   requiredSeatsCount,
   titlePrefix = '',
   isAgentBooking = false,
@@ -45,12 +44,12 @@ const SeatSelectorModal = ({
   prefilledPassenger = null,
 }) => {
   const { user } = useAuth();
-  const [modalStep, setModalStep] = useState('seats'); // 'seats' | 'passenger_info'
+  const { t } = useTranslation();
+  const [modalStep, setModalStep] = useState('seats');  
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [bookedSeats, setBookedSeats] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Passenger Information State
   const [passengerForm, setPassengerForm] = useState({
     fullName: isAgentBooking ? (prefilledPassenger?.fullName || '') : (user?.name || ''),
     phone: isAgentBooking ? (prefilledPassenger?.phone || '') : (user?.phone || ''),
@@ -59,12 +58,11 @@ const SeatSelectorModal = ({
     age: isAgentBooking ? (prefilledPassenger?.age || '') : '',
     emergencyContact: '',
     notes: '',
-    bookingChannel: 'walk_in', // 'walk_in' | 'phone_call'
-    paymentStatus: 'PAID', // 'PAID' | 'PENDING'
-    paymentMethod: 'Cash', // 'Cash' | 'CBE Birr' | 'Telebirr' | 'Online Banking'
+    bookingChannel: 'walk_in',  
+    paymentStatus: 'PAID',  
+    paymentMethod: 'Cash',  
   });
 
-  // Per-passenger detail list if multiple seats selected
   const [passengersList, setPassengersList] = useState([]);
 
   useEffect(() => {
@@ -87,7 +85,6 @@ const SeatSelectorModal = ({
     }
   }, [user, isAgentBooking, prefilledPassenger]);
 
-  // Sync passengersList when selectedSeats change
   useEffect(() => {
     setPassengersList(
       selectedSeats.map((seatNum, idx) => ({
@@ -103,7 +100,7 @@ const SeatSelectorModal = ({
   const basePrice    = schedule?.price || 600;
   const singleLegFare = basePrice * (selectedSeats.length || 1);
   const grossSubtotal = isRoundTrip ? singleLegFare * 2 : singleLegFare;
-  const roundTripDiscount = isRoundTrip ? Math.round(grossSubtotal * 0.10) : 0; // 10% round-trip discount
+  const roundTripDiscount = isRoundTrip ? Math.round(grossSubtotal * 0.10) : 0;  
   const totalPayable = grossSubtotal - roundTripDiscount;
   const pricePerSeat = isRoundTrip ? basePrice * 2 : basePrice;
   const routeFrom    = schedule?.route?.from || 'Addis Ababa';
@@ -118,7 +115,6 @@ const SeatSelectorModal = ({
   const busImage     = schedule?.bus?.image || schedule?.image || BUS_IMAGES[busType] || BUS_IMAGES.default;
   const contactPhone = schedule?.companyId?.phone || schedule?.companyPhone || '090 121 1211';
 
-  // Load live booked seats and reset selections on schedule change
   useEffect(() => {
     setSelectedSeats([]);
     setModalStep('seats');
@@ -155,7 +151,6 @@ const SeatSelectorModal = ({
       }
       if (prev.length >= maxAllowed) {
         if (maxAllowed === 1) {
-          // If limit is 1, replace previous seat with the newly selected seat
           return [seatNum];
         } else {
           toast.info(`You have chosen ${maxAllowed} passenger(s). You can only select up to ${maxAllowed} seat(s).`);
@@ -259,18 +254,13 @@ const SeatSelectorModal = ({
     const isBooked   = bookedSeats.includes(num) || bookedSeats.includes(String(num));
     const isSelected = selectedSeats.includes(num);
 
-    let bg = '#ffffff';
-    let border = '#d1d5db';
-    let color = '#1e293b';
-
+    let btnClasses = "w-[38px] h-[34px] rounded-lg text-xs font-extrabold flex items-center justify-center shrink-0 transition-all duration-150 border ";
     if (isBooked) {
-      bg = '#cbd5e1';
-      border = '#94a3b8';
-      color = '#64748b';
+      btnClasses += "bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-400 cursor-not-allowed";
     } else if (isSelected) {
-      bg = '#22c55e';
-      border = '#16a34a';
-      color = '#ffffff';
+      btnClasses += "bg-emerald-500 border-emerald-600 text-white shadow-md shadow-emerald-500/30 cursor-pointer scale-105";
+    } else {
+      btnClasses += "bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-slate-700 cursor-pointer shadow-xs";
     }
 
     return (
@@ -279,23 +269,7 @@ const SeatSelectorModal = ({
         onClick={() => toggleSeat(num)}
         disabled={isBooked}
         title={isBooked ? `Seat ${num} – Occupied` : isSelected ? `Seat ${num} – Selected` : `Seat ${num} – Available`}
-        style={{
-          width: 38,
-          height: 34,
-          borderRadius: 8,
-          border: `1.5px solid ${border}`,
-          background: bg,
-          color,
-          fontWeight: 800,
-          fontSize: '0.82rem',
-          cursor: isBooked ? 'not-allowed' : 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: isSelected ? '0 4px 12px rgba(34,197,94,0.35)' : '0 1px 2px rgba(0,0,0,0.04)',
-          transition: 'all 0.15s ease',
-          flexShrink: 0,
-        }}
+        className={btnClasses}
       >
         {num}
       </button>
@@ -305,352 +279,194 @@ const SeatSelectorModal = ({
   return (
     <div
       onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(15, 23, 42, 0.75)',
-        backdropFilter: 'blur(6px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1100,
-        padding: '16px',
-        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-      }}
+      className="fixed inset-0 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center z-[1100] p-4 font-sans"
     >
       <div
         onClick={e => e.stopPropagation()}
-        style={{
-          background: '#ffffff',
-          width: '100%',
-          maxWidth: 1040,
-          maxHeight: '94vh',
-          borderRadius: 20,
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          border: '1px solid #e2e8f0',
-        }}
+        className="bg-white dark:bg-slate-900 w-full max-w-5xl max-h-[94vh] rounded-2xl shadow-2xl overflow-y-auto flex flex-col border border-slate-200 dark:border-slate-800 transition-colors"
       >
-        {/* ── TOP HEADER (ETHIO TRIP Branding + Operator + Stepper + Support) ── */}
-        <div
-          style={{
-            padding: '18px 28px',
-            borderBottom: '1px solid #e2e8f0',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: 16,
-          }}
-        >
-          {/* Platform Branding: ETHIO TRIP */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <span style={{ fontSize: '1.6rem', fontWeight: 900, color: '#1e40af', letterSpacing: '-0.5px' }}>
-                ETHIO<span style={{ color: '#059669' }}>TRIP</span>
+        {}
+        <div className="px-6 py-4.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between flex-wrap gap-4">
+          {}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-0.5">
+              <span className="text-2xl font-black text-blue-700 dark:text-blue-400 tracking-tight">
+                ETHIO<span className="text-emerald-600 dark:text-emerald-400">TRIP</span>
               </span>
-              <span style={{ background: '#f59e0b', color: '#ffffff', fontSize: '0.65rem', fontWeight: 900, padding: '2px 6px', borderRadius: 4, marginLeft: 3 }}>
+              <span className="bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded ml-1">
                 .ET
               </span>
             </div>
 
-            {/* Selected Bus Company Pill */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                background: '#eff6ff',
-                border: '1px solid #bfdbfe',
-                padding: '4px 10px',
-                borderRadius: 20,
-                fontSize: '0.78rem',
-                fontWeight: 800,
-                color: '#1e40af',
-              }}
-            >
-              <FaBus style={{ color: '#2563eb' }} />
+            {}
+            <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 px-2.5 py-1 rounded-full text-xs font-extrabold text-blue-700 dark:text-blue-300">
+              <FaBus className="text-blue-600 dark:text-blue-400" />
               <span>{titlePrefix ? `${titlePrefix}: ${operatorName}` : operatorName}</span>
             </div>
           </div>
 
-          {/* Stepper */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {}
+          <div className="flex items-center gap-2">
             {(isAgentBooking ? [
-              { n: 1, lbl: 'Schedules', state: 'done' },
-              { n: 2, lbl: 'Seat Selection', state: modalStep === 'seats' ? 'active' : 'done' },
-              { n: 3, lbl: 'Passenger & Payment', state: modalStep === 'passenger_info' ? 'active' : 'next' },
+              { n: 1, lbl: t('schedules', 'Schedules'), state: 'done' },
+              { n: 2, lbl: t('seat selection', 'Seat Selection'), state: modalStep === 'seats' ? 'active' : 'done' },
+              { n: 3, lbl: t('passenger & payment', 'Passenger & Payment'), state: modalStep === 'passenger_info' ? 'active' : 'next' },
             ] : [
-              { n: 1, lbl: 'Search', state: 'done' },
-              { n: 2, lbl: 'Trips', state: 'done' },
-              { n: 3, lbl: 'Seat Selection', state: modalStep === 'seats' ? 'active' : 'done' },
-              { n: 4, lbl: 'Passenger Info', state: modalStep === 'passenger_info' ? 'active' : 'next' },
-              { n: 5, lbl: 'Payment', state: 'next' },
+              { n: 1, lbl: t('search', 'Search'), state: 'done' },
+              { n: 2, lbl: t('trips', 'Trips'), state: 'done' },
+              { n: 3, lbl: t('seat selection', 'Seat Selection'), state: modalStep === 'seats' ? 'active' : 'done' },
+              { n: 4, lbl: t('passenger details', 'Passenger Info'), state: modalStep === 'passenger_info' ? 'active' : 'next' },
+              { n: 5, lbl: t('payment', 'Payment'), state: 'next' },
             ]).map((s, i, arr) => (
               <React.Fragment key={s.n}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div className="flex items-center gap-1.5">
                   <div
-                    style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: '50%',
-                      background: s.state === 'active' ? (isAgentBooking ? '#078930' : '#2563eb') : s.state === 'done' ? '#22c55e' : '#ffffff',
-                      color: s.state === 'next' ? '#94a3b8' : '#ffffff',
-                      fontSize: '0.7rem',
-                      fontWeight: 900,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      border: s.state === 'next' ? '1.5px solid #cbd5e1' : 'none',
-                    }}
+                    className={`w-5.5 h-5.5 rounded-full text-[11px] font-black flex items-center justify-center ${
+                      s.state === 'active'
+                        ? isAgentBooking ? 'bg-emerald-600 text-white' : 'bg-blue-600 text-white'
+                        : s.state === 'done'
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-white dark:bg-slate-800 text-slate-400 border border-slate-300 dark:border-slate-700'
+                    }`}
                   >
-                    {s.state === 'done' ? <FaCheck style={{ fontSize: '0.6rem' }} /> : s.n}
+                    {s.state === 'done' ? <FaCheck className="text-[9px]" /> : s.n}
                   </div>
                   <span
-                    style={{
-                      fontSize: '0.78rem',
-                      fontWeight: s.state === 'active' ? 800 : 600,
-                      color: s.state === 'active' ? (isAgentBooking ? '#078930' : '#2563eb') : s.state === 'done' ? '#0f172a' : '#94a3b8',
-                    }}
+                    className={`text-xs ${
+                      s.state === 'active'
+                        ? isAgentBooking ? 'font-extrabold text-emerald-600 dark:text-emerald-400' : 'font-extrabold text-blue-600 dark:text-blue-400'
+                        : s.state === 'done'
+                        ? 'font-bold text-slate-800 dark:text-slate-200'
+                        : 'font-medium text-slate-400 dark:text-slate-500'
+                    }`}
                   >
                     {s.lbl}
                   </span>
                 </div>
                 {i < arr.length - 1 && (
-                  <div style={{ width: 14, height: 1.5, background: s.state === 'done' ? '#22c55e' : '#e2e8f0' }} />
+                  <div className={`w-3.5 h-[1.5px] ${s.state === 'done' ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700'}`} />
                 )}
               </React.Fragment>
             ))}
           </div>
 
-          {/* Support Phone & Close */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <span style={{ fontSize: '0.82rem', color: '#475569', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-              Need help? <strong style={{ color: '#0f172a', fontWeight: 800 }}><FaPhone style={{ color: '#0f172a', fontSize: '0.75rem' }} /> {contactPhone}</strong>
+          {}
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-slate-600 dark:text-slate-400 font-semibold flex items-center gap-1.5">
+              {t('need help?', 'Need help?')} <strong className="text-slate-900 dark:text-slate-100 font-extrabold flex items-center gap-1"><FaPhone className="text-xs" /> {contactPhone}</strong>
             </span>
             <button
               type="button"
               onClick={onClose}
-              style={{
-                background: '#f1f5f9',
-                border: 'none',
-                color: '#64748b',
-                width: 28,
-                height: 28,
-                borderRadius: '50%',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '0.85rem',
-              }}
+              className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 w-7 h-7 rounded-full cursor-pointer flex items-center justify-center text-sm transition"
             >
               <FaTimes />
             </button>
           </div>
         </div>
 
-        {/* ── TRIP DETAILS BANNER ── */}
-        <div style={{ padding: '18px 28px 0' }}>
-          <div
-            style={{
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
-              borderRadius: 16,
-              padding: '16px 22px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: 16,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-            }}
-          >
-            {/* Bus Photo + Departure & Arrival Stations */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+        {}
+        <div className="px-6 pt-4.5">
+          <div className="bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4 sm:p-5 flex items-center justify-between flex-wrap gap-4 shadow-xs">
+            {}
+            <div className="flex items-center gap-5">
               <img
                 src={busImage}
                 alt={`${operatorName} Bus`}
-                style={{
-                  width: 108,
-                  height: 64,
-                  objectFit: 'cover',
-                  borderRadius: 8,
-                  boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
-                }}
+                className="w-24 sm:w-28 h-16 object-cover rounded-lg shadow-sm"
                 onError={(e) => { e.target.src = BUS_IMAGES.default; }}
               />
 
-              {/* Origin */}
+              {}
               <div>
-                <div style={{ fontWeight: 900, fontSize: '1.05rem', color: '#0f172a' }}>{routeFrom}</div>
-                <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 1 }}>{fromStation}</div>
-                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', marginTop: 3 }}>{travelTime}</div>
+                <div className="font-extrabold text-base text-slate-900 dark:text-white">{routeFrom}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{fromStation}</div>
+                <div className="text-xs font-bold text-slate-900 dark:text-slate-200 mt-1">{travelTime}</div>
               </div>
 
-              <div style={{ fontSize: '1.2rem', color: '#94a3b8', padding: '0 8px' }}>
-                <FaChevronRight style={{ fontSize: '0.9rem' }} />
+              <div className="text-slate-400 px-2">
+                <FaChevronRight className="text-sm" />
               </div>
 
-              {/* Destination */}
+              {}
               <div>
-                <div style={{ fontWeight: 900, fontSize: '1.05rem', color: '#0f172a' }}>{routeTo}</div>
-                <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 1 }}>{toStation}</div>
-                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', marginTop: 3 }}>{arrivalTime}</div>
+                <div className="font-extrabold text-base text-slate-900 dark:text-white">{routeTo}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{toStation}</div>
+                <div className="text-xs font-bold text-slate-900 dark:text-slate-200 mt-1">{arrivalTime}</div>
               </div>
             </div>
 
-            {/* Date, Bus Company, Seat Count, and Change Button */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 28, flexWrap: 'wrap' }}>
+            {}
+            <div className="flex items-center gap-6 sm:gap-7 flex-wrap">
               <div>
-                <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Date</div>
-                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.88rem' }}>{travelDate}</div>
+                <div className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">{t('date', 'Date')}</div>
+                <div className="font-bold text-slate-900 dark:text-slate-100 text-sm">{travelDate}</div>
               </div>
 
               <div>
-                <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Bus</div>
-                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.88rem' }}>{operatorName}</div>
+                <div className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">{t('nav.buses', 'Bus')}</div>
+                <div className="font-bold text-slate-900 dark:text-slate-100 text-sm">{operatorName}</div>
               </div>
 
               <div>
-                <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Total Seats</div>
-                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.88rem' }}>45</div>
+                <div className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">{t('Total Seats', 'Total Seats')}</div>
+                <div className="font-bold text-slate-900 dark:text-slate-100 text-sm">45</div>
               </div>
 
               <button
                 type="button"
                 onClick={onClose}
-                style={{
-                  padding: '8px 16px',
-                  background: '#ffffff',
-                  color: '#2563eb',
-                  border: '1.5px solid #2563eb',
-                  borderRadius: 8,
-                  fontWeight: 800,
-                  fontSize: '0.82rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
+                className="px-3.5 py-2 bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border border-blue-600 dark:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 rounded-lg font-bold text-xs flex items-center gap-1.5 cursor-pointer transition"
               >
-                <FaEdit /> Change Trip
+                <FaEdit /> {t('Change Trip', 'Change Trip')}
               </button>
             </div>
           </div>
         </div>
 
-        {/* ══════════════════════════════════════════════════════════════════════
-            STEP 3: SEAT SELECTION VIEW
-            ══════════════════════════════════════════════════════════════════════ */}
+        {}
         {modalStep === 'seats' && (
-          <div
-            style={{
-              padding: '22px 28px',
-              display: 'grid',
-              gridTemplateColumns: '1fr 340px',
-              gap: 24,
-              alignItems: 'start',
-            }}
-          >
-            {/* ── LEFT COLUMN: BUS CHASSIS SEAT MAP ── */}
-            <div
-              style={{
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
-                borderRadius: 16,
-                padding: '20px',
-              }}
-            >
-              {/* Legend (Selected, Available, Occupied) */}
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 22,
-                  marginBottom: 20,
-                  flexWrap: 'wrap',
-                  justifyContent: 'center',
-                }}
-              >
+          <div className="p-6 grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
+            {}
+            <div className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-5 shadow-xs">
+              {}
+              <div className="flex gap-5 mb-5 flex-wrap justify-center">
                 {[
-                  { bg: '#22c55e', border: '#16a34a', label: 'Selected' },
-                  { bg: '#ffffff', border: '#cbd5e1', label: 'Available' },
-                  { bg: '#cbd5e1', border: '#94a3b8', label: 'Occupied' },
+                  { bg: 'bg-emerald-500 border-emerald-600', label: t('selected', 'Selected') },
+                  { bg: 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600', label: t('available', 'Available') },
+                  { bg: 'bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600', label: t('occupied', 'Occupied') },
                 ].map(l => (
-                  <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '0.82rem', color: '#475569', fontWeight: 600 }}>
-                    <div style={{ width: 15, height: 15, background: l.bg, border: `1.5px solid ${l.border}`, borderRadius: 3 }} />
+                  <div key={l.label} className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 font-semibold">
+                    <div className={`w-4 h-4 border rounded ${l.bg}`} />
                     {l.label}
                   </div>
                 ))}
               </div>
 
-              {/* Bus Graphic Chassis */}
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <div
-                  style={{
-                    width: '100%',
-                    maxWidth: 320,
-                    border: '2.5px solid #2563eb',
-                    borderRadius: '38px 38px 24px 24px',
-                    background: '#ffffff',
-                    boxShadow: '0 10px 25px rgba(37,99,235,0.08)',
-                    overflow: 'hidden',
-                    position: 'relative',
-                  }}
-                >
-                  {/* Windshield / FRONT */}
-                  <div
-                    style={{
-                      background: '#ffffff',
-                      borderBottom: '2px solid #e2e8f0',
-                      padding: '8px 12px',
-                      textAlign: 'center',
-                      fontSize: '0.72rem',
-                      fontWeight: 900,
-                      letterSpacing: '3px',
-                      color: '#475569',
-                    }}
-                  >
+              {}
+              <div className="flex justify-center">
+                <div className="w-full max-w-[320px] border-[2.5px] border-blue-600 dark:border-emerald-500 rounded-[38px_38px_24px_24px] bg-white dark:bg-slate-900 shadow-xl overflow-hidden relative">
+                  {}
+                  <div className="bg-slate-50 dark:bg-slate-800 border-b-2 border-slate-200 dark:border-slate-700 py-2 px-3 text-center text-[11px] font-black tracking-[3px] text-slate-500 dark:text-slate-400">
                     FRONT
                   </div>
 
-                  {/* Seat Grid with Center Dark Rubber Aisle */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 7,
-                      padding: '12px 14px',
-                      background: '#ffffff',
-                    }}
-                  >
+                  {}
+                  <div className="flex flex-col gap-2 p-3 sm:p-4 bg-white dark:bg-slate-900">
                     {ROWS.map(row => (
-                      <div key={row.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        {/* Left seats */}
-                        <div style={{ display: 'flex', gap: 6, minWidth: 82 }}>
+                      <div key={row.key} className="flex items-center justify-between">
+                        {}
+                        <div className="flex gap-1.5 min-w-[82px]">
                           {row.left.map(n => (
                             <SeatBtn key={n} num={n} />
                           ))}
                         </div>
 
-                        {/* Dark Rubber Aisle */}
-                        <div
-                          style={{
-                            flex: 1,
-                            margin: '0 8px',
-                            height: 34,
-                            background: '#334155',
-                            borderRadius: 4,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        />
+                        {}
+                        <div className="flex-1 mx-2 h-8.5 bg-slate-700 dark:bg-slate-800 rounded flex items-center justify-center opacity-80" />
 
-                        {/* Right seats */}
-                        <div style={{ display: 'flex', gap: 6, minWidth: 82, justifyContent: 'flex-end' }}>
+                        {}
+                        <div className="flex gap-1.5 min-w-[82px] justify-end">
                           {row.right.map(n => (
                             <SeatBtn key={n} num={n} />
                           ))}
@@ -659,49 +475,28 @@ const SeatSelectorModal = ({
                     ))}
                   </div>
 
-                  {/* BACK */}
-                  <div
-                    style={{
-                      background: '#ffffff',
-                      borderTop: '2px solid #e2e8f0',
-                      padding: '8px 12px',
-                      textAlign: 'center',
-                      fontSize: '0.72rem',
-                      fontWeight: 900,
-                      letterSpacing: '3px',
-                      color: '#475569',
-                    }}
-                  >
+                  {}
+                  <div className="bg-slate-50 dark:bg-slate-800 border-t-2 border-slate-200 dark:border-slate-700 py-2 px-3 text-center text-[11px] font-black tracking-[3px] text-slate-500 dark:text-slate-400">
                     BACK
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* ── RIGHT COLUMN: SUMMARY CARD ── */}
-            <div
-              style={{
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
-                borderRadius: 16,
-                padding: '24px 22px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 18,
-              }}
-            >
-              {/* Title */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ color: '#2563eb', fontSize: '1.2rem' }}>
+            {}
+            <div className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-6 flex flex-col gap-4 shadow-xs">
+              {}
+              <div className="flex items-center gap-2">
+                <div className="text-blue-600 dark:text-emerald-400 text-lg">
                   <FaCouch />
                 </div>
-                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
-                  Your Selected Seats
+                <h3 className="m-0 text-base font-extrabold text-slate-900 dark:text-white">
+                  {t('your selected seats', 'Your Selected Seats')}
                 </h3>
               </div>
 
-              {/* Selected Seats Chips */}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', minHeight: 34 }}>
+              {}
+              <div className="flex gap-2 flex-wrap min-h-[34px]">
                 {selectedSeats.length > 0 ? (
                   selectedSeats
                     .sort((a, b) => a - b)
@@ -709,380 +504,244 @@ const SeatSelectorModal = ({
                       <span
                         key={s}
                         onClick={() => toggleSeat(s)}
-                        style={{
-                          background: '#f0fdf4',
-                          color: '#16a34a',
-                          border: '1px solid #bbf7d0',
-                          padding: '4px 10px',
-                          borderRadius: 6,
-                          fontWeight: 800,
-                          fontSize: '0.85rem',
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 6,
-                        }}
+                        className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 px-2.5 py-1 rounded-md font-extrabold text-xs cursor-pointer inline-flex items-center gap-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition"
                         title="Click to deselect"
                       >
-                        {s} <span style={{ fontWeight: 900, fontSize: '0.8rem', color: '#16a34a' }}>×</span>
+                        {s} <span className="font-black text-xs">×</span>
                       </span>
                     ))
                 ) : (
-                  <span style={{ fontSize: '0.82rem', color: '#94a3b8', fontStyle: 'italic' }}>
-                    Click available seats on the bus map to select
+                  <span className="text-xs text-slate-400 italic">
+                    {t('click available seats on the bus map to select', 'Click available seats on the bus map to select')}
                   </span>
                 )}
               </div>
 
-              {/* Breakdown */}
-              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 14, fontSize: '0.88rem', color: '#64748b', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Seat(s)</span>
-                  <strong style={{ color: '#0f172a' }}>{selectedSeats.length}</strong>
+              {}
+              <div className="border-t border-slate-100 dark:border-slate-700/60 pt-3.5 text-sm text-slate-500 dark:text-slate-400 flex flex-col gap-2.5">
+                <div className="flex justify-between">
+                  <span>{t('seat(s)', 'Seat(s)')}</span>
+                  <strong className="text-slate-900 dark:text-white">{selectedSeats.length}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Ticket Price (per seat)</span>
-                  <strong style={{ color: '#0f172a' }}>ETB {pricePerSeat.toLocaleString()}</strong>
+                <div className="flex justify-between">
+                  <span>{t('ticket price (per seat)', 'Ticket Price (per seat)')}</span>
+                  <strong className="text-slate-900 dark:text-white">ETB {pricePerSeat.toLocaleString()}</strong>
                 </div>
               </div>
 
-              {/* Total Amount */}
-              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>Total Amount</span>
-                <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#2563eb' }}>
+              {}
+              <div className="border-t border-slate-200 dark:border-slate-700 pt-3.5 flex justify-between items-center">
+                <span className="font-extrabold text-slate-900 dark:text-white text-sm">{t('total amount', 'Total Amount')}</span>
+                <span className="text-xl font-black text-blue-600 dark:text-emerald-400">
                   ETB {(pricePerSeat * selectedSeats.length).toFixed(2)}
                 </span>
               </div>
 
-              {/* Secure Booking Notice Box */}
-              <div
-                style={{
-                  background: '#f0f9ff',
-                  border: '1px solid #e0f2fe',
-                  borderRadius: 12,
-                  padding: '14px 16px',
-                  fontSize: '0.8rem',
-                  color: '#0369a1',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 12,
-                }}
-              >
-                <FaShieldAlt style={{ fontSize: '1.3rem', flexShrink: 0, color: '#0284c7', marginTop: 2 }} />
+              {}
+              <div className="bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/60 rounded-xl p-3.5 text-xs text-sky-700 dark:text-sky-300 flex items-start gap-2.5">
+                <FaShieldAlt className="text-xl shrink-0 text-sky-600 dark:text-sky-400 mt-0.5" />
                 <div>
-                  <strong style={{ color: '#0c4a6e', fontSize: '0.84rem' }}>Secure Booking</strong>
-                  <div style={{ color: '#0369a1', marginTop: 2, fontSize: '0.78rem', lineHeight: 1.4 }}>
-                    Your payment information is safe and encrypted.
+                  <strong className="text-sky-900 dark:text-sky-200 font-bold block mb-0.5">{t('secure booking', 'Secure Booking')}</strong>
+                  <div className="text-sky-700 dark:text-sky-300 text-[11px] leading-relaxed">
+                    {t('your payment information is safe and encrypted.', 'Your payment information is safe and encrypted.')}
                   </div>
                 </div>
               </div>
 
-              {/* Actions */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+              {}
+              <div className="flex flex-col gap-2.5 mt-1">
                 <button
                   type="button"
                   onClick={handleContinueToPassengerInfo}
                   disabled={selectedSeats.length === 0}
-                  style={{
-                    width: '100%',
-                    padding: '14px',
-                    borderRadius: 8,
-                    border: 'none',
-                    background: selectedSeats.length > 0 ? '#1d4ed8' : '#93c5fd',
-                    color: '#ffffff',
-                    fontWeight: 800,
-                    fontSize: '0.92rem',
-                    cursor: selectedSeats.length > 0 ? 'pointer' : 'not-allowed',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 10,
-                    boxShadow: selectedSeats.length > 0 ? '0 4px 12px rgba(29,78,216,0.25)' : 'none',
-                    transition: 'all 0.15s ease',
-                  }}
+                  className={`w-full py-3.5 px-4 rounded-xl font-extrabold text-sm flex items-center justify-center gap-2 transition shadow-md ${
+                    selectedSeats.length > 0
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/25 cursor-pointer'
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
+                  }`}
                 >
-                  <span>Continue to Passenger Info</span> <FaArrowRight />
+                  <span>{t('continue to passenger info', 'Continue to Passenger Info')}</span> <FaArrowRight />
                 </button>
 
                 <button
                   type="button"
                   onClick={onClose}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    borderRadius: 8,
-                    border: '1px solid #cbd5e1',
-                    background: '#ffffff',
-                    color: '#475569',
-                    fontWeight: 700,
-                    fontSize: '0.88rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                  }}
+                  className="w-full py-2.5 px-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition"
                 >
-                  <FaArrowLeft /> Back to Trip Selection
+                  <FaArrowLeft /> {t('back to trip selection', 'Back to Trip Selection')}
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* ══════════════════════════════════════════════════════════════════════
-            STEP 4: PASSENGER INFO VIEW
-            ══════════════════════════════════════════════════════════════════════ */}
+        {}
         {modalStep === 'passenger_info' && (
-          <div
-            style={{
-              padding: '22px 28px',
-              display: 'grid',
-              gridTemplateColumns: '1.2fr 1fr',
-              gap: 24,
-              alignItems: 'start',
-            }}
-          >
-            {/* ── LEFT COLUMN: PASSENGER PERSONAL INFO & PAYMENT SETUP FORM ── */}
-            <div
-              style={{
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
-                borderRadius: 16,
-                padding: '22px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18, borderBottom: '1px solid #f1f5f9', paddingBottom: 12 }}>
-                <div style={{ width: 34, height: 34, borderRadius: 8, background: isAgentBooking ? '#ecfdf5' : '#eff6ff', color: isAgentBooking ? '#078930' : '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>
+          <div className="p-6 grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-6 items-start">
+            {}
+            <div className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-6 shadow-xs">
+              <div className="flex items-center gap-3 mb-5 pb-3 border-b border-slate-100 dark:border-slate-700/60">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base ${
+                  isAgentBooking ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400'
+                }`}>
                   <FaUser />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 900, color: '#0f172a' }}>
-                    {isAgentBooking ? 'Agent Counter & Passenger Booking Details' : 'Passenger Contact & Details'}
+                  <h3 className="m-0 text-base font-extrabold text-slate-900 dark:text-white">
+                    {isAgentBooking ? t('agent booking details', 'Agent Counter & Passenger Booking Details') : t('passenger details', 'Passenger Contact & Details')}
                   </h3>
-                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                    {isAgentBooking ? 'Enter passenger contact info, booking channel, and configure payment status' : 'Please enter accurate personal information for ticketing and verification'}
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    {isAgentBooking ? t('agent booking details desc', 'Enter passenger contact info, booking channel, and configure payment status') : t('passenger info hint', 'Please enter accurate personal information for ticketing and verification')}
                   </span>
                 </div>
               </div>
 
-              <form onSubmit={handleCreateBookingAndPay} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {isAgentBooking ? (
-                  /* Agent Booking Channel Selector */
+              <form onSubmit={handleCreateBookingAndPay} className="flex flex-col gap-4">
+                {isAgentBooking && (
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                      Booking Channel / Source <span style={{ color: '#ef4444' }}>*</span>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                      Booking Channel / Source <span className="text-red-500">*</span>
                     </label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div className="grid grid-cols-2 gap-2.5">
                       <button
                         type="button"
                         onClick={() => setPassengerForm({ ...passengerForm, bookingChannel: 'walk_in' })}
-                        style={{
-                          padding: '10px 12px',
-                          borderRadius: 8,
-                          border: `1.5px solid ${passengerForm.bookingChannel === 'walk_in' ? '#078930' : '#cbd5e1'}`,
-                          background: passengerForm.bookingChannel === 'walk_in' ? '#f0fdf4' : '#ffffff',
-                          color: passengerForm.bookingChannel === 'walk_in' ? '#078930' : '#475569',
-                          fontWeight: 700,
-                          fontSize: '0.82rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 6,
-                        }}
+                        className={`py-2.5 px-3 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                          passengerForm.bookingChannel === 'walk_in'
+                            ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500/20'
+                            : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                        }`}
                       >
                         🚶 Walk-In (Terminal)
                       </button>
                       <button
                         type="button"
                         onClick={() => setPassengerForm({ ...passengerForm, bookingChannel: 'phone_call' })}
-                        style={{
-                          padding: '10px 12px',
-                          borderRadius: 8,
-                          border: `1.5px solid ${passengerForm.bookingChannel === 'phone_call' ? '#078930' : '#cbd5e1'}`,
-                          background: passengerForm.bookingChannel === 'phone_call' ? '#f0fdf4' : '#ffffff',
-                          color: passengerForm.bookingChannel === 'phone_call' ? '#078930' : '#475569',
-                          fontWeight: 700,
-                          fontSize: '0.82rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 6,
-                        }}
+                        className={`py-2.5 px-3 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                          passengerForm.bookingChannel === 'phone_call'
+                            ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500/20'
+                            : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                        }`}
                       >
                         📞 Phone Call Booking
                       </button>
                     </div>
                   </div>
-                ) : null}
+                )}
 
-                {/* Full Name */}
+                {}
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                    Passenger Full Name <span style={{ color: '#ef4444' }}>*</span>
-                    <span style={{ marginLeft: 6, fontSize: '0.7rem', color: '#059669', background: '#dcfce7', padding: '1px 6px', borderRadius: 4 }}>Editable</span>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center">
+                    {t('passenger full name', 'Passenger Full Name')} <span className="text-red-500 ml-0.5">*</span>
+                    <span className="ml-2 text-[10px] text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded font-semibold">{t('editable', 'Editable')}</span>
                   </label>
-                  <div style={{ position: 'relative' }}>
-                    <FaUser style={{ position: 'absolute', left: 12, top: 13, color: '#94a3b8', fontSize: '0.85rem' }} />
+                  <div className="relative">
+                    <FaUser className="absolute left-3.5 top-3.5 text-slate-400 text-xs" />
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Abebe Kebede"
+                      placeholder="e.g. Abebe Bikila"
                       value={passengerForm.fullName}
                       onChange={e => setPassengerForm({ ...passengerForm, fullName: e.target.value })}
-                      style={{
-                        width: '100%',
-                        padding: '11px 12px 11px 36px',
-                        borderRadius: 8,
-                        border: '1.5px solid #86efac',
-                        fontSize: '0.9rem',
-                        outline: 'none',
-                        boxSizing: 'border-box',
-                        background: '#ffffff',
-                        color: '#0f172a',
-                        cursor: 'text',
-                      }}
+                      className="w-full pl-9 pr-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
                     />
                   </div>
                 </div>
 
-                {/* Phone & Email Row */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                {}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                      Phone <span style={{ color: '#ef4444' }}>*</span>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                      {t('phone', 'Phone')} <span className="text-red-500">*</span>
                     </label>
-                    <div style={{ position: 'relative' }}>
-                      <FaPhone style={{ position: 'absolute', left: 12, top: 13, color: '#94a3b8', fontSize: '0.85rem' }} />
+                    <div className="relative">
+                      <FaPhone className="absolute left-3.5 top-3.5 text-slate-400 text-xs" />
                       <input
                         type="tel"
                         required
-                        placeholder="0911234567"
+                        placeholder="09..."
+                        maxLength={10}
                         value={passengerForm.phone}
-                        onChange={e => setPassengerForm({ ...passengerForm, phone: e.target.value })}
-                        style={{
-                          width: '100%',
-                          padding: '11px 12px 11px 36px',
-                          borderRadius: 8,
-                          border: '1.5px solid #86efac',
-                          fontSize: '0.9rem',
-                          outline: 'none',
-                          boxSizing: 'border-box',
-                          background: '#ffffff',
-                          color: '#0f172a',
-                          cursor: 'text',
+                        onChange={e => setPassengerForm({ ...passengerForm, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                        onKeyDown={e => {
+                          if (!/[\d]/.test(e.key) && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) {
+                            e.preventDefault();
+                          }
                         }}
+                        className="w-full pl-9 pr-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                      Email {isAgentBooking ? '(Optional)' : ''}
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                      {t('email', 'Email')} {isAgentBooking ? `(${t('optional', 'Optional')})` : ''}
                     </label>
-                    <div style={{ position: 'relative' }}>
-                      <FaEnvelope style={{ position: 'absolute', left: 12, top: 13, color: '#94a3b8', fontSize: '0.85rem' }} />
+                    <div className="relative">
+                      <FaEnvelope className="absolute left-3.5 top-3.5 text-slate-400 text-xs" />
                       <input
                         type="email"
-                        placeholder="passenger@example.com"
+                        placeholder="e.g. abebe@gmail.com"
                         value={passengerForm.email}
                         onChange={e => setPassengerForm({ ...passengerForm, email: e.target.value })}
-                        style={{
-                          width: '100%',
-                          padding: '11px 12px 11px 36px',
-                          borderRadius: 8,
-                          border: '1.5px solid #86efac',
-                          fontSize: '0.9rem',
-                          outline: 'none',
-                          boxSizing: 'border-box',
-                          background: '#ffffff',
-                          color: '#0f172a',
-                          cursor: 'text',
-                        }}
+                        className="w-full pl-9 pr-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
                       />
                     </div>
                   </div>
                 </div>
 
-                {/* Gender & Age Row */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                {}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                      Gender
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                      {t('gender', 'Gender')}
                     </label>
                     <select
                       value={passengerForm.gender}
                       onChange={e => setPassengerForm({ ...passengerForm, gender: e.target.value })}
-                      style={{
-                        width: '100%',
-                        padding: '11px 12px',
-                        borderRadius: 8,
-                        border: '1.5px solid #86efac',
-                        fontSize: '0.9rem',
-                        outline: 'none',
-                        background: '#ffffff',
-                        boxSizing: 'border-box',
-                        cursor: 'pointer',
-                      }}
+                      className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition cursor-pointer"
                     >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
+                      <option value="Male">{t('male', 'Male')}</option>
+                      <option value="Female">{t('female', 'Female')}</option>
                     </select>
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                      Age (Optional)
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                      {t('age', 'Age')} ({t('optional', 'Optional')})
                     </label>
                     <input
                       type="number"
                       min="1"
                       max="120"
-                      placeholder="e.g. 28"
+                      placeholder="Age"
                       value={passengerForm.age}
                       onChange={e => setPassengerForm({ ...passengerForm, age: e.target.value })}
-                      style={{
-                        width: '100%',
-                        padding: '11px 12px',
-                        borderRadius: 8,
-                        border: '1.5px solid #86efac',
-                        fontSize: '0.9rem',
-                        outline: 'none',
-                        boxSizing: 'border-box',
-                      }}
+                      className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
                     />
                   </div>
                 </div>
 
-                {/* Agent Payment Status & Method Setup */}
+                {}
                 {isAgentBooking && (
-                  <div style={{ background: '#f8fafc', borderRadius: 12, padding: 14, border: '1.5px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <FaCreditCard style={{ color: '#078930' }} /> Agent Payment Status Setup
+                  <div className="bg-slate-50 dark:bg-slate-900/60 rounded-xl p-3.5 border border-slate-200 dark:border-slate-700 flex flex-col gap-3">
+                    <div className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <FaCreditCard className="text-emerald-600 dark:text-emerald-400" /> Agent Payment Status Setup
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
                           Payment Status *
                         </label>
                         <select
                           value={passengerForm.paymentStatus}
                           onChange={e => setPassengerForm({ ...passengerForm, paymentStatus: e.target.value })}
-                          style={{
-                            width: '100%',
-                            padding: '9px 10px',
-                            borderRadius: 8,
-                            border: '1.5px solid #cbd5e1',
-                            fontSize: '0.85rem',
-                            fontWeight: 700,
-                            color: passengerForm.paymentStatus === 'PAID' ? '#166534' : '#b45309',
-                            background: passengerForm.paymentStatus === 'PAID' ? '#f0fdf4' : '#fefce8',
-                            outline: 'none',
-                          }}
+                          className={`w-full px-3 py-2 rounded-lg border text-xs font-bold outline-none cursor-pointer ${
+                            passengerForm.paymentStatus === 'PAID'
+                              ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+                              : 'border-amber-500 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
+                          }`}
                         >
                           <option value="PAID">Paid / Completed (Confirmed)</option>
                           <option value="PENDING">Pending / Reserved (5h Hold)</option>
@@ -1090,21 +749,13 @@ const SeatSelectorModal = ({
                       </div>
 
                       <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
                           Payment Method *
                         </label>
                         <select
                           value={passengerForm.paymentMethod}
                           onChange={e => setPassengerForm({ ...passengerForm, paymentMethod: e.target.value })}
-                          style={{
-                            width: '100%',
-                            padding: '9px 10px',
-                            borderRadius: 8,
-                            border: '1.5px solid #cbd5e1',
-                            fontSize: '0.85rem',
-                            outline: 'none',
-                            background: '#ffffff',
-                          }}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs outline-none cursor-pointer"
                         >
                           <option value="Cash">Cash (Counter)</option>
                           <option value="CBE Birr">CBE Birr</option>
@@ -1116,27 +767,19 @@ const SeatSelectorModal = ({
                   </div>
                 )}
 
-                {/* Multi-Passenger Cards if > 1 seat */}
+                {}
                 {selectedSeats.length > 1 && (
-                  <div style={{ marginTop: 8 }}>
-                    <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 800, color: '#0f172a', marginBottom: 10 }}>
+                  <div className="mt-2">
+                    <label className="block text-xs font-extrabold text-slate-900 dark:text-white mb-2.5">
                       Passenger Names for Assigned Seats:
                     </label>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div className="flex flex-col gap-2.5">
                       {passengersList.map((p, idx) => (
                         <div
                           key={p.seatNumber}
-                          style={{
-                            background: '#f8fafc',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: 10,
-                            padding: '12px 14px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 12,
-                          }}
+                          className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/60 rounded-xl p-3 flex items-center gap-3"
                         >
-                          <span style={{ background: '#22c55e', color: '#fff', padding: '4px 8px', borderRadius: 6, fontWeight: 900, fontSize: '0.78rem' }}>
+                          <span className="bg-emerald-600 text-white px-2.5 py-1 rounded-md font-extrabold text-xs">
                             Seat {p.seatNumber}
                           </span>
                           <input
@@ -1148,14 +791,7 @@ const SeatSelectorModal = ({
                               updated[idx].name = e.target.value;
                               setPassengersList(updated);
                             }}
-                            style={{
-                              flex: 1,
-                              padding: '8px 12px',
-                              borderRadius: 6,
-                              border: '1px solid #cbd5e1',
-                              fontSize: '0.85rem',
-                              outline: 'none',
-                            }}
+                            className="flex-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs outline-none"
                           />
                         </div>
                       ))}
@@ -1165,130 +801,100 @@ const SeatSelectorModal = ({
               </form>
             </div>
 
-            {/* ── RIGHT COLUMN: SUMMARY & ISSUE ACTION ── */}
-            <div
-              style={{
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
-                borderRadius: 16,
-                padding: '24px 22px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 18,
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ color: isAgentBooking ? '#078930' : '#2563eb', fontSize: '1.2rem' }}>
+            {}
+            <div className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-6 flex flex-col gap-4 shadow-xs">
+              <div className="flex items-center gap-2">
+                <div className={`text-lg ${isAgentBooking ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
                   <FaCreditCard />
                 </div>
-                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
-                  {isAgentBooking ? 'Counter Booking Summary' : 'Booking Summary'}
+                <h3 className="m-0 text-base font-extrabold text-slate-900 dark:text-white">
+                  {isAgentBooking ? t('counter booking summary', 'Counter Booking Summary') : t('booking summary', 'Booking Summary')}
                 </h3>
               </div>
 
-              {/* Selected Seats Chips */}
-              <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 700, marginBottom: 6 }}>ASSIGNED SEATS</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {}
+              <div className="bg-slate-50 dark:bg-slate-900/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700/60">
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mb-1.5">{t('assigned seats', 'ASSIGNED SEATS')}</div>
+                <div className="flex gap-1.5 flex-wrap">
                   {selectedSeats.sort((a, b) => a - b).map(s => (
-                    <span key={s} style={{ background: '#22c55e', color: '#fff', padding: '3px 8px', borderRadius: 6, fontWeight: 900, fontSize: '0.8rem' }}>
-                      Seat {s}
+                    <span key={s} className="bg-emerald-500 text-white px-2 py-0.5 rounded font-extrabold text-xs">
+                      {t('seat', 'Seat')} {s}
                     </span>
                   ))}
                 </div>
               </div>
 
-              {/* Breakdown */}
-              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 14, fontSize: '0.88rem', color: '#64748b', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Bus Operator</span>
-                  <strong style={{ color: '#0f172a' }}>{operatorName}</strong>
+              {}
+              <div className="border-t border-slate-100 dark:border-slate-700/60 pt-3.5 text-xs text-slate-500 dark:text-slate-400 flex flex-col gap-2.5">
+                <div className="flex justify-between">
+                  <span>{t('bus company', 'Bus Operator')}</span>
+                  <strong className="text-slate-900 dark:text-white">{operatorName}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Seat(s) Count</span>
-                  <strong style={{ color: '#0f172a' }}>{selectedSeats.length}</strong>
+                <div className="flex justify-between">
+                  <span>{t('seat(s)', "Seat(s) Count")}</span>
+                  <strong className="text-slate-900 dark:text-white">{selectedSeats.length}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Single Leg Fare</span>
-                  <strong style={{ color: '#0f172a' }}>ETB {basePrice.toLocaleString()} / seat</strong>
+                <div className="flex justify-between">
+                  <span>{t('single leg fare', 'Single Leg Fare')}</span>
+                  <strong className="text-slate-900 dark:text-white">ETB {basePrice.toLocaleString()} / {t('seat', 'seat')}</strong>
                 </div>
                 {isRoundTrip && (
                   <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Round-Trip Fare (2 Legs)</span>
-                      <strong style={{ color: '#0f172a' }}>ETB {(basePrice * 2).toLocaleString()} / seat</strong>
+                    <div className="flex justify-between">
+                      <span>{t('round trip fare', 'Round-Trip Fare (2 Legs)')}</span>
+                      <strong className="text-slate-900 dark:text-white">ETB {(basePrice * 2).toLocaleString()} / {t('seat', 'seat')}</strong>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Gross Subtotal</span>
-                      <strong style={{ color: '#0f172a' }}>ETB {grossSubtotal.toLocaleString()}</strong>
+                    <div className="flex justify-between">
+                      <span>{t('Subtotal', 'Gross Subtotal')}</span>
+                      <strong className="text-slate-900 dark:text-white">ETB {grossSubtotal.toLocaleString()}</strong>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}>
-                      <span>Round-Trip Saver (10% OFF)</span>
-                      <strong style={{ color: '#16a34a' }}>- ETB {roundTripDiscount.toLocaleString()}</strong>
+                    <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                      <span>{t('round trip saver', 'Round-Trip Saver (10% OFF)')}</span>
+                      <strong className="font-bold">- ETB {roundTripDiscount.toLocaleString()}</strong>
                     </div>
                   </>
                 )}
                 {isAgentBooking && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Payment Method</span>
-                    <strong style={{ color: '#078930' }}>{passengerForm.paymentMethod}</strong>
+                  <div className="flex justify-between">
+                    <span>{t('payment method', 'Payment Method')}</span>
+                    <strong className="text-emerald-600 dark:text-emerald-400">{passengerForm.paymentMethod}</strong>
                   </div>
                 )}
               </div>
 
-              {/* Total Amount */}
-              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>Total Fare</span>
-                <span style={{ fontSize: '1.35rem', fontWeight: 900, color: isAgentBooking ? '#078930' : '#1d4ed8' }}>
+              {}
+              <div className="border-t border-slate-200 dark:border-slate-700 pt-3.5 flex justify-between items-center">
+                <span className="font-extrabold text-slate-900 dark:text-white text-sm">{t('total amount', 'Total Fare')}</span>
+                <span className={`text-xl font-black ${isAgentBooking ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
                   ETB {totalPayable.toFixed(2)}
                 </span>
               </div>
 
-              {/* Notice Box */}
-              <div
-                style={{
-                  background: isAgentBooking ? '#f0fdf4' : '#f0f9ff',
-                  border: `1px solid ${isAgentBooking ? '#bbf7d0' : '#e0f2fe'}`,
-                  borderRadius: 12,
-                  padding: '12px 14px',
-                  fontSize: '0.78rem',
-                  color: isAgentBooking ? '#166534' : '#0369a1',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                }}
-              >
-                <FaShieldAlt style={{ fontSize: '1.2rem', flexShrink: 0, color: isAgentBooking ? '#16a34a' : '#0284c7' }} />
-                <span>
+              {}
+              <div className={`rounded-xl p-3 text-xs flex items-center gap-2.5 border ${
+                isAgentBooking
+                  ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300'
+                  : 'bg-sky-50 dark:bg-sky-950/30 border-sky-200 dark:border-sky-800/60 text-sky-800 dark:text-sky-300'
+              }`}>
+                <FaShieldAlt className={`text-lg shrink-0 ${isAgentBooking ? 'text-emerald-600 dark:text-emerald-400' : 'text-sky-600 dark:text-sky-400'}`} />
+                <span className="text-[11px] leading-relaxed">
                   {isAgentBooking
                     ? 'Direct staff counter booking. Digital ticket & printable boarding pass issued immediately.'
                     : 'Encrypted payment. Instant digital QR ticket confirmation.'}
                 </span>
               </div>
 
-              {/* Actions */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+              {}
+              <div className="flex flex-col gap-2.5 mt-1">
                 <button
                   type="button"
                   onClick={handleCreateBookingAndPay}
                   disabled={isSubmitting}
-                  style={{
-                    width: '100%',
-                    padding: '14px',
-                    borderRadius: 8,
-                    border: 'none',
-                    background: isAgentBooking ? '#078930' : '#1d4ed8',
-                    color: '#ffffff',
-                    fontWeight: 800,
-                    fontSize: '0.95rem',
-                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 10,
-                    boxShadow: isAgentBooking ? '0 4px 14px rgba(7,137,48,0.35)' : '0 4px 14px rgba(29,78,216,0.35)',
-                    transition: 'all 0.15s ease',
-                  }}
+                  className={`w-full py-3.5 px-4 rounded-xl text-white font-extrabold text-sm flex items-center justify-center gap-2 transition shadow-lg cursor-pointer ${
+                    isAgentBooking
+                      ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/25'
+                      : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/25'
+                  } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   {isSubmitting ? (
                     'Processing Booking…'
@@ -1306,23 +912,9 @@ const SeatSelectorModal = ({
                 <button
                   type="button"
                   onClick={() => setModalStep('seats')}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    borderRadius: 8,
-                    border: '1px solid #cbd5e1',
-                    background: '#ffffff',
-                    color: '#475569',
-                    fontWeight: 700,
-                    fontSize: '0.88rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                  }}
+                  className="w-full py-2.5 px-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition"
                 >
-                  <FaArrowLeft /> Back to Seat Selection
+                  <FaArrowLeft /> {t('back to seat selection', 'Back to Seat Selection')}
                 </button>
               </div>
             </div>

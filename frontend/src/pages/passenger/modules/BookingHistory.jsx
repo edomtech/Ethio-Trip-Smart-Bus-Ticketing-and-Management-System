@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { FaTicketAlt, FaDownload, FaCreditCard, FaHeadset } from 'react-icons/fa';
 import { bookingAPI } from '../../../utils/api';
-import { toast } from 'react-toastify';
 import TicketModal from '../../../components/TicketModal';
 import PaymentModal from '../../../components/PaymentModal';
 import DataTable from '../../../components/DataTable';
-import AdminPageHeader from '../../../components/AdminPageHeader';
+import { useNotification } from '../../../contexts/NotificationContext';
+import { MESSAGES } from '../../../constants/messages';
+import { useTranslation } from '../../../i18n';
 
 const BookingHistory = ({ onAskSupport = null, onPay = null }) => {
+  const { t } = useTranslation();
+  const notify = useNotification();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -21,8 +24,8 @@ const BookingHistory = ({ onAskSupport = null, onPay = null }) => {
         setBookings(res || []);
         setLoading(false);
       })
-      .catch(() => {
-        toast.error('Failed to load bookings');
+      .catch((err) => {
+        notify.notifyError(err, MESSAGES.reports.loadFailed);
         setLoading(false);
       });
   }, []);
@@ -37,168 +40,142 @@ const BookingHistory = ({ onAskSupport = null, onPay = null }) => {
     );
   });
 
-  const isConfirmedBooking = (b) => {
-    const st = (b.status || '').toLowerCase();
-    const ps = (b.paymentStatus || '').toLowerCase();
-    return st === 'confirmed' || st === 'completed' || ps === 'paid' || ps === 'completed';
-  };
-
-  const stats = [
-    { label: 'Total Bookings', val: bookings.length, color: '#0284c7' },
-    { label: 'Confirmed', val: bookings.filter(isConfirmedBooking).length, color: '#16a34a' },
-    { label: 'Pending Payment', val: bookings.filter((b) => (b.status || '').toLowerCase().includes('pending')).length, color: '#d97706' },
-  ];
-
   const columns = [
     {
-      header: 'Ticket No',
+      header: t('ticket.ticketNo', 'Ticket No'),
       render: (b) => {
         const st = (b.status || '').toLowerCase();
         const ps = (b.paymentStatus || '').toLowerCase();
         const isPaid = (st === 'confirmed' || st === 'completed') && (ps === 'paid' || ps === 'completed') && b.ticketNumber;
         if (!isPaid) {
           return (
-            <span style={{ color: '#94a3b8', fontSize: '0.78rem', fontWeight: 600 }}>
+            <span className="text-slate-400 text-[0.78rem] font-semibold">
               —
             </span>
           );
         }
         return (
-          <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#078930' }}>
+          <span className="font-mono font-extrabold text-[#078930] dark:text-emerald-400">
             {b.ticketNumber}
           </span>
         );
       },
     },
     {
-      header: 'Bus Operator',
+      header: t('passenger.busOperator', 'Bus Operator'),
       render: (b) => (
         <div>
-          <span style={{ fontWeight: 800, color: '#0f172a' }}>
+          <span className="font-extrabold text-slate-900 dark:text-white">
             {b.companyId?.companyName || 'Ethio Trip'}
           </span>
-          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+          <div className="text-[0.72rem] text-slate-500 dark:text-slate-400">
             {b.schedule?.bus?.type || 'Standard'}
           </div>
         </div>
       ),
     },
     {
-      header: 'Trip Route',
+      header: t('ticket.route', 'Trip Route'),
       render: (b) => (
         <div>
-          <div style={{ fontWeight: 700, color: '#0f172a' }}>
+          <div className="font-bold text-slate-900 dark:text-white">
             {b.schedule?.route?.from || 'Origin'} → {b.schedule?.route?.to || 'Destination'}
           </div>
-          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-            Date: {b.schedule?.date || 'Upcoming'} · {b.schedule?.departureTime || ''}
+          <div className="text-[0.72rem] text-slate-500 dark:text-slate-400">
+            {t('common.date', 'Date')}: {b.schedule?.date || 'Upcoming'} · {b.schedule?.departureTime || ''}
           </div>
         </div>
       ),
     },
     {
-      header: 'Trip Type',
+      header: t('ticket.journeyLeg', 'Trip Type'),
       render: (b) => (
-        <span style={{
-          fontSize: '0.72rem',
-          fontWeight: 800,
-          padding: '3px 8px',
-          borderRadius: 6,
-          background: b.tripType === 'round' ? '#fef3c7' : '#f1f5f9',
-          color: b.tripType === 'round' ? '#92400e' : '#475569',
-          border: `1px solid ${b.tripType === 'round' ? '#fde68a' : '#e2e8f0'}`,
-          display: 'inline-block',
-          whiteSpace: 'nowrap'
-        }}>
-          {b.tripType === 'round' ? '🔁 Round-Trip' : 'One-Way'}
+        <span className={`text-[0.72rem] font-extrabold py-1 px-2 rounded-md inline-block whitespace-nowrap border ${
+          b.tripType === 'round'
+            ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+        }`}>
+          {b.tripType === 'round' ? `🔁 ${t('home.tripTypeRound', 'Round-Trip')}` : t('home.tripTypeOneWay', 'One-Way')}
         </span>
       ),
     },
     {
-      header: 'Seats',
+      header: t('booking.selectedSeats', 'Seats'),
       render: (b) => (
-        <span className="eb-badge eb-badge-vip" style={{ background: '#e0f2fe', color: '#0284c7' }}>
+        <span className="inline-block py-0.5 px-2 rounded-md text-xs font-bold bg-sky-100 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300">
           {Array.isArray(b.selectedSeats) ? b.selectedSeats.join(', ') : b.selectedSeats || '—'}
         </span>
       ),
     },
     {
-      header: 'Fare Paid',
-      render: (b) => <span style={{ fontWeight: 800, color: '#078930' }}>ETB {b.totalPrice}</span>,
+      header: t('ticket.totalFare', 'Fare Paid'),
+      render: (b) => <span className="font-extrabold text-[#078930] dark:text-emerald-400">ETB {b.totalPrice}</span>,
     },
     {
-      header: 'Status',
+      header: t('common.status', 'Status'),
       render: (b) => {
         const st = (b.status || '').toLowerCase();
         const isConfirmed = st === 'confirmed' || st === 'completed';
         const isPending = st === 'pending' || st === 'pending_payment';
         return (
-          <span className={`eb-badge ${isConfirmed ? 'eb-badge-active' : isPending ? 'eb-badge-pending' : 'eb-badge-inactive'}`}>
-            {isConfirmed ? 'Confirmed' : isPending ? 'Pending Payment' : b.status}
+          <span className={`inline-block py-0.5 px-2.5 rounded-full text-xs font-bold ${
+            isConfirmed
+              ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300'
+              : isPending
+              ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+          }`}>
+            {isConfirmed ? t('common.confirmed', 'Confirmed') : isPending ? t('passenger.pendingPayments', 'Pending Payment') : b.status}
           </span>
         );
       },
     },
     {
-      header: 'Actions',
+      header: t('common.actions', 'Actions'),
       render: (b) => {
         const st = (b.status || '').toLowerCase();
         const ps = (b.paymentStatus || '').toLowerCase();
         const isCancelled = st === 'cancelled';
         const isPaid = !isCancelled && (st === 'confirmed' || st === 'completed') && (ps === 'paid' || ps === 'completed') && Boolean(b.ticketNumber);
 
-        const handleDelete = (id, tktNo) => {
-          if (!window.confirm(`Are you sure you want to delete booking ${tktNo || ''} from history?`)) return;
+        const handleDelete = async (id, tktNo) => {
+          const confirmed = await notify.confirm({
+            title: t('passenger.removeBooking', 'Remove Booking From History?'),
+            message: `${t('passenger.removeBookingConfirm', 'Are you sure you want to remove booking')} ${tktNo || ''}?`,
+            description: t('passenger.removeBookingDesc', 'This only hides the booking from this view. Your booking and ticket records are not affected.'),
+            confirmLabel: t('common.delete', 'Remove'),
+            cancelLabel: t('common.cancel', 'Cancel'),
+            variant: 'danger',
+          });
+          if (!confirmed) return;
           setBookings(prev => prev.filter(bk => bk._id !== id));
-          toast.success(`Booking ${tktNo || ''} deleted`);
         };
 
         if (isCancelled) {
           return (
-            <span style={{ color: '#ef4444', fontSize: '0.74rem', fontWeight: 800, background: '#fef2f2', padding: '3px 8px', borderRadius: 6 }}>
-              Cancelled
+            <span className="text-red-500 bg-red-50 dark:bg-red-950/40 text-[0.74rem] font-extrabold py-1 px-2 rounded-md">
+              {t('common.cancelled', 'Cancelled')}
             </span>
           );
         }
 
         if (!isPaid) {
           return (
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <div className="flex gap-1.5 items-center">
               <button
                 type="button"
                 onClick={() => onPay ? onPay(b) : setSelectedBookingForPayment(b)}
-                style={{
-                  padding: '6px 12px',
-                  background: '#d97706',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 8,
-                  fontWeight: 800,
-                  fontSize: '0.78rem',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  boxShadow: '0 2px 5px rgba(217,119,6,0.2)',
-                }}
-                title="Pay now to get your E-Ticket"
+                className="py-1.5 px-3 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-extrabold text-[0.78rem] cursor-pointer inline-flex items-center gap-1.5 shadow-sm transition"
+                title={t('common.payNow', 'Pay Now')}
               >
-                <FaCreditCard /> Pay Now
+                <FaCreditCard /> {t('common.payNow', 'Pay Now')}
               </button>
               {onAskSupport && (
                 <button
                   type="button"
                   onClick={() => onAskSupport(b)}
-                  title="Ask a question about this reservation"
-                  style={{
-                    padding: '6px 8px',
-                    background: '#eff6ff',
-                    color: '#2563eb',
-                    border: '1px solid #bfdbfe',
-                    borderRadius: 8,
-                    fontSize: '0.78rem',
-                    cursor: 'pointer',
-                  }}
+                  title={t('passenger.askQuestion', 'Ask a question about this reservation')}
+                  className="p-1.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg text-[0.78rem] cursor-pointer hover:bg-blue-100 transition"
                 >
                   <FaHeadset />
                 </button>
@@ -208,42 +185,21 @@ const BookingHistory = ({ onAskSupport = null, onPay = null }) => {
         }
 
         return (
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <div className="flex gap-1.5 items-center">
             <button
               type="button"
               onClick={() => setSelectedBooking(b)}
-              className="eb-btn-action eb-btn-view"
-              style={{
-                padding: '6px 12px',
-                background: '#078930',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 8,
-                fontWeight: 800,
-                fontSize: '0.78rem',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 5,
-              }}
-              title="Open and view official E-Ticket"
+              className="py-1.5 px-3 bg-[#078930] hover:bg-emerald-700 text-white rounded-lg font-extrabold text-[0.78rem] cursor-pointer inline-flex items-center gap-1.5 shadow-sm transition"
+              title={t('passenger.viewETicket', 'Open and view official E-Ticket')}
             >
-              <FaTicketAlt /> E-Ticket
+              <FaTicketAlt /> {t('ticket.title', 'E-Ticket')}
             </button>
             {onAskSupport && (
               <button
                 type="button"
                 onClick={() => onAskSupport(b)}
-                title="Ask question to staff"
-                style={{
-                  padding: '6px 8px',
-                  background: '#eff6ff',
-                  color: '#2563eb',
-                  border: '1px solid #bfdbfe',
-                  borderRadius: 8,
-                  fontSize: '0.78rem',
-                  cursor: 'pointer',
-                }}
+                title={t('passenger.askQuestion', 'Ask question')}
+                className="p-1.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg text-[0.78rem] cursor-pointer hover:bg-blue-100 transition"
               >
                 <FaHeadset />
               </button>
@@ -251,19 +207,8 @@ const BookingHistory = ({ onAskSupport = null, onPay = null }) => {
             <button
               type="button"
               onClick={() => handleDelete(b._id, b.ticketNumber)}
-              title="Delete from history"
-              style={{
-                padding: '6px 9px',
-                background: '#fef2f2',
-                color: '#dc2626',
-                border: '1px solid #fecaca',
-                borderRadius: 8,
-                fontWeight: 800,
-                fontSize: '0.78rem',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-              }}
+              title={t('common.delete', 'Delete')}
+              className="py-1.5 px-2 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg font-extrabold text-[0.78rem] cursor-pointer inline-flex items-center hover:bg-red-100 transition"
             >
               ✕
             </button>
@@ -274,27 +219,15 @@ const BookingHistory = ({ onAskSupport = null, onPay = null }) => {
   ];
 
   return (
-    <div>
-      <AdminPageHeader
-        category="TRAVEL HISTORY & RESERVATIONS"
-        title="My Booking History"
-        icon={<FaTicketAlt />}
-        subtitle="Review all your past, active, confirmed, and pending intercity bus reservations with official E-ticket downloads."
-        stats={[
-          { label: 'Total Bookings', value: bookings.length, color: '#0284c7' },
-          { label: 'Confirmed Tickets', value: bookings.filter(isConfirmedBooking).length, color: '#16a34a' },
-          { label: 'Pending Payment', value: bookings.filter((b) => (b.status || '').toLowerCase().includes('pending')).length, color: '#d97706' },
-        ]}
-      />
-
+    <div className="w-full">
       <DataTable
         columns={columns}
         data={filtered}
         loading={loading}
         searchTerm={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search by ticket number, company, or route..."
-        emptyMessage="No booking history found. Search and book your bus tickets anytime!"
+        searchPlaceholder={t('buses.searchPlaceholder', 'Search by ticket number, company, or route...')}
+        emptyMessage={t('passenger.noBookingsRecorded', 'No booking history found. Search and book your bus tickets anytime!')}
       />
 
       {selectedBooking && <TicketModal booking={selectedBooking} onClose={() => setSelectedBooking(null)} />}
@@ -306,7 +239,7 @@ const BookingHistory = ({ onAskSupport = null, onPay = null }) => {
             setSelectedBookingForPayment(null);
             setBookings(prev => prev.map(b => b._id === updated._id ? updated : b));
             setSelectedBooking(updated);
-            toast.success('Payment verified! Your official E-Ticket is ready.');
+            notify.success(MESSAGES.payment.success);
           }}
         />
       )}

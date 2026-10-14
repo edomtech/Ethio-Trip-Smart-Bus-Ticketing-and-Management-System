@@ -5,45 +5,27 @@ import { scheduleAPI, ticketAPI, conductorReportAPI, authAPI } from '../../utils
 import {
   FaBus,
   FaQrcode,
-  FaUsers,
   FaCheckCircle,
   FaTimesCircle,
   FaClock,
   FaSearch,
-  FaRoute,
   FaClipboardList,
-  FaShieldAlt,
   FaExclamationTriangle,
   FaUserCircle,
   FaSync,
-  FaArrowRight,
   FaSignOutAlt,
   FaBars,
-  FaChartBar,
   FaTachometerAlt,
   FaPaperPlane,
-  FaUserCheck,
-  FaCamera,
   FaEye,
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
-import { useTranslation } from '../../i18n.jsx';
+import { useTranslation } from '../../i18n';
 import LanguageSelector from '../../components/LanguageSelector';
 import CameraQRScanner from '../../components/CameraQRScanner';
 import PassengerDetailsModal from '../../components/PassengerDetailsModal';
-
-/* ── Colour palette for Conductor portal (indigo / purple theme) ─────────── */
-const C = {
-  primary:   '#4f46e5',
-  primaryDk: '#3730a3',
-  primaryLt: '#e0e7ff',
-  sidebar:   'linear-gradient(180deg, #1e1b4b 0%, #312e81 60%, #3730a3 100%)',
-  accent:    '#818cf8',
-  success:   '#10b981',
-  danger:    '#ef4444',
-  warn:      '#f59e0b',
-  bg:        '#f8fafc',
-};
+import NotificationPanel from '../../components/NotificationPanel';
+import ThemeToggle from '../../components/ThemeToggle';
 
 const ConductorDashboard = () => {
   const { user, logout } = useAuth();
@@ -51,7 +33,8 @@ const ConductorDashboard = () => {
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 1024 : false));
 
   const [assignedTrips, setAssignedTrips] = useState([]);
   const [selectedTrip, setSelectedTrip] = useState(null);
@@ -61,7 +44,6 @@ const ConductorDashboard = () => {
   const [loadingTrips, setLoadingTrips] = useState(false);
   const [loadingManifest, setLoadingManifest] = useState(false);
 
-  /* Validation & Boarding */
   const [ticketQuery, setTicketQuery] = useState('');
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] = useState(null);
@@ -71,10 +53,8 @@ const ConductorDashboard = () => {
   const [selectedPassengerForModal, setSelectedPassengerForModal] = useState(null);
   const [showCameraModal, setShowCameraModal] = useState(false);
 
-  /* Manifest filter */
   const [manifestFilter, setManifestFilter] = useState('ALL');
 
-  /* Problem Reporting State */
   const [problemCategory, setProblemCategory] = useState('Passenger problem');
   const [problemDescription, setProblemDescription] = useState('');
   const [problemPassenger, setProblemPassenger] = useState('');
@@ -83,7 +63,6 @@ const ConductorDashboard = () => {
   const [myReports, setMyReports] = useState([]);
   const [loadingReports, setLoadingReports] = useState(false);
 
-  /* Profile State */
   const [profileForm, setProfileForm] = useState({
     name: user?.name || '',
     email: user?.email || '',
@@ -92,7 +71,6 @@ const ConductorDashboard = () => {
   });
   const [savingProfile, setSavingProfile] = useState(false);
 
-  /* ── Data fetching ─────────────────────────────────────────────────────── */
   useEffect(() => {
     fetchAssignedTrips();
     fetchMyReports();
@@ -120,7 +98,7 @@ const ConductorDashboard = () => {
     try {
       setLoadingManifest(true);
       const data = await ticketAPI.getTripManifest({ scheduleId });
-      setManifest(data.passengers || []);
+      setManifest(data.manifest || data.passengers || []);
       setManifestStats({
         total: data.totalPassengers || 0,
         verified: data.verifiedCount || 0,
@@ -157,7 +135,7 @@ const ConductorDashboard = () => {
     }
 
     if (!query || !query.trim()) {
-      toast.warning('Please scan a QR code or enter a ticket number');
+      toast.warning(t('conductor.scanOrEnterPrompt', 'Please scan a QR code or enter a ticket number'));
       return;
     }
 
@@ -186,37 +164,39 @@ const ConductorDashboard = () => {
       if (res.valid) {
         setValidationResult(res.ticket);
         setValidationError('');
-        toast.success(`✅ Ticket verified for ${res.ticket.passengerName} (Seat ${res.ticket.seatNumber})`);
+        toast.success(`✅ ${t('ticket.verified', 'Ticket verified for')} ${res.ticket.passengerName} (${t('booking.seat', 'Seat')} ${res.ticket.seatNumber})`);
       } else {
         setValidationResult(res.ticket || null);
-        setValidationError(res.message || 'Ticket is not valid for boarding');
+        setValidationError(res.message || t('conductor.invalidForBoarding', 'Ticket is not valid for boarding'));
         if (res.status === 'NOT_VERIFIED_BY_AGENT') {
-          toast.warning('⚠️ Ticket requires counter verification by an Agent before boarding.');
+          toast.warning(`⚠️ ${t('conductor.requiresAgentVerification', 'Ticket requires counter verification by an Agent before boarding.')}`);
         } else {
-          toast.error(res.message || 'Validation failed');
+          toast.error(res.message || t('conductor.validationFailed', 'Validation failed'));
         }
       }
     } catch (err) {
-      setValidationError(err.message || 'Invalid Ticket / Unrecognized QR Code');
-      toast.error(err.message || 'Validation failed');
+      setValidationError(err.message || t('conductor.invalidTicketOrQR', 'Invalid Ticket / Unrecognized QR Code'));
+      toast.error(err.message || t('conductor.validationFailed', 'Validation failed'));
     } finally {
       setValidating(false);
     }
   };
 
   const handleConfirmBoarding = async (ticket) => {
+    if (!ticket) return;
+
     try {
       setActionLoading(true);
       setBoardingSuccess('');
       setValidationError('');
       await ticketAPI.conductorConfirmBoarding({ ticketId: ticket._id, ticketNumber: ticket.ticketNumber });
-      setBoardingSuccess(`Boarding confirmed for ${ticket.passengerName} (Seat: ${ticket.seatNumber})!`);
+      setBoardingSuccess(`${t('conductor.boardingConfirmedFor', 'Boarding confirmed for')} ${ticket.passengerName} (${t('booking.seat', 'Seat')}: ${ticket.seatNumber})!`);
       setValidationResult(null);
       setTicketQuery('');
       if (selectedTrip) fetchTripManifest(selectedTrip._id);
-      toast.success('Passenger boarded successfully!');
+      toast.success(t('conductor.paxBoardedSuccess', 'Passenger boarded successfully!'));
     } catch (err) {
-      setValidationError(err.message || 'Failed to confirm boarding');
+      setValidationError(err.message || t('conductor.failedConfirmBoarding', 'Failed to confirm boarding'));
     } finally {
       setActionLoading(false);
     }
@@ -225,7 +205,7 @@ const ConductorDashboard = () => {
   const handleSubmitProblem = async (e) => {
     e.preventDefault();
     if (!problemDescription.trim()) {
-      toast.warning('Please enter problem details');
+      toast.warning(t('forms.required', 'Please enter problem details'));
       return;
     }
 
@@ -240,13 +220,13 @@ const ConductorDashboard = () => {
         category: problemCategory,
         description: problemDescription.trim(),
       });
-      toast.success('Problem report filed to Company Admin successfully!');
+      toast.success(t('conductor.problemFiledSuccess', 'Problem report filed to Company Admin successfully!'));
       setProblemDescription('');
       setProblemPassenger('');
       setProblemTicket('');
       fetchMyReports();
     } catch (err) {
-      toast.error(err.message || 'Failed to file problem report');
+      toast.error(err.message || t('conductor.problemFileFailed', 'Failed to file problem report'));
     } finally {
       setSubmittingProblem(false);
     }
@@ -264,10 +244,10 @@ const ConductorDashboard = () => {
         payload.password = profileForm.newPassword;
       }
       await authAPI.updateProfile(payload);
-      toast.success('Conductor profile updated successfully!');
+      toast.success(t('conductor.profileUpdatedSuccess', 'Conductor profile updated successfully!'));
       setProfileForm((prev) => ({ ...prev, newPassword: '' }));
     } catch (err) {
-      toast.error(err.message || 'Failed to update profile');
+      toast.error(err.message || t('admin.profileUpdateFailed', 'Failed to update profile'));
     } finally {
       setSavingProfile(false);
     }
@@ -275,7 +255,7 @@ const ConductorDashboard = () => {
 
   const handleLogout = () => {
     logout();
-    toast.success('Logged out successfully');
+    toast.success(t('auth.logoutSuccess', 'Logged out successfully'));
     navigate('/');
   };
 
@@ -287,73 +267,54 @@ const ConductorDashboard = () => {
     return true;
   });
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todayAssigned = assignedTrips.filter((t) => t.date === todayStr);
-
   const companyName = user?.companyId?.companyName || 'Transport Fleet';
 
-  // Conductor Sidebar Items
   const navItems = [
     { id: 'dashboard', label: t('nav.dashboard', 'Dashboard'), icon: <FaTachometerAlt /> },
-    { id: 'assigned_trips', label: 'Assigned Trips', icon: <FaBus /> },
-    { id: 'passenger_list', label: t('nav.passenger', 'Passenger Manifest'), icon: <FaClipboardList /> },
-    { id: 'scan_board', label: 'Scan & Board Passenger', icon: <FaQrcode /> },
-    { id: 'report_problem', label: 'Report Problem', icon: <FaExclamationTriangle />, badge: myReports.filter((r) => r.status === 'OPEN').length },
-    { id: 'profile', label: t('common.profile', 'Profile'), icon: <FaUserCircle /> },
+    { id: 'assigned_trips', label: t('conductor.assignedTrips', 'Assigned Trips'), icon: <FaBus /> },
+    { id: 'passenger_list', label: t('conductor.passengerManifest', 'Passenger Manifest'), icon: <FaClipboardList /> },
+    { id: 'scan_board', label: t('conductor.scanAndBoard', 'Scan & Board Passenger'), icon: <FaQrcode /> },
+    { id: 'report_problem', label: t('conductor.reportProblem', 'Report Problem'), icon: <FaExclamationTriangle />, badge: myReports.filter((r) => r.status === 'OPEN').length },
   ];
 
-  const card = { background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.03)' };
-
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: C.bg, fontFamily: "'Poppins','Inter',sans-serif" }}>
-      {/* ── LEFT SIDEBAR ── */}
+    <div className="flex h-screen bg-slate-50 font-poppins relative overflow-hidden">
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[99] lg:hidden backdrop-blur-sm"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       <aside
-        style={{
-          width: sidebarOpen ? 260 : 0,
-          minWidth: sidebarOpen ? 260 : 0,
-          background: C.sidebar,
-          color: '#fff',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          padding: sidebarOpen ? '24px 16px' : 0,
-          position: 'fixed',
-          top: 0,
-          bottom: 0,
-          left: 0,
-          zIndex: 100,
-          boxShadow: '4px 0 24px rgba(0,0,0,0.18)',
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          transition: 'width 0.25s ease, min-width 0.25s ease, padding 0.25s ease',
-        }}
+        className={`bg-gradient-to-b from-[#1e1b4b] via-[#312e81] to-[#3730a3] text-white flex flex-col justify-between fixed top-0 bottom-0 left-0 z-[100] shadow-[4px_0_24px_rgba(0,0,0,0.18)] overflow-y-auto overflow-x-hidden transition-all duration-250 ease-in-out ${
+          sidebarOpen ? 'w-[260px] min-w-[260px] p-6 px-4' : 'w-0 min-w-0 p-0'
+        }`}
       >
         {sidebarOpen && (
           <>
             <div>
-              {/* Brand */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0 8px 24px', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: 20 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem', flexShrink: 0 }}>
+              <div className="flex items-center gap-3 px-2 pb-6 border-b border-white/10 mb-5">
+                <div className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center text-xl shrink-0">
                   <FaBus />
                 </div>
                 <div>
-                  <div style={{ fontWeight: 900, fontSize: '0.95rem', lineHeight: 1.2 }}>Conductor Portal</div>
-                  <div style={{ fontSize: '0.72rem', color: C.accent, fontWeight: 600 }}>{companyName}</div>
+                  <div className="font-black text-[0.95rem] leading-tight">{t('conductor', 'Conductor')}</div>
+                  <div className="text-[0.72rem] text-indigo-400 font-semibold">{companyName}</div>
                 </div>
               </div>
 
-              {/* Nav */}
-              <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <nav className="flex flex-col gap-1">
                 {navItems.map((item) => (
                   <button
                     key={item.id}
-                    onClick={() => setActiveTab(item.id)}
-                    className={`eb-as-nav-item${activeTab === item.id ? ' active' : ''}`}
+                    onClick={() => { setActiveTab(item.id); if (window.innerWidth < 1024) setSidebarOpen(false); }}
+                    className={`flex items-center gap-3.5 w-full px-4 py-3 rounded-xl border-none text-[0.9rem] font-semibold cursor-pointer text-left transition-all ${activeTab === item.id ? 'bg-white/20 text-white font-extrabold shadow-sm' : 'bg-transparent text-slate-300 hover:bg-white/[0.08] hover:text-white'}`}
                   >
-                    <span style={{ fontSize: '1rem', flexShrink: 0 }}>{item.icon}</span>
-                    <span style={{ flex: 1 }}>{item.label}</span>
+                    <span className="text-base shrink-0">{item.icon}</span>
+                    <span className="flex-1">{item.label}</span>
                     {item.badge > 0 && (
-                      <span style={{ marginLeft: 'auto', background: '#ef4444', color: '#fff', fontSize: '0.7rem', padding: '2px 6px', borderRadius: 10, fontWeight: 800 }}>
+                      <span className="ml-auto bg-red-500 text-white text-[0.7rem] px-1.5 py-0.5 rounded-full font-extrabold">
                         {item.badge}
                       </span>
                     )}
@@ -362,48 +323,32 @@ const ConductorDashboard = () => {
               </nav>
             </div>
 
-            {/* Logout */}
             <button
               onClick={handleLogout}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 10, border: 'none', background: 'rgba(239,68,68,0.15)', color: '#fca5a5', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', width: '100%', marginTop: 16 }}
+              className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg border-none bg-red-500/15 text-red-300 font-bold text-[0.85rem] cursor-pointer w-full mt-4 hover:bg-red-500/25 transition-colors"
             >
-              <FaSignOutAlt /> Logout
+              <FaSignOutAlt /> {t('common.logout', 'Logout')}
             </button>
           </>
         )}
       </aside>
 
-      {/* ── RIGHT PANEL ── */}
-      <div style={{ marginLeft: sidebarOpen ? 260 : 0, flex: 1, display: 'flex', flexDirection: 'column', transition: 'margin-left 0.25s ease', minWidth: 0 }}>
-        {/* Topbar */}
-        <header
-          style={{
-            background: '#fff',
-            borderBottom: '1px solid #e2e8f0',
-            padding: '0 28px',
-            height: 64,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            position: 'sticky',
-            top: 0,
-            zIndex: 90,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      <div className={`flex-1 flex flex-col h-screen overflow-hidden transition-[margin-left] duration-250 ease-in-out min-w-0 ${sidebarOpen ? 'lg:ml-[260px]' : 'ml-0'}`}>
+        <header className="bg-white border-b border-slate-200 px-7 h-16 flex items-center justify-between sticky top-0 z-[90] shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <div className="flex items-center gap-3.5">
             <button
               onClick={() => setSidebarOpen((o) => !o)}
-              style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#64748b', padding: 6, borderRadius: 8 }}
+              className="bg-transparent border-none text-[1.2rem] cursor-pointer text-slate-500 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
             >
               <FaBars />
             </button>
-            <div style={{ background: `${C.primary}18`, color: C.primary, padding: '4px 14px', borderRadius: 50, fontSize: '0.78rem', fontWeight: 800 }}>
-              🚌 Conductor Boarding & Onboard Center
+            <div className="bg-indigo-600/10 text-indigo-600 px-3.5 py-1 rounded-full text-[0.78rem] font-extrabold">
+              🚌 {t('conductor.boardingOnboardCenter', 'Conductor Boarding & Onboard Center')}
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div className="flex items-center gap-2.5">
+            <ThemeToggle />
             <LanguageSelector />
             <button
               onClick={() => {
@@ -411,57 +356,83 @@ const ConductorDashboard = () => {
                 if (selectedTrip) fetchTripManifest(selectedTrip._id);
                 fetchMyReports();
               }}
-              style={{ background: `${C.primary}12`, color: C.primary, border: 'none', padding: '8px 14px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer' }}
+              className="bg-indigo-600/10 text-indigo-600 border-none px-3.5 py-2 rounded-[10px] flex items-center gap-1.5 font-bold text-[0.82rem] cursor-pointer hover:bg-indigo-600/20 transition-colors"
             >
-              <FaSync style={{ animation: loadingTrips || loadingManifest ? 'spin 1s linear infinite' : 'none' }} /> {t('common.refresh', 'Refresh')}
+              <FaSync className={loadingTrips || loadingManifest ? 'animate-spin' : ''} /> {t('common.refresh', 'Refresh')}
             </button>
-            <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#1e293b' }}>
-              {(user?.name || '').replace(/\s*\([^)]*\)/g, '').replace(/\b(Passenger|Super Admin|Company Admin|Admin|Ticket Agent|Agent|Conductor|Staff)\b/gi, '').trim() || 'Conductor'}
+            <NotificationPanel role="conductor" />
+            <div className="relative">
+              <div
+                onClick={() => setProfileDropdownOpen(prev => !prev)}
+                className="flex items-center gap-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl px-3 py-1.5 cursor-pointer transition"
+                title={t('nav.profile', 'My Profile')}
+              >
+                <div className="w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-black shrink-0 overflow-hidden">
+                  {user?.avatar ? <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" /> : <FaUserCircle />}
+                </div>
+                <span className="font-bold text-[0.82rem] text-indigo-800 hidden sm:block max-w-[120px] truncate">
+                  {(user?.name || '').replace(/\s*\([^)]*\)/g, '').replace(/\b(Passenger|Super Admin|Company Admin|Admin|Ticket Agent|Agent|Conductor|Staff)\b/gi, '').trim() || t('conductor', 'Conductor')}
+                </span>
+              </div>
+              {profileDropdownOpen && (
+                <div className="absolute top-12 right-0 w-52 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 z-[1200] overflow-hidden" onMouseLeave={() => setProfileDropdownOpen(false)}>
+                  <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-sm shrink-0 overflow-hidden">
+                      {user?.avatar ? <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" /> : <FaUserCircle />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-900 dark:text-white m-0 truncate">{user?.name || 'Conductor'}</p>
+                      <p className="text-[10px] text-slate-400 m-0">{t('conductor', 'Bus Conductor')}</p>
+                    </div>
+                  </div>
+                  <div className="p-2">
+                    <button
+                      type="button"
+                      onClick={() => { setActiveTab('profile'); setProfileDropdownOpen(false); }}
+                      className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors cursor-pointer flex items-center gap-2"
+                    >
+                      <FaUserCircle className="text-indigo-600" /> {t('common.editProfile', 'Edit Profile')}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
 
-        {/* Body */}
-        <div style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {/* Active Trip Selector Header */}
-          {assignedTrips.length > 0 && (
-            <div style={{ background: '#fff', borderRadius: 16, padding: 18, border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontWeight: 800, fontSize: '0.88rem', color: '#64748b' }}>Active Trip:</span>
+        <div className="p-4 sm:p-7 flex flex-col gap-6 flex-1 overflow-y-auto">
+          {assignedTrips.length > 0 && activeTab !== 'report_problem' && (
+            <div className="bg-white rounded-2xl p-4.5 border border-slate-200 flex items-center justify-between flex-wrap gap-3 shadow-sm">
+              <div className="flex items-center gap-3">
+                <span className="font-extrabold text-[0.88rem] text-slate-500">{t('conductor.activeTrip', 'Active Trip:')}</span>
                 <select
                   value={selectedTrip?._id || ''}
                   onChange={(e) => {
-                    const found = assignedTrips.find((t) => t._id === e.target.value);
+                    const found = assignedTrips.find((item) => item._id === e.target.value);
                     if (found) setSelectedTrip(found);
                   }}
-                  style={{ padding: '8px 14px', borderRadius: 10, border: '1.5px solid #cbd5e1', fontWeight: 800, fontSize: '0.9rem', color: '#1e293b' }}
+                  className="px-3.5 py-2 rounded-[10px] border-[1.5px] border-slate-300 font-extrabold text-[0.9rem] text-slate-800 focus:outline-none focus:border-indigo-500"
                 >
-                  {assignedTrips.map((t) => (
-                    <option key={t._id} value={t._id}>
-                      {t.tripId} • {t.route?.from} → {t.route?.to} ({t.date} at {t.departureTime})
+                  {assignedTrips.map((item) => (
+                    <option key={item._id} value={item._id}>
+                      {item.tripId} • {t(item.route?.from, item.route?.from)} → {t(item.route?.to, item.route?.to)} ({item.date} @ {item.departureTime})
                     </option>
                   ))}
                 </select>
               </div>
 
               {selectedTrip && (
-                <div style={{ display: 'flex', gap: 14, fontSize: '0.82rem', color: '#475569' }}>
-                  <span>Bus: <strong>{selectedTrip.bus?.busNumber || '—'}</strong></span>
-                  <span>Departure: <strong>{selectedTrip.departureTime}</strong></span>
-                  <span>Date: <strong>{selectedTrip.date}</strong></span>
+                <div className="flex gap-3.5 text-[0.82rem] text-slate-600">
+                  <span>{t('admin.bus', 'Bus:')} <strong>{selectedTrip.bus?.busNumber || '—'}</strong></span>
+                  <span>{t('conductor.departure', 'Departure:')} <strong>{selectedTrip.departureTime}</strong></span>
+                  <span>{t('conductor.date', 'Date:')} <strong>{selectedTrip.date}</strong></span>
                 </div>
               )}
             </div>
           )}
 
-          {/* ═══════════════════════════════════════════════════════════════
-              1. DASHBOARD OVERVIEW (Matching Screenshot)
-             ═══════════════════════════════════════════════════════════════ */}
           {activeTab === 'dashboard' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
-              {/* ═══════════════════════════════════════════════════════════════
-                  ROW 1: 4 Large Metric Cards (Dynamic Conductor Data)
-                  ═══════════════════════════════════════════════════════════════ */}
+            <div className="flex flex-col gap-5.5">
               {(() => {
                 const totalSeats = selectedTrip?.bus?.totalSeats || selectedTrip?.bus?.capacity || (selectedTrip ? 45 : 0);
                 const assignedSeats = manifestStats.total || 0;
@@ -472,74 +443,65 @@ const ConductorDashboard = () => {
 
                 return (
                   <>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '18px' }}>
-                      {/* Card 1: Total Seats */}
-                      <div style={{ background: '#ffffff', borderRadius: '16px', padding: '22px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.02)' }}>
-                        <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                          Total Seats
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4.5">
+                      <div className="bg-white rounded-2xl p-5.5 border border-slate-200 shadow-[0_1px_4px_rgba(0,0,0,0.02)]">
+                        <div className="text-[0.72rem] font-extrabold text-slate-500 uppercase tracking-wider">
+                          {t('conductor.totalSeats', 'Total Seats')}
                         </div>
-                        <div style={{ fontSize: '2.4rem', fontWeight: 900, color: '#0f172a', margin: '4px 0 2px', lineHeight: 1 }}>
+                        <div className="text-[2.4rem] font-black text-slate-900 my-1 leading-none">
                           {totalSeats}
                         </div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>
-                          {selectedTrip ? 'Bus Capacity' : 'No Trip Active'}
+                        <div className="text-xs font-semibold text-slate-500">
+                          {selectedTrip ? t('conductor.busCapacity', 'Bus Capacity') : t('conductor.noTripActive', 'No Trip Active')}
                         </div>
                       </div>
 
-                      {/* Card 2: Assigned Seats */}
-                      <div style={{ background: '#ffffff', borderRadius: '16px', padding: '22px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.02)' }}>
-                        <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                          Assigned Seats
+                      <div className="bg-white rounded-2xl p-5.5 border border-slate-200 shadow-[0_1px_4px_rgba(0,0,0,0.02)]">
+                        <div className="text-[0.72rem] font-extrabold text-slate-500 uppercase tracking-wider">
+                          {t('conductor.assignedSeats', 'Assigned Seats')}
                         </div>
-                        <div style={{ fontSize: '2.4rem', fontWeight: 900, color: '#2563eb', margin: '4px 0 2px', lineHeight: 1 }}>
+                        <div className="text-[2.4rem] font-black text-blue-600 my-1 leading-none">
                           {assignedSeats}
                         </div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#2563eb' }}>
-                          Passengers Booked
+                        <div className="text-xs font-bold text-blue-600">
+                          {t('conductor.passengersBooked', 'Passengers Booked')}
                         </div>
                       </div>
 
-                      {/* Card 3: Boarded Passengers */}
-                      <div style={{ background: '#ffffff', borderRadius: '16px', padding: '22px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.02)' }}>
-                        <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                          Boarded Passengers
+                      <div className="bg-white rounded-2xl p-5.5 border border-slate-200 shadow-[0_1px_4px_rgba(0,0,0,0.02)]">
+                        <div className="text-[0.72rem] font-extrabold text-slate-500 uppercase tracking-wider">
+                          {t('conductor.boardedPassengers', 'Boarded Passengers')}
                         </div>
-                        <div style={{ fontSize: '2.4rem', fontWeight: 900, color: '#16a34a', margin: '4px 0 2px', lineHeight: 1 }}>
+                        <div className="text-[2.4rem] font-black text-green-600 my-1 leading-none">
                           {boarded}
                         </div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#16a34a' }}>
-                          {boardedPercent}% Completed
+                        <div className="text-xs font-bold text-green-600">
+                          {boardedPercent}% {t('conductor.completed', 'Completed')}
                         </div>
                       </div>
 
-                      {/* Card 4: Remaining to Board */}
-                      <div style={{ background: '#ffffff', borderRadius: '16px', padding: '22px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.02)' }}>
-                        <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                          Remaining to Board
+                      <div className="bg-white rounded-2xl p-5.5 border border-slate-200 shadow-[0_1px_4px_rgba(0,0,0,0.02)]">
+                        <div className="text-[0.72rem] font-extrabold text-slate-500 uppercase tracking-wider">
+                          {t('conductor.remainingToBoard', 'Remaining to Board')}
                         </div>
-                        <div style={{ fontSize: '2.4rem', fontWeight: 900, color: '#ea580c', margin: '4px 0 2px', lineHeight: 1 }}>
+                        <div className="text-[2.4rem] font-black text-orange-600 my-1 leading-none">
                           {remaining}
                         </div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#ea580c' }}>
-                          {remainingPercent}% Remaining
+                        <div className="text-xs font-bold text-orange-600">
+                          {remainingPercent}% {t('conductor.remaining', 'Remaining')}
                         </div>
                       </div>
                     </div>
 
-                    {/* ═══════════════════════════════════════════════════════════════
-                        ROW 2: 2 Panels (Boarding Progress / Boarding by Status)
-                        ═══════════════════════════════════════════════════════════════ */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
-                      {/* Panel 1: Boarding Progress */}
-                      <div style={{ background: '#ffffff', borderRadius: '18px', padding: '24px', border: '1px solid #e2e8f0' }}>
-                        <h3 style={{ margin: '0 0 18px', fontSize: '1rem', fontWeight: 900, color: '#0f172a' }}>
-                          Boarding Progress
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4.5">
+                      <div className="bg-white rounded-[18px] p-6 border border-slate-200">
+                        <h3 className="m-0 mb-4.5 text-base font-black text-slate-900">
+                          {t('conductor.boardingProgress', 'Boarding Progress')}
                         </h3>
 
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', gap: '20px' }}>
-                          {/* SVG Radial Gauge */}
-                          <div style={{ position: 'relative', width: '130px', height: '130px', flexShrink: 0 }}>
-                            <svg viewBox="0 0 36 36" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
+                        <div className="flex items-center justify-around gap-5">
+                          <div className="relative w-[130px] h-[130px] shrink-0">
+                            <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
                               <circle cx="18" cy="18" r="14.5" fill="transparent" stroke="#f1f5f9" strokeWidth="3" />
                               <circle
                                 cx="18"
@@ -553,40 +515,37 @@ const ConductorDashboard = () => {
                                 strokeLinecap="round"
                               />
                             </svg>
-                            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                              <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#0f172a' }}>{boardedPercent}%</span>
-                              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b' }}>Boarded</span>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                              <span className="text-[1.25rem] font-black text-slate-900">{boardedPercent}%</span>
+                              <span className="text-[0.68rem] font-bold text-slate-500">{t('booking.boarded', 'Boarded')}</span>
                             </div>
                           </div>
 
-                          {/* Breakdown Numbers */}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', minWidth: '130px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.84rem' }}>
-                              <span style={{ color: '#64748b', fontWeight: 600 }}>Boarded</span>
-                              <strong style={{ color: '#0f172a', fontWeight: 900 }}>{boarded}</strong>
+                          <div className="flex flex-col gap-3 min-w-[130px]">
+                            <div className="flex justify-between text-[0.84rem]">
+                              <span className="text-slate-500 font-semibold">{t('booking.boarded', 'Boarded')}</span>
+                              <strong className="text-slate-900 font-black">{boarded}</strong>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.84rem' }}>
-                              <span style={{ color: '#64748b', fontWeight: 600 }}>Remaining</span>
-                              <strong style={{ color: '#0f172a', fontWeight: 900 }}>{remaining}</strong>
+                            <div className="flex justify-between text-[0.84rem]">
+                              <span className="text-slate-500 font-semibold">{t('conductor.remaining', 'Remaining')}</span>
+                              <strong className="text-slate-900 font-black">{remaining}</strong>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.84rem', borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
-                              <span style={{ color: '#64748b', fontWeight: 600 }}>Total</span>
-                              <strong style={{ color: '#0f172a', fontWeight: 900 }}>{assignedSeats}</strong>
+                            <div className="flex justify-between text-[0.84rem] border-t border-slate-100 pt-2">
+                              <span className="text-slate-500 font-semibold">{t('common.total', 'Total')}</span>
+                              <strong className="text-slate-900 font-black">{assignedSeats}</strong>
                             </div>
                           </div>
                         </div>
                       </div>
 
-                      {/* Panel 2: Boarding by Status */}
-                      <div style={{ background: '#ffffff', borderRadius: '18px', padding: '24px', border: '1px solid #e2e8f0' }}>
-                        <h3 style={{ margin: '0 0 18px', fontSize: '1rem', fontWeight: 900, color: '#0f172a' }}>
-                          Boarding by Status
+                      <div className="bg-white rounded-[18px] p-6 border border-slate-200">
+                        <h3 className="m-0 mb-4.5 text-base font-black text-slate-900">
+                          {t('conductor.boardingByStatus', 'Boarding by Status')}
                         </h3>
 
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', gap: '20px' }}>
-                          {/* SVG Donut */}
-                          <div style={{ position: 'relative', width: '120px', height: '120px', flexShrink: 0 }}>
-                            <svg viewBox="0 0 36 36" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
+                        <div className="flex items-center justify-around gap-5">
+                          <div className="relative w-[120px] h-[120px] shrink-0">
+                            <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
                               <circle cx="18" cy="18" r="14" fill="transparent" stroke="#f1f5f9" strokeWidth="4.5" />
                               {assignedSeats > 0 ? (
                                 <>
@@ -599,38 +558,37 @@ const ConductorDashboard = () => {
                             </svg>
                           </div>
 
-                          {/* Status Breakdown Legend */}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '150px', fontSize: '0.78rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10b981' }} />
-                                <span style={{ color: '#64748b' }}>Checked-In</span>
+                          <div className="flex flex-col gap-2 min-w-[150px] text-[0.78rem]">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                <span className="text-slate-500">{t('conductor.checkedIn', 'Checked-In')}</span>
                               </div>
-                              <strong style={{ color: '#0f172a' }}>{boarded} ({boardedPercent}%)</strong>
+                              <strong className="text-slate-900">{boarded} ({boardedPercent}%)</strong>
                             </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#f59e0b' }} />
-                                <span style={{ color: '#64748b' }}>Not Checked-In</span>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                <span className="text-slate-500">{t('conductor.notCheckedIn', 'Not Checked-In')}</span>
                               </div>
-                              <strong style={{ color: '#0f172a' }}>{remaining} ({remainingPercent}%)</strong>
+                              <strong className="text-slate-900">{remaining} ({remainingPercent}%)</strong>
                             </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#ef4444' }} />
-                                <span style={{ color: '#64748b' }}>No Show</span>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                                <span className="text-slate-500">{t('conductor.noShow', 'No Show')}</span>
                               </div>
-                              <strong style={{ color: '#0f172a' }}>0 (0%)</strong>
+                              <strong className="text-slate-900">0 (0%)</strong>
                             </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#cbd5e1' }} />
-                                <span style={{ color: '#64748b' }}>Cancelled</span>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                                <span className="text-slate-500">{t('booking.cancelled', 'Cancelled')}</span>
                               </div>
-                              <strong style={{ color: '#0f172a' }}>0 (0%)</strong>
+                              <strong className="text-slate-900">0 (0%)</strong>
                             </div>
                           </div>
                         </div>
@@ -640,97 +598,66 @@ const ConductorDashboard = () => {
                 );
               })()}
 
-              {/* ═══════════════════════════════════════════════════════════════
-                  ROW 3: Quick Actions
-                  ═══════════════════════════════════════════════════════════════ */}
-              <div style={{ background: '#ffffff', borderRadius: '18px', padding: '24px', border: '1px solid #e2e8f0' }}>
-                <h3 style={{ margin: '0 0 16px', fontSize: '1rem', fontWeight: 900, color: '#0f172a' }}>
-                  Quick Actions
+              <div className="bg-white rounded-[18px] p-6 border border-slate-200">
+                <h3 className="m-0 mb-4 text-base font-black text-slate-900">
+                  {t('conductor.quickActions', 'Quick Actions')}
                 </h3>
 
-                <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
+                <div className="flex gap-3.5 flex-wrap">
                   <button
                     type="button"
                     onClick={() => setActiveTab('scan_board')}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '12px 22px',
-                      background: '#4f46e5',
-                      color: '#ffffff',
-                      border: 'none',
-                      borderRadius: '10px',
-                      fontWeight: 800,
-                      fontSize: '0.85rem',
-                      cursor: 'pointer',
-                      boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)',
-                    }}
+                    className="flex items-center gap-2 px-5.5 py-3 bg-indigo-600 text-white border-none rounded-[10px] font-extrabold text-[0.85rem] cursor-pointer shadow-[0_4px_12px_rgba(79,70,229,0.3)] hover:bg-indigo-700 transition-colors"
                   >
-                    <FaQrcode /> Scan / Board Passenger
+                    <FaQrcode /> {t('conductor.scanBoardPassenger', 'Scan / Board Passenger')}
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setActiveTab('passenger_list')}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '12px 22px',
-                      background: '#f8fafc',
-                      color: '#334155',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '10px',
-                      fontWeight: 800,
-                      fontSize: '0.85rem',
-                      cursor: 'pointer',
-                    }}
+                    className="flex items-center gap-2 px-5.5 py-3 bg-slate-50 text-slate-700 border border-slate-200 rounded-[10px] font-extrabold text-[0.85rem] cursor-pointer hover:bg-slate-100 transition-colors"
                   >
-                    <FaClipboardList style={{ color: '#ea580c' }} /> View Passenger Manifest
+                    <FaClipboardList className="text-orange-600" /> {t('conductor.viewPassengerManifest', 'View Passenger Manifest')}
                   </button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* ═══════════════════════════════════════════════════════════════
-              2. ASSIGNED TRIPS (Section 10)
-             ═══════════════════════════════════════════════════════════════ */}
           {activeTab === 'assigned_trips' && (
-            <div style={card}>
-              <h3 style={{ margin: '0 0 16px', fontSize: '1.2rem', fontWeight: 900 }}>All Assigned Trips</h3>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="m-0 mb-4 text-[1.2rem] font-black text-slate-900">{t('conductor.allAssignedTrips', 'All Assigned Trips')}</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-[0.88rem]">
                   <thead>
-                    <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', textAlign: 'left', color: '#475569' }}>
-                      <th style={{ padding: 12 }}>Trip ID</th>
-                      <th style={{ padding: 12 }}>Date</th>
-                      <th style={{ padding: 12 }}>Bus</th>
-                      <th style={{ padding: 12 }}>Route</th>
-                      <th style={{ padding: 12 }}>Departure</th>
-                      <th style={{ padding: 12 }}>Booked Seats</th>
-                      <th style={{ padding: 12 }}>Action</th>
+                    <tr className="bg-slate-50 border-b-2 border-slate-200 text-left text-slate-600">
+                      <th className="p-3">{t('conductor.tripId', 'Trip ID')}</th>
+                      <th className="p-3">{t('conductor.date', 'Date')}</th>
+                      <th className="p-3">{t('admin.bus', 'Bus')}</th>
+                      <th className="p-3">{t('admin.route', 'Route')}</th>
+                      <th className="p-3">{t('conductor.departure', 'Departure')}</th>
+                      <th className="p-3">{t('booking.bookedSeats', 'Booked Seats')}</th>
+                      <th className="p-3">{t('common.actions', 'Action')}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {assignedTrips.map((t) => (
-                      <tr key={t._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: 12, fontWeight: 800, color: C.primary }}>{t.tripId}</td>
-                        <td style={{ padding: 12, fontWeight: 600 }}>{t.date}</td>
-                        <td style={{ padding: 12 }}>{t.bus?.busNumber || '—'}</td>
-                        <td style={{ padding: 12 }}>{t.route?.from} → {t.route?.to}</td>
-                        <td style={{ padding: 12, fontWeight: 700 }}>{t.departureTime}</td>
-                        <td style={{ padding: 12 }}><strong>{(t.bookedSeats || []).length}</strong> passengers</td>
-                        <td style={{ padding: 12 }}>
+                    {assignedTrips.map((tr) => (
+                      <tr key={tr._id} className="border-b border-slate-100 hover:bg-slate-50/60 transition-colors">
+                        <td className="p-3 font-extrabold text-indigo-600">{tr.tripId}</td>
+                        <td className="p-3 font-semibold text-slate-800">{tr.date}</td>
+                        <td className="p-3 text-slate-700">{tr.bus?.busNumber || '—'}</td>
+                        <td className="p-3 text-slate-700">{t(tr.route?.from, tr.route?.from)} → {t(tr.route?.to, tr.route?.to)}</td>
+                        <td className="p-3 font-bold text-slate-900">{tr.departureTime}</td>
+                        <td className="p-3 text-slate-800"><strong>{(tr.bookedSeats || []).length}</strong> {t('passenger.passengers', 'passengers')}</td>
+                        <td className="p-3">
                           <button
                             onClick={() => {
-                              setSelectedTrip(t);
+                              setSelectedTrip(tr);
                               setActiveTab('passenger_list');
                             }}
-                            style={{ padding: '6px 12px', background: C.primary, color: '#fff', border: 'none', borderRadius: 6, fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer' }}
+                            className="px-3 py-1.5 bg-indigo-600 text-white border-none rounded-md text-[0.78rem] font-bold cursor-pointer hover:bg-indigo-700 transition-colors"
                           >
-                            Open Manifest
+                            {t('conductor.openManifest', 'Open Manifest')}
                           </button>
                         </td>
                       </tr>
@@ -741,52 +668,49 @@ const ConductorDashboard = () => {
             </div>
           )}
 
-          {/* ═══════════════════════════════════════════════════════════════
-              3. PASSENGER LIST (Section 10)
-             ═══════════════════════════════════════════════════════════════ */}
           {activeTab === 'passenger_list' && (
-            <div style={card}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <div className="flex justify-between items-center mb-4 flex-wrap gap-2.5">
                 <div>
-                  <h3 style={{ margin: '0 0 4px', fontSize: '1.2rem', fontWeight: 900 }}>
-                    Passenger Manifest ({selectedTrip?.tripId || 'Selected Trip'})
+                  <h3 className="m-0 mb-1 text-[1.2rem] font-black text-slate-900">
+                    {t('conductor.passengerManifest', 'Passenger Manifest')} ({selectedTrip?.tripId || t('conductor.selectedTrip', 'Selected Trip')})
                   </h3>
-                  <p style={{ margin: 0, color: '#64748b', fontSize: '0.82rem' }}>
-                    {selectedTrip?.route?.from} → {selectedTrip?.route?.to} on {selectedTrip?.date} ({selectedTrip?.departureTime})
+                  <p className="m-0 text-slate-500 text-[0.82rem]">
+                    {t(selectedTrip?.route?.from, selectedTrip?.route?.from)} → {t(selectedTrip?.route?.to, selectedTrip?.route?.to)} {t('conductor.on', 'on')} {selectedTrip?.date} ({selectedTrip?.departureTime})
                   </p>
                 </div>
 
-                <div style={{ display: 'flex', gap: 10 }}>
+                <div className="flex gap-2.5">
                   <select
                     value={manifestFilter}
                     onChange={(e) => setManifestFilter(e.target.value)}
-                    style={{ padding: '8px 12px', borderRadius: 8, border: '1.5px solid #cbd5e1', fontSize: '0.85rem' }}
+                    className="px-3 py-2 rounded-lg border-[1.5px] border-slate-300 text-[0.85rem] focus:outline-none focus:border-indigo-500"
                   >
-                    <option value="ALL">All Passengers ({manifest.length})</option>
-                    <option value="BOARDED">Boarded ({manifestStats.boarded})</option>
-                    <option value="NOT_BOARDED">Not Boarded ({manifestStats.notBoarded})</option>
-                    <option value="VERIFIED">Agent Verified ({manifestStats.verified})</option>
-                    <option value="INVALID">Agent Pending / Invalid ({manifestStats.pendingVerification})</option>
+                    <option value="ALL">{t('common.allPassengers', 'All Passengers')} ({manifest.length})</option>
+                    <option value="BOARDED">{t('booking.boarded', 'Boarded')} ({manifestStats.boarded})</option>
+                    <option value="NOT_BOARDED">{t('booking.notBoarded', 'Not Boarded')} ({manifestStats.notBoarded})</option>
+                    <option value="VERIFIED">{t('conductor.agentVerified', 'Agent Verified')} ({manifestStats.verified})</option>
+                    <option value="INVALID">{t('conductor.agentPendingInvalid', 'Agent Pending / Invalid')} ({manifestStats.pendingVerification})</option>
                   </select>
                 </div>
               </div>
 
               {loadingManifest ? (
-                <div style={{ textAlign: 'center', padding: '30px 0', color: '#94a3b8' }}>Loading manifest...</div>
+                <div className="text-center py-7.5 text-slate-400">{t('conductor.loadingManifest', 'Loading manifest...')}</div>
               ) : filteredManifest.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '30px 0', color: '#94a3b8' }}>No passengers matching the filter.</div>
+                <div className="text-center py-7.5 text-slate-400">{t('conductor.noPaxFilter', 'No passengers matching the filter.')}</div>
               ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-[0.88rem]">
                     <thead>
-                      <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', textAlign: 'left', color: '#475569' }}>
-                        <th style={{ padding: 10 }}>Seat</th>
-                        <th style={{ padding: 10 }}>Passenger Name</th>
-                        <th style={{ padding: 10 }}>Contact</th>
-                        <th style={{ padding: 10 }}>Ticket No</th>
-                        <th style={{ padding: 10 }}>Agent Verification</th>
-                        <th style={{ padding: 10 }}>Boarding Status</th>
-                        <th style={{ padding: 10 }}>Booking Details &amp; Boarding</th>
+                      <tr className="bg-slate-50 border-b-2 border-slate-200 text-left text-slate-600">
+                        <th className="p-2.5">{t('booking.seat', 'Seat')}</th>
+                        <th className="p-2.5">{t('forms.fullName', 'Passenger Name')}</th>
+                        <th className="p-2.5">{t('conductor.contact', 'Contact')}</th>
+                        <th className="p-2.5">{t('ticket.ticketNumber', 'Ticket No')}</th>
+                        <th className="p-2.5">{t('agent.agentVerification', 'Agent Verification')}</th>
+                        <th className="p-2.5">{t('booking.boardingStatus', 'Boarding Status')}</th>
+                        <th className="p-2.5">{t('conductor.bookingDetailsBoarding', 'Booking Details & Boarding')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -794,67 +718,39 @@ const ConductorDashboard = () => {
                         const isVerified = p.verificationStatus === 'VERIFIED';
                         const isBoarded = p.boardingStatus === 'BOARDED';
                         return (
-                          <tr key={p._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td style={{ padding: 10, fontWeight: 900, color: C.primary, fontSize: '1rem' }}>{p.seatNumber}</td>
-                            <td style={{ padding: 10, fontWeight: 700, color: '#0f172a' }}>{p.passengerName}</td>
-                            <td style={{ padding: 10, color: '#64748b', fontSize: '0.82rem' }}>{p.passengerPhone || p.user?.phone || '0911223344'}</td>
-                            <td style={{ padding: 10, fontFamily: 'monospace', fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>{p.ticketNumber}</td>
-                            <td style={{ padding: 10 }}>
+                          <tr key={p._id} className="border-b border-slate-100 hover:bg-slate-50/60 transition-colors">
+                            <td className="p-2.5 font-black text-indigo-600 text-base">{p.seatNumber}</td>
+                            <td className="p-2.5 font-bold text-slate-900">{p.passengerName}</td>
+                            <td className="p-2.5 text-slate-500 text-[0.82rem]">{p.passengerPhone || p.user?.phone || '0911223344'}</td>
+                            <td className="p-2.5 font-mono text-[0.82rem] font-bold text-slate-700">{p.ticketNumber}</td>
+                            <td className="p-2.5">
                               <span
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                  padding: '3px 10px',
-                                  borderRadius: 12,
-                                  fontSize: '0.72rem',
-                                  fontWeight: 800,
-                                  background: isVerified ? '#dcfce7' : '#fee2e2',
-                                  color: isVerified ? '#16a34a' : '#dc2626',
-                                }}
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[0.72rem] font-extrabold ${
+                                  isVerified ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                                }`}
                               >
                                 {isVerified ? <FaCheckCircle /> : <FaExclamationTriangle />}
-                                {p.verificationStatus || 'PENDING'}
+                                {t(p.verificationStatus || 'PENDING', p.verificationStatus || 'PENDING')}
                               </span>
                             </td>
-                            <td style={{ padding: 10 }}>
+                            <td className="p-2.5">
                               <span
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                  padding: '3px 10px',
-                                  borderRadius: 12,
-                                  fontSize: '0.72rem',
-                                  fontWeight: 800,
-                                  background: isBoarded ? '#e0e7ff' : '#f1f5f9',
-                                  color: isBoarded ? C.primary : '#64748b',
-                                }}
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[0.72rem] font-extrabold ${
+                                  isBoarded ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-500'
+                                }`}
                               >
                                 {isBoarded ? <FaCheckCircle /> : <FaClock />}
-                                {p.boardingStatus}
+                                {t(p.boardingStatus, p.boardingStatus)}
                               </span>
                             </td>
-                            <td style={{ padding: 10 }}>
-                              <div style={{ display: 'flex', gap: 8 }}>
+                            <td className="p-2.5">
+                              <div className="flex gap-2">
                                 <button
                                   type="button"
                                   onClick={() => setSelectedPassengerForModal(p)}
-                                  style={{
-                                    padding: '5px 10px',
-                                    background: '#f8fafc',
-                                    border: '1.5px solid #cbd5e1',
-                                    borderRadius: 8,
-                                    fontSize: '0.75rem',
-                                    fontWeight: 700,
-                                    color: '#334155',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 4,
-                                  }}
+                                  className="px-2.5 py-1 bg-slate-50 border-[1.5px] border-slate-300 rounded-lg text-[0.75rem] font-bold text-slate-700 cursor-pointer flex items-center gap-1 hover:bg-slate-100 transition-colors"
                                 >
-                                  <FaEye /> Details
+                                  <FaEye /> {t('common.details', 'Details')}
                                 </button>
                                 {!isBoarded && (
                                   <button
@@ -864,21 +760,11 @@ const ConductorDashboard = () => {
                                       setTicketQuery(p.ticketNumber);
                                       handleValidateTicket(p.ticketNumber);
                                     }}
-                                    style={{
-                                      padding: '5px 12px',
-                                      background: isVerified ? C.primary : '#64748b',
-                                      color: '#fff',
-                                      border: 'none',
-                                      borderRadius: 8,
-                                      fontSize: '0.75rem',
-                                      fontWeight: 800,
-                                      cursor: 'pointer',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: 4,
-                                    }}
+                                    className={`px-3 py-1 text-white border-none rounded-lg text-[0.75rem] font-extrabold cursor-pointer flex items-center gap-1 transition-colors ${
+                                      isVerified ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-500 hover:bg-slate-600'
+                                    }`}
                                   >
-                                    <FaQrcode /> Scan to Board
+                                    <FaQrcode /> {t('conductor.scanToBoard', 'Scan to Board')}
                                   </button>
                                 )}
                               </div>
@@ -893,126 +779,60 @@ const ConductorDashboard = () => {
             </div>
           )}
 
-          {/* ═══════════════════════════════════════════════════════════════
-              4. SCAN & CONFIRM BOARDING (Live Camera & Agent Verification)
-             ═══════════════════════════════════════════════════════════════ */}
           {(activeTab === 'scan_board' || activeTab === 'verify_ticket' || activeTab === 'confirm_boarding') && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {/* Trip Context Bar */}
-              <div style={{ background: '#1e1b4b', color: '#fff', borderRadius: 16, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+            <div className="flex flex-col gap-5">
+              <div className="bg-[#1e1b4b] text-white rounded-2xl p-4 px-5 flex justify-between items-center flex-wrap gap-3">
                 <div>
-                  <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '1px', color: '#a5b4fc', fontWeight: 700 }}>
-                    Active Boarding Trip
+                  <div className="text-[0.72rem] uppercase tracking-wider text-indigo-300 font-bold">
+                    {t('conductor.activeBoardingTrip', 'Active Boarding Trip')}
                   </div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 900, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <FaBus style={{ color: '#38bdf8' }} /> {selectedTrip?.tripId || 'Trip'} — {selectedTrip?.route?.from} → {selectedTrip?.route?.to}
+                  <div className="text-[1.1rem] font-black flex items-center gap-2">
+                    <FaBus className="text-sky-400" /> {selectedTrip?.tripId || t('conductor.trip', 'Trip')} — {t(selectedTrip?.route?.from, selectedTrip?.route?.from)} → {t(selectedTrip?.route?.to, selectedTrip?.route?.to)}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 16, fontSize: '0.82rem' }}>
-                  <div><strong>Date:</strong> {selectedTrip?.date}</div>
-                  <div><strong>Departure:</strong> {selectedTrip?.departureTime}</div>
-                  <div><strong>Bus:</strong> {selectedTrip?.bus?.busNumber}</div>
-                  <div><strong>Boarded:</strong> <span style={{ color: '#4ade80', fontWeight: 800 }}>{manifestStats.boarded} / {manifestStats.total}</span></div>
+                <div className="flex gap-4 text-[0.82rem]">
+                  <div><strong>{t('conductor.date', 'Date:')}</strong> {selectedTrip?.date}</div>
+                  <div><strong>{t('conductor.departure', 'Departure:')}</strong> {selectedTrip?.departureTime}</div>
+                  <div><strong>{t('admin.bus', 'Bus:')}</strong> {selectedTrip?.bus?.busNumber}</div>
+                  <div><strong>{t('conductor.boarded', 'Boarded:')}</strong> <span className="text-emerald-400 font-extrabold">{manifestStats.boarded} / {manifestStats.total}</span></div>
                 </div>
               </div>
 
-              {/* ── Control Bar matching uploaded image media_1788360219709.png ── */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: '20px',
-                padding: '22px 28px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 10px 30px rgba(0, 0, 0, 0.05)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '14px',
-                flexWrap: 'wrap'
-              }}>
-                {/* Search / QR string input */}
-                <div style={{
-                  flex: 1,
-                  minWidth: '260px',
-                  position: 'relative',
-                  display: 'flex',
-                  alignItems: 'center'
-                }}>
-                  <FaSearch style={{
-                    position: 'absolute',
-                    left: '16px',
-                    color: '#94a3b8',
-                    fontSize: '1rem',
-                    pointerEvents: 'none'
-                  }} />
+              <div className="bg-white rounded-[20px] p-5.5 px-7 border border-slate-200 shadow-[0_10px_30px_rgba(0,0,0,0.05)] flex items-center gap-3.5 flex-wrap">
+                <div className="flex-1 min-w-[260px] relative flex items-center">
+                  <FaSearch className="absolute left-4 text-slate-400 text-base pointer-events-none" />
                   <input
                     type="text"
-                    placeholder="e.g. TKT-10023-01 or paste QR string..."
+                    placeholder={t('conductor.ticketPlaceholder', 'Scan QR or enter ticket number...')}
                     value={ticketQuery}
                     onChange={(e) => setTicketQuery(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') handleValidateTicket(); }}
-                    style={{
-                      width: '100%',
-                      padding: '14px 18px 14px 44px',
-                      borderRadius: '14px',
-                      border: '1.5px solid #cbd5e1',
-                      fontSize: '0.92rem',
-                      outline: 'none',
-                      color: '#0f172a',
-                      background: '#ffffff',
-                      boxSizing: 'border-box'
-                    }}
+                    className="w-full py-3.5 pr-4.5 pl-11 rounded-[14px] border-[1.5px] border-slate-300 text-[0.92rem] outline-none text-slate-900 bg-white focus:border-indigo-500"
                   />
                 </div>
 
-                {/* Validate Button */}
                 <button
                   type="button"
                   onClick={() => handleValidateTicket()}
                   disabled={validating}
-                  style={{
-                    padding: '14px 28px',
-                    background: 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)',
-                    color: '#ffffff',
-                    border: 'none',
-                    borderRadius: '14px',
-                    fontWeight: 800,
-                    fontSize: '0.95rem',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    boxShadow: '0 4px 14px rgba(79, 70, 229, 0.3)',
-                    whiteSpace: 'nowrap'
-                  }}
+                  className="px-7 py-3.5 bg-gradient-to-br from-indigo-600 to-indigo-800 text-white border-none rounded-[14px] font-extrabold text-[0.95rem] cursor-pointer inline-flex items-center gap-2 shadow-[0_4px_14px_rgba(79,70,229,0.3)] whitespace-nowrap hover:opacity-95 transition-opacity disabled:opacity-70"
                 >
-                  <FaCheckCircle style={{ fontSize: '1rem' }} /> Validate
+                  <FaCheckCircle className="text-base" /> {t('conductor.validate', 'Validate')}
                 </button>
 
-                {/* Scan Button (Camera QR scanner toggle) */}
                 <button
                   type="button"
                   onClick={() => setShowCameraModal(prev => !prev)}
-                  style={{
-                    padding: '14px 24px',
-                    background: showCameraModal ? '#4f46e5' : '#f5f3ff',
-                    color: showCameraModal ? '#ffffff' : '#4f46e5',
-                    border: '1.5px solid #6366f1',
-                    borderRadius: '14px',
-                    fontWeight: 800,
-                    fontSize: '0.95rem',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    whiteSpace: 'nowrap'
-                  }}
+                  className={`px-6 py-3.5 border-[1.5px] border-indigo-500 rounded-[14px] font-extrabold text-[0.95rem] cursor-pointer inline-flex items-center gap-2 whitespace-nowrap transition-colors ${
+                    showCameraModal ? 'bg-indigo-600 text-white' : 'bg-purple-50 text-indigo-600 hover:bg-purple-100'
+                  }`}
                 >
-                  <FaQrcode style={{ fontSize: '1.1rem' }} /> {showCameraModal ? 'Close Scanner' : 'Scan'}
+                  <FaQrcode className="text-[1.1rem]" /> {showCameraModal ? t('conductor.closeScanner', 'Close Scanner') : t('conductor.scan', 'Scan')}
                 </button>
               </div>
 
-              {/* Live Camera Scanner Container */}
               {showCameraModal && (
-                <div style={{ maxWidth: 420, margin: '0 auto' }}>
+                <div className="max-w-[420px] mx-auto">
                   <CameraQRScanner
                     onScan={(scannedCode) => handleValidateTicket(scannedCode)}
                     onClose={() => setShowCameraModal(false)}
@@ -1022,59 +842,55 @@ const ConductorDashboard = () => {
                 </div>
               )}
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                {/* Validation & Boarding Action Box */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {/* Status: Validating */}
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-col gap-4">
                   {validating && (
-                    <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
-                      <div style={{ width: 44, height: 44, border: '4px solid #e2e8f0', borderTopColor: C.primary, borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 16px' }} />
-                      <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a' }}>Verifying Passenger Ticket &amp; Agent Status...</div>
-                      <div style={{ fontSize: '0.8rem', marginTop: 4 }}>Checking company database, trip assignment, and agent validation</div>
-                      <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+                    <div className="bg-white rounded-2xl border border-slate-200 text-center p-10 px-5 text-slate-500 shadow-sm">
+                      <div className="w-11 h-11 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4" />
+                      <div className="font-extrabold text-base text-slate-900">{t('conductor.verifyingTicket', 'Verifying Passenger Ticket & Agent Status...')}</div>
+                      <div className="text-[0.8rem] mt-1">{t('conductor.verifyingDetailsSub', 'Checking company database, trip assignment, and agent validation')}</div>
                     </div>
                   )}
 
-                  {/* Status: Agent Verified — Ready to Board */}
                   {!validating && validationResult && validationResult.verificationStatus === 'VERIFIED' && (
-                    <div style={{ ...card, border: '2px solid #10b981', background: '#f0fdf4', boxShadow: '0 10px 25px rgba(16, 185, 129, 0.1)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#16a34a', fontWeight: 900, fontSize: '1.15rem', marginBottom: 14 }}>
-                        <FaCheckCircle style={{ fontSize: '1.4rem' }} /> TICKET AGENT VERIFIED — READY FOR BOARDING
+                    <div className="bg-emerald-50 rounded-2xl border-2 border-emerald-500 p-6 shadow-[0_10px_25px_rgba(16,185,129,0.1)]">
+                      <div className="flex items-center gap-2.5 text-green-600 font-black text-[1.15rem] mb-3.5">
+                        <FaCheckCircle className="text-[1.4rem]" /> {t('conductor.agentVerifiedReady', 'TICKET AGENT VERIFIED — READY FOR BOARDING')}
                       </div>
 
-                      <div style={{ background: '#ffffff', borderRadius: 14, padding: 18, border: '1px solid #bbf7d0', marginBottom: 16 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+                      <div className="bg-white rounded-[14px] p-4.5 border border-emerald-200 mb-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                           <div>
-                            <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700 }}>Passenger</div>
-                            <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem' }}>{validationResult.passengerName}</div>
-                            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{validationResult.passengerPhone || '0911223344'}</div>
+                            <div className="text-[0.72rem] text-slate-500 font-bold">{t('passenger.passenger', 'Passenger')}</div>
+                            <div className="font-extrabold text-slate-900 text-base">{validationResult.passengerName}</div>
+                            <div className="text-xs text-slate-500">{validationResult.passengerPhone || '0911223344'}</div>
                           </div>
 
                           <div>
-                            <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700 }}>Seat Number</div>
-                            <div style={{ fontWeight: 900, color: C.primary, fontSize: '1.4rem' }}>{validationResult.seatNumber}</div>
+                            <div className="text-[0.72rem] text-slate-500 font-bold">{t('booking.seats', 'Seat Number')}</div>
+                            <div className="font-black text-indigo-600 text-[1.4rem]">{validationResult.seatNumber}</div>
                           </div>
 
                           <div>
-                            <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700 }}>Ticket No</div>
-                            <div style={{ fontFamily: 'monospace', fontWeight: 800, color: '#0f172a' }}>{validationResult.ticketNumber}</div>
+                            <div className="text-[0.72rem] text-slate-500 font-bold">{t('ticket.ticketNumber', 'Ticket No')}</div>
+                            <div className="font-mono font-extrabold text-slate-900">{validationResult.ticketNumber}</div>
                           </div>
 
                           <div>
-                            <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700 }}>Fare &amp; Payment</div>
-                            <div style={{ fontWeight: 800, color: '#16a34a' }}>ETB {validationResult.price || selectedTrip?.price || 950} (PAID)</div>
+                            <div className="text-[0.72rem] text-slate-500 font-bold">{t('ticket.fareStatus', 'Fare & Payment')}</div>
+                            <div className="font-extrabold text-green-600">ETB {validationResult.price || selectedTrip?.price || 950} ({t('payment.paid', 'PAID')})</div>
                           </div>
 
                           <div>
-                            <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700 }}>Counter Verification</div>
-                            <div style={{ fontWeight: 800, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <FaCheckCircle /> Verified by {validationResult.verifiedBy || 'Ticket Agent'}
+                            <div className="text-[0.72rem] text-slate-500 font-bold">{t('agent.agentVerification', 'Counter Verification')}</div>
+                            <div className="font-extrabold text-green-600 flex items-center gap-1">
+                              <FaCheckCircle /> {t('agent.verifiedBy', 'Verified by')} {validationResult.verifiedBy || t('ticket agent', 'Ticket Agent')}
                             </div>
                           </div>
 
                           <div>
-                            <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700 }}>Bus Route</div>
-                            <div style={{ fontWeight: 700, color: '#334155' }}>{validationResult.route || `${selectedTrip?.route?.from} → ${selectedTrip?.route?.to}`}</div>
+                            <div className="text-[0.72rem] text-slate-500 font-bold">{t('admin.route', 'Bus Route')}</div>
+                            <div className="font-bold text-slate-700">{validationResult.route || `${selectedTrip?.route?.from} → ${selectedTrip?.route?.to}`}</div>
                           </div>
                         </div>
                       </div>
@@ -1083,75 +899,56 @@ const ConductorDashboard = () => {
                         type="button"
                         onClick={() => handleConfirmBoarding(validationResult)}
                         disabled={actionLoading}
-                        style={{
-                          width: '100%',
-                          padding: '16px',
-                          background: '#16a34a',
-                          color: '#fff',
-                          border: 'none',
-                          borderRadius: 14,
-                          fontWeight: 900,
-                          fontSize: '1.05rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 10,
-                          boxShadow: '0 6px 16px rgba(22, 163, 74, 0.35)',
-                          transition: 'transform 0.1s ease',
-                        }}
+                        className="w-full p-4 bg-green-600 text-white border-none rounded-[14px] font-black text-[1.05rem] cursor-pointer flex items-center justify-center gap-2.5 shadow-[0_6px_16px_rgba(22,163,74,0.35)] hover:bg-green-700 transition-colors disabled:opacity-75"
                       >
-                        <FaCheckCircle style={{ fontSize: '1.2rem' }} />
-                        {actionLoading ? 'Recording Boarding...' : `Confirm Boarding for Seat ${validationResult.seatNumber}`}
+                        <FaCheckCircle className="text-[1.2rem]" />
+                        {actionLoading ? t('conductor.recordingBoarding', 'Recording Boarding...') : `${t('conductor.confirmBoardingForSeat', 'Confirm Boarding for Seat')} ${validationResult.seatNumber}`}
                       </button>
                     </div>
                   )}
 
-                  {/* Status: NOT Verified by Agent */}
                   {!validating && validationResult && validationResult.verificationStatus !== 'VERIFIED' && (
-                    <div style={{ ...card, border: '2px solid #f59e0b', background: '#fffbeb', boxShadow: '0 10px 25px rgba(245, 158, 11, 0.12)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#d97706', fontWeight: 900, fontSize: '1.1rem', marginBottom: 10 }}>
-                        <FaExclamationTriangle style={{ fontSize: '1.3rem' }} /> BOARDING NOT ALLOWED — NOT VERIFIED BY AGENT
+                    <div className="bg-amber-50 rounded-2xl border-2 border-amber-500 p-6 shadow-[0_10px_25px_rgba(245,158,11,0.12)]">
+                      <div className="flex items-center gap-2.5 text-amber-600 font-black text-[1.1rem] mb-2.5">
+                        <FaExclamationTriangle className="text-[1.3rem]" /> {t('conductor.notAllowedNotVerified', 'BOARDING NOT ALLOWED — NOT VERIFIED BY AGENT')}
                       </div>
-                      <p style={{ color: '#78350f', fontSize: '0.85rem', margin: '0 0 14px', lineHeight: 1.4 }}>
-                        This passenger's ticket is paid, but has <strong>NOT been verified by a counter Ticket Agent</strong>. Conductor cannot confirm boarding until the passenger validates their ticket at the station counter.
+                      <p className="text-amber-900 text-[0.85rem] m-0 mb-3.5 leading-relaxed">
+                        {t('conductor.notVerifiedNotice', "This passenger's ticket is paid, but has NOT been verified by a counter Ticket Agent. Conductor cannot confirm boarding until the passenger validates their ticket at the station counter.")}
                       </p>
 
-                      <div style={{ background: '#ffffff', borderRadius: 14, padding: 16, border: '1px solid #fde68a', marginBottom: 14 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, fontSize: '0.85rem' }}>
-                          <div><strong>Passenger:</strong> {validationResult.passengerName}</div>
-                          <div><strong>Seat:</strong> <span style={{ color: '#d97706', fontWeight: 900 }}>{validationResult.seatNumber}</span></div>
-                          <div><strong>Ticket No:</strong> {validationResult.ticketNumber}</div>
-                          <div><strong>Status:</strong> <span style={{ color: '#d97706', fontWeight: 800 }}>PENDING AGENT VERIFICATION</span></div>
+                      <div className="bg-white rounded-[14px] p-4 border border-amber-200 mb-3.5">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 text-[0.85rem]">
+                          <div><strong>{t('passenger.passenger', 'Passenger:')}</strong> {validationResult.passengerName}</div>
+                          <div><strong>{t('booking.seat', 'Seat:')}</strong> <span className="text-amber-600 font-black">{validationResult.seatNumber}</span></div>
+                          <div><strong>{t('ticket.ticketNumber', 'Ticket No:')}</strong> {validationResult.ticketNumber}</div>
+                          <div><strong>{t('common.status', 'Status:')}</strong> <span className="text-amber-600 font-extrabold">{t('conductor.pendingAgentVerification', 'PENDING AGENT VERIFICATION')}</span></div>
                         </div>
                       </div>
 
-                      <div style={{ padding: '12px', background: '#fef3c7', borderRadius: 10, fontSize: '0.8rem', color: '#92400e', fontWeight: 700, textAlign: 'center' }}>
-                        Please direct passenger to the ticket counter for Agent ID &amp; ticket verification.
+                      <div className="p-3 bg-amber-100 rounded-[10px] text-[0.8rem] text-amber-900 font-bold text-center">
+                        {t('conductor.directToCounter', 'Please direct passenger to the ticket counter for Agent ID & ticket verification.')}
                       </div>
                     </div>
                   )}
 
-                  {/* Status: General Validation Error */}
                   {!validating && validationError && (!validationResult || validationResult.verificationStatus === 'VERIFIED') && (
-                    <div style={{ ...card, border: '2px solid #ef4444', background: '#fef2f2' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#dc2626', fontWeight: 900, fontSize: '1.05rem', marginBottom: 6 }}>
-                        <FaTimesCircle style={{ fontSize: '1.3rem' }} /> BOARDING REJECTED / INVALID TICKET
+                    <div className="bg-red-50 rounded-2xl border-2 border-red-500 p-6">
+                      <div className="flex items-center gap-2.5 text-red-600 font-black text-[1.05rem] mb-1.5">
+                        <FaTimesCircle className="text-[1.3rem]" /> {t('conductor.rejectedInvalid', 'BOARDING REJECTED / INVALID TICKET')}
                       </div>
-                      <div style={{ fontSize: '0.88rem', color: '#991b1b' }}>{validationError}</div>
+                      <div className="text-[0.88rem] text-red-800">{validationError}</div>
                     </div>
                   )}
 
-                  {/* Status: Boarding Success Flash */}
                   {boardingSuccess && (
-                    <div style={{ ...card, border: '2px solid #10b981', background: '#f0fdf4', textAlign: 'center', padding: 24 }}>
-                      <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#dcfce7', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', fontSize: '1.6rem' }}>
+                    <div className="bg-emerald-50 rounded-2xl border-2 border-emerald-500 text-center p-6">
+                      <div className="w-[52px] h-[52px] rounded-full bg-emerald-100 text-green-600 flex items-center justify-center mx-auto mb-3 text-[1.6rem]">
                         <FaCheckCircle />
                       </div>
-                      <div style={{ fontWeight: 900, fontSize: '1.1rem', color: '#166534', marginBottom: 6 }}>
-                        Passenger Boarded Successfully!
+                      <div className="font-black text-[1.1rem] text-emerald-900 mb-1.5">
+                        {t('conductor.paxBoardedSuccess', 'Passenger Boarded Successfully!')}
                       </div>
-                      <div style={{ fontSize: '0.85rem', color: '#15803d', marginBottom: 16 }}>
+                      <div className="text-[0.85rem] text-emerald-700 mb-4">
                         {boardingSuccess}
                       </div>
                       <button
@@ -1161,160 +958,128 @@ const ConductorDashboard = () => {
                           setValidationResult(null);
                           setTicketQuery('');
                         }}
-                        style={{
-                          padding: '10px 20px',
-                          background: C.primary,
-                          color: '#fff',
-                          border: 'none',
-                          borderRadius: 10,
-                          fontWeight: 800,
-                          cursor: 'pointer',
-                        }}
+                        className="px-5 py-2.5 bg-indigo-600 text-white border-none rounded-[10px] font-extrabold cursor-pointer hover:bg-indigo-700 transition-colors"
                       >
-                        Scan Next Passenger
+                        {t('conductor.scanNextPax', 'Scan Next Passenger')}
                       </button>
                     </div>
                   )}
-
-
                 </div>
               </div>
             </div>
           )}
 
-          {/* ═══════════════════════════════════════════════════════════════
-              6. REPORT PROBLEM (Section 10 & 23)
-             ═══════════════════════════════════════════════════════════════ */}
           {activeTab === 'report_problem' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 24 }}>
-              {/* Report Submission Form */}
-              <div style={card}>
-                <h3 style={{ margin: '0 0 6px', fontSize: '1.2rem', fontWeight: 900 }}>
-                  ⚠️ Report Passenger / Ticket Problem
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <h3 className="m-0 mb-1.5 text-[1.2rem] font-black text-slate-900">
+                  ⚠️ {t('conductor.reportProblemTitle', 'Report Passenger / Ticket Problem')}
                 </h3>
-                <p style={{ color: '#64748b', fontSize: '0.82rem', marginBottom: 20 }}>
-                  Directly report seat mismatches, duplicate tickets, or passenger incidents to Company Admin
+                <p className="text-slate-500 text-[0.82rem] mb-5">
+                  {t('conductor.reportProblemSub', 'Directly report seat mismatches, duplicate tickets, or passenger incidents to Company Admin')}
                 </p>
 
-                <form onSubmit={handleSubmitProblem} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <form onSubmit={handleSubmitProblem} className="flex flex-col gap-3.5">
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: 4 }}>Problem Category *</label>
+                    <label className="block text-[0.8rem] font-bold mb-1 text-slate-700">{t('conductor.categoryTrip', 'Problem Category *')}</label>
                     <select
                       value={problemCategory}
                       onChange={(e) => setProblemCategory(e.target.value)}
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #cbd5e1', fontSize: '0.9rem' }}
+                      className="w-full px-3 py-2.5 rounded-lg border-[1.5px] border-slate-300 text-[0.9rem] focus:outline-none focus:border-indigo-500"
                     >
-                      <option value="Passenger problem">Passenger problem</option>
-                      <option value="Ticket problem">Ticket problem</option>
-                      <option value="Payment problem">Payment problem</option>
-                      <option value="Seat mismatch">Seat mismatch</option>
-                      <option value="Passenger information mismatch">Passenger information mismatch</option>
-                      <option value="Invalid ticket">Invalid ticket</option>
-                      <option value="Duplicate boarding">Duplicate boarding</option>
-                      <option value="Wrong trip">Wrong trip</option>
-                      <option value="Other issue">Other issue</option>
+                      <option value="Passenger problem">{t('conductor.paxProblem', 'Passenger problem')}</option>
+                      <option value="Ticket problem">{t('conductor.ticketProblem', 'Ticket problem')}</option>
+                      <option value="Payment problem">{t('conductor.paymentProblem', 'Payment problem')}</option>
+                      <option value="Seat mismatch">{t('conductor.seatMismatch', 'Seat mismatch')}</option>
+                      <option value="Passenger information mismatch">{t('conductor.paxInfoMismatch', 'Passenger information mismatch')}</option>
+                      <option value="Invalid ticket">{t('conductor.invalidTicket', 'Invalid ticket')}</option>
+                      <option value="Duplicate boarding">{t('conductor.duplicateBoarding', 'Duplicate boarding')}</option>
+                      <option value="Wrong trip">{t('conductor.wrongTrip', 'Wrong trip')}</option>
+                      <option value="Other issue">{t('conductor.otherIssue', 'Other issue')}</option>
                     </select>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: 4 }}>Passenger Name (Optional)</label>
+                      <label className="block text-[0.8rem] font-bold mb-1 text-slate-700">{t('conductor.passengerNameOpt', 'Passenger Name (Optional)')}</label>
                       <input
                         type="text"
-                        placeholder="e.g. Abebe Kebede"
+                        placeholder=""
                         value={problemPassenger}
                         onChange={(e) => setProblemPassenger(e.target.value)}
-                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #cbd5e1', fontSize: '0.85rem' }}
+                        className="w-full px-3 py-2 rounded-lg border-[1.5px] border-slate-300 text-[0.85rem] focus:outline-none focus:border-indigo-500"
                       />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: 4 }}>Ticket Number (Optional)</label>
+                      <label className="block text-[0.8rem] font-bold mb-1 text-slate-700">{t('conductor.ticketNumberOpt', 'Ticket Number (Optional)')}</label>
                       <input
                         type="text"
-                        placeholder="e.g. TKT-982104"
+                        placeholder=""
                         value={problemTicket}
                         onChange={(e) => setProblemTicket(e.target.value)}
-                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #cbd5e1', fontSize: '0.85rem' }}
+                        className="w-full px-3 py-2 rounded-lg border-[1.5px] border-slate-300 text-[0.85rem] focus:outline-none focus:border-indigo-500"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: 4 }}>Description & Details *</label>
+                    <label className="block text-[0.8rem] font-bold mb-1 text-slate-700">{t('conductor.descriptionDetails', 'Description & Details *')}</label>
                     <textarea
                       rows={4}
                       required
-                      placeholder="Describe what occurred, who was involved, and what action was attempted..."
+                      placeholder=""
                       value={problemDescription}
                       onChange={(e) => setProblemDescription(e.target.value)}
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #cbd5e1', fontSize: '0.85rem' }}
+                      className="w-full px-3 py-2.5 rounded-lg border-[1.5px] border-slate-300 text-[0.85rem] focus:outline-none focus:border-indigo-500 resize-none"
                     />
                   </div>
 
                   <button
                     type="submit"
                     disabled={submittingProblem}
-                    style={{
-                      padding: '12px 20px',
-                      background: '#dc2626',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: 10,
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 8,
-                    }}
+                    className="py-3 px-5 bg-red-600 text-white border-none rounded-[10px] font-extrabold cursor-pointer flex items-center justify-center gap-2 hover:bg-red-700 transition-colors disabled:opacity-75"
                   >
-                    <FaPaperPlane /> {submittingProblem ? 'Submitting...' : 'Submit Report to Company Admin'}
+                    <FaPaperPlane /> {submittingProblem ? t('common.submitting', 'Submitting...') : t('conductor.submitReportToAdmin', 'Submit Report to Company Admin')}
                   </button>
                 </form>
               </div>
 
-              {/* Submitted Reports History */}
-              <div style={card}>
-                <h3 style={{ margin: '0 0 16px', fontSize: '1.2rem', fontWeight: 900 }}>
-                  📋 My Submitted Problem Reports
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <h3 className="m-0 mb-4 text-[1.2rem] font-black text-slate-900">
+                  📋 {t('conductor.mySubmittedReports', 'My Submitted Problem Reports')}
                 </h3>
 
                 {loadingReports ? (
-                  <div style={{ textAlign: 'center', padding: '30px 0', color: '#94a3b8' }}>Loading reports...</div>
+                  <div className="text-center py-7.5 text-slate-400">{t('conductor.loadingReports', 'Loading reports...')}</div>
                 ) : myReports.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '30px 0', color: '#94a3b8' }}>
-                    No problem reports filed yet.
+                  <div className="text-center py-7.5 text-slate-400">
+                    {t('conductor.noReportsFiled', 'No problem reports filed yet.')}
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '500px', overflowY: 'auto' }}>
+                  <div className="flex flex-col gap-3 max-h-[500px] overflow-y-auto">
                     {myReports.map((rep) => {
                       const isOpen = rep.status === 'OPEN';
                       const isResolved = rep.status === 'RESOLVED' || rep.status === 'CLOSED';
                       return (
-                        <div key={rep._id} style={{ padding: 14, borderRadius: 10, border: '1px solid #e2e8f0', background: '#f8fafc' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                            <span style={{ fontWeight: 800, color: '#dc2626', fontSize: '0.88rem' }}>{rep.category}</span>
+                        <div key={rep._id} className="p-3.5 rounded-[10px] border border-slate-200 bg-slate-50">
+                          <div className="flex justify-between mb-1">
+                            <span className="font-extrabold text-red-600 text-[0.88rem]">{t(rep.category, rep.category)}</span>
                             <span
-                              style={{
-                                fontSize: '0.72rem',
-                                fontWeight: 800,
-                                padding: '2px 8px',
-                                borderRadius: 10,
-                                background: isOpen ? '#fee2e2' : isResolved ? '#dcfce7' : '#fef3c7',
-                                color: isOpen ? '#dc2626' : isResolved ? '#16a34a' : '#d97706',
-                              }}
+                              className={`text-[0.72rem] font-extrabold px-2 py-0.5 rounded-full ${
+                                isOpen ? 'bg-red-100 text-red-600' : isResolved ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'
+                              }`}
                             >
-                              {rep.status}
+                              {t(rep.status, rep.status)}
                             </span>
                           </div>
-                          <div style={{ fontSize: '0.82rem', color: '#334155', marginBottom: 6 }}>{rep.description}</div>
+                          <div className="text-[0.82rem] text-slate-700 mb-1.5">{rep.description}</div>
                           {rep.resolutionNotes && (
-                            <div style={{ fontSize: '0.78rem', color: '#16a34a', background: '#f0fdf4', padding: 6, borderRadius: 6, marginBottom: 4 }}>
-                              <strong>Admin Resolution:</strong> {rep.resolutionNotes}
+                            <div className="text-[0.78rem] text-green-600 bg-green-50 p-1.5 rounded-md mb-1">
+                              <strong>{t('conductor.adminResolution', 'Admin Resolution:')}</strong> {rep.resolutionNotes}
                             </div>
                           )}
-                          <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                            {new Date(rep.createdAt).toLocaleString()} {rep.tripId ? `• Trip: ${rep.tripId}` : ''}
+                          <div className="text-[0.72rem] text-slate-400">
+                            {new Date(rep.createdAt).toLocaleString()} {rep.tripId ? `• ${t('conductor.trip', 'Trip:')} ${rep.tripId}` : ''}
                           </div>
                         </div>
                       );
@@ -1325,55 +1090,58 @@ const ConductorDashboard = () => {
             </div>
           )}
 
-          {/* ═══════════════════════════════════════════════════════════════
-              7. PROFILE (Section 10)
-             ═══════════════════════════════════════════════════════════════ */}
           {activeTab === 'profile' && (
-            <div style={{ ...card, maxWidth: 600 }}>
-              <h3 style={{ margin: '0 0 6px', fontSize: '1.2rem', fontWeight: 900 }}>Conductor Profile</h3>
-              <p style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: 20 }}>Update your contact information and password</p>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm max-w-[600px]">
+              <h3 className="m-0 mb-1.5 text-[1.2rem] font-black text-slate-900">{t('conductor.conductorProfile', 'Conductor Profile')}</h3>
+              <p className="text-slate-500 text-[0.85rem] mb-5">{t('conductor.updateContactPassword', 'Update your contact information and password')}</p>
 
-              <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <form onSubmit={handleSaveProfile} className="flex flex-col gap-3.5">
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: 4 }}>Full Name</label>
+                  <label className="block text-[0.8rem] font-bold mb-1 text-slate-700">{t('forms.fullName', 'Full Name')}</label>
                   <input
                     type="text"
                     required
                     value={profileForm.name}
                     onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #cbd5e1' }}
+                    className="w-full px-3 py-2.5 rounded-lg border-[1.5px] border-slate-300 text-slate-900 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: 4 }}>Phone Number</label>
+                  <label className="block text-[0.8rem] font-bold mb-1 text-slate-700">{t('forms.phone', 'Phone Number')}</label>
                   <input
-                    type="text"
+                    type="tel"
                     value={profileForm.phone}
-                    onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #cbd5e1' }}
+                    maxLength={10}
+                    onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                    onKeyDown={e => {
+                      if (!/[\d]/.test(e.key) && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
+                    className="w-full px-3 py-2.5 rounded-lg border-[1.5px] border-slate-300 text-slate-900 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: 4 }}>
-                    New Password <span style={{ color: '#94a3b8' }}>(Leave blank to keep current)</span>
+                  <label className="block text-[0.8rem] font-bold mb-1 text-slate-700">
+                    {t('auth.newPassword', 'New Password')} <span className="text-slate-400 font-normal">({t('conductor.leaveBlankKeepCurrent', 'Leave blank to keep current')})</span>
                   </label>
                   <input
                     type="password"
-                    placeholder="Enter new password..."
+                    placeholder="••••••••"
                     value={profileForm.newPassword}
                     onChange={(e) => setProfileForm({ ...profileForm, newPassword: e.target.value })}
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #cbd5e1' }}
+                    className="w-full px-3 py-2.5 rounded-lg border-[1.5px] border-slate-300 text-slate-900 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={savingProfile}
-                  style={{ padding: '12px 20px', background: C.primary, color: '#fff', border: 'none', borderRadius: 8, fontWeight: 800, cursor: 'pointer', alignSelf: 'flex-start' }}
+                  className="py-3 px-5 bg-indigo-600 text-white border-none rounded-lg font-extrabold cursor-pointer self-start hover:bg-indigo-700 transition-colors disabled:opacity-75"
                 >
-                  {savingProfile ? 'Saving...' : 'Update Conductor Profile'}
+                  {savingProfile ? t('common.saving', 'Saving...') : t('conductor.updateProfileBtn', 'Update Conductor Profile')}
                 </button>
               </form>
             </div>
@@ -1381,7 +1149,6 @@ const ConductorDashboard = () => {
         </div>
       </div>
 
-      {/* Passenger Booking Details Modal */}
       {selectedPassengerForModal && (
         <PassengerDetailsModal
           passenger={selectedPassengerForModal}

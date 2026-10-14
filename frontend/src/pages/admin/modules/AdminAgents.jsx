@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { FaPlus, FaTrash, FaTimes, FaSave, FaUserTie, FaUserShield } from 'react-icons/fa';
 import { userAPI } from '../../../utils/api';
-import { toast } from 'react-toastify';
 import DataTable from '../../../components/DataTable';
-import AdminPageHeader from '../../../components/AdminPageHeader';
+import { useNotification } from '../../../contexts/NotificationContext';
+import { MESSAGES } from '../../../constants/messages';
+import { useTranslation } from '../../../i18n';
 
 const EMPTY = { name: '', email: '', phone: '', city: 'Addis Ababa', password: '', role: 'agent' };
 const CITIES = ['Addis Ababa', 'Dire Dawa', 'Mekelle', 'Hawassa', 'Bahir Dar', 'Jimma', 'Adama', 'Gondar', 'Dessie', 'Jijiga'];
 
 const AdminAgents = () => {
+  const { t } = useTranslation();
+  const notify = useNotification();
   const [staffList, setStaffList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -23,8 +26,8 @@ const AdminAgents = () => {
     try {
       const data = await userAPI.getStaff();
       setStaffList(data || []);
-    } catch {
-      toast.error('Failed to load company staff');
+    } catch (err) {
+      notify.notifyError(err, MESSAGES.reports.loadFailed);
     } finally {
       setLoading(false);
     }
@@ -37,26 +40,37 @@ const AdminAgents = () => {
     setSaving(true);
     try {
       await userAPI.createStaff(form);
-      toast.success(`${form.role === 'conductor' ? 'Conductor' : 'Ticket Agent'} ${form.name} created successfully!`);
       setShowModal(false);
       setForm(EMPTY);
       load();
     } catch (err) {
-      toast.error(err.message || 'Failed to create staff account');
+      notify.notifyError(err, MESSAGES.staff.createFailed);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this staff account?')) return;
+  const handleDelete = async (staff) => {
+    const id = staff?._id;
+    const roleLabel = staff?.role === 'conductor' ? t('conductor.portal', 'Bus Conductor') : t('agent.portal', 'Ticket Agent');
+
+    const confirmed = await notify.confirm({
+      title: `${t('common.delete', 'Delete')} ${roleLabel}?`,
+      message: `${t('admin.deleteStaffTitle', 'Are you sure you want to delete')} ${staff?.name ? `"${staff.name}"` : ''}?`,
+      description: t('admin.deleteStaffDesc', 'This account will lose access immediately. This action cannot be undone.'),
+      confirmLabel: t('common.delete', 'Delete'),
+      cancelLabel: t('common.cancel', 'Cancel'),
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
     setDeletingId(id);
     try {
       await userAPI.delete(id);
-      toast.success('Staff account deleted');
+      setStaffList((prev) => prev.filter((a) => a._id !== id));
       load();
     } catch (err) {
-      toast.error('Delete failed');
+      notify.notifyError(err, MESSAGES.staff.deleteFailed);
     } finally {
       setDeletingId(null);
     }
@@ -73,79 +87,64 @@ const AdminAgents = () => {
 
   const columns = [
     {
-      header: 'Staff Name',
+      header: t('admin.staffName', 'Staff Name'),
       render: (a) => {
         const isConductor = a.role === 'conductor';
         return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div className="flex items-center gap-2.5">
             <div
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: '50%',
-                background: isConductor ? 'linear-gradient(135deg,#6366f1,#4338ca)' : 'linear-gradient(135deg,#0284c7,#0369a1)',
-                color: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 800,
-                fontSize: '0.9rem',
-                flexShrink: 0,
-              }}
+              className={`w-[34px] h-[34px] rounded-full text-white flex items-center justify-center font-extrabold text-[0.9rem] shrink-0 ${
+                isConductor ? 'bg-gradient-to-br from-indigo-500 to-indigo-700' : 'bg-gradient-to-br from-sky-600 to-sky-700'
+              }`}
             >
               {(a.name || 'A')[0].toUpperCase()}
             </div>
             <div>
-              <span style={{ fontWeight: 700, color: '#0f172a', display: 'block' }}>{a.name}</span>
-              <span style={{ fontSize: '0.72rem', color: '#64748b' }}>{a.email}</span>
+              <span className="font-bold text-slate-900 block">{a.name}</span>
+              <span className="text-[0.72rem] text-slate-500">{a.email}</span>
             </div>
           </div>
         );
       },
     },
     {
-      header: 'Staff Role',
+      header: t('admin.staffRole', 'Staff Role'),
       render: (a) => {
         const isConductor = a.role === 'conductor';
         return (
-          <span style={{
-            padding: '3px 8px',
-            borderRadius: '6px',
-            fontSize: '11px',
-            fontWeight: 700,
-            background: isConductor ? '#e0e7ff' : '#dbeafe',
-            color: isConductor ? '#3730a3' : '#1d4ed8',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-          }}>
+          <span
+            className={`py-[3px] px-2 rounded-md text-[11px] font-bold inline-flex items-center gap-1 ${
+              isConductor ? 'bg-indigo-100 text-indigo-800' : 'bg-blue-100 text-blue-700'
+            }`}
+          >
             {isConductor ? <FaUserShield /> : <FaUserTie />}
-            {isConductor ? 'Bus Conductor' : 'Ticket Agent'}
+            {isConductor ? t('conductor.portal', 'Bus Conductor') : t('agent.portal', 'Ticket Agent')}
           </span>
         );
       },
     },
     {
-      header: 'Phone Number',
-      render: (a) => <span style={{ fontWeight: 600 }}>{a.phone || '—'}</span>,
+      header: t('admin.phone', 'Phone Number'),
+      render: (a) => <span className="font-semibold">{a.phone || '—'}</span>,
     },
     {
-      header: 'Station / City',
+      header: t('admin.stationCity', 'Station / City'),
       render: (a) => (
-        <span className="eb-badge eb-badge-vip" style={{ background: '#f8fafc', color: '#334155', borderColor: '#e2e8f0' }}>
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[0.72rem] font-bold bg-slate-50 text-slate-700 border border-slate-200">
           {a.city || 'Addis Ababa'}
         </span>
       ),
     },
     {
-      header: 'Actions',
+      header: t('common.actions', 'Actions'),
       render: (a) => (
         <button
-          onClick={() => handleDelete(a._id)}
+          onClick={() => handleDelete(a)}
           disabled={deletingId === a._id}
-          className="eb-btn-action eb-btn-delete"
+          aria-label={`Delete account ${a.name || 'staff'}`}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-[0.76rem] font-bold cursor-pointer border-none transition-colors"
         >
-          <FaTrash /> {deletingId === a._id ? '...' : 'Delete'}
+          <FaTrash /> {deletingId === a._id ? t('common.deleting', 'Deleting…') : t('common.delete', 'Delete')}
         </button>
       ),
     },
@@ -156,43 +155,18 @@ const AdminAgents = () => {
 
   return (
     <div>
-      <AdminPageHeader
-        category="HUMAN RESOURCES & STAFFING"
-        title="Ticket Agents & Conductors"
-        icon={<FaUserTie />}
-        subtitle="Manage company staff credentials, counter ticket agents, bus conductor assignments, and station locations."
-        stats={[
-          { label: 'Total Company Staff', value: staffList.length, color: '#0284c7' },
-          { label: 'Ticket Agents', value: agentCount, color: '#16a34a' },
-          { label: 'Bus Conductors', value: conductorCount, color: '#7c3aed' },
-        ]}
-        actions={
-          <button onClick={() => { setForm(EMPTY); setShowModal(true); }} className="eb-btn-primary-header">
-            <FaPlus /> Add New Staff Member
-          </button>
-        }
-      />
-
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+      <div className="flex gap-2 mb-4 flex-wrap">
         {[
-          { id: 'ALL', label: `All Staff (${staffList.length})` },
-          { id: 'agent', label: `Ticket Agents (${agentCount})` },
-          { id: 'conductor', label: `Conductors (${conductorCount})` },
+          { id: 'ALL', label: `${t('admin.allStaff', 'All Staff')} (${staffList.length})` },
+          { id: 'agent', label: `${t('admin.ticketAgents', 'Ticket Agents')} (${agentCount})` },
+          { id: 'conductor', label: `${t('admin.conductors', 'Conductors')} (${conductorCount})` },
         ].map((btn) => (
           <button
             key={btn.id}
             onClick={() => setRoleFilter(btn.id)}
-            style={{
-              padding: '6px 14px',
-              borderRadius: '8px',
-              border: '1px solid',
-              borderColor: roleFilter === btn.id ? '#078930' : '#e2e8f0',
-              background: roleFilter === btn.id ? '#dcfce7' : '#fff',
-              color: roleFilter === btn.id ? '#15803d' : '#64748b',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: 'pointer',
-            }}
+            className={`py-1.5 px-3.5 rounded-lg border font-semibold text-[13px] cursor-pointer transition-colors ${
+              roleFilter === btn.id ? 'border-emerald-600 bg-green-100 text-green-700' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+            }`}
           >
             {btn.label}
           </button>
@@ -205,213 +179,147 @@ const AdminAgents = () => {
         loading={loading}
         searchTerm={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search staff by name, email, or city..."
-        emptyMessage="No staff accounts found. Click 'Add Staff' to create Ticket Agents and Conductors."
+        searchPlaceholder={t('admin.searchStaff', 'Search staff by name, email, or city...')}
+        emptyMessage={t('admin.noStaffFound', "No staff accounts found. Click 'Add Staff' to create Ticket Agents and Conductors.")}
         actions={
           <button
             onClick={() => { setForm(EMPTY); setShowModal(true); }}
-            style={{
-              padding: '10px 18px',
-              background: 'linear-gradient(135deg,#078930,#046623)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '12px',
-              fontWeight: 800,
-              fontSize: '0.85rem',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 4px 14px rgba(7,137,48,0.3)',
-            }}
+            className="py-2.5 px-4.5 bg-gradient-to-br from-eb-green to-[#046623] text-white border-none rounded-xl font-extrabold text-[0.85rem] cursor-pointer flex items-center gap-2 shadow-[0_4px_14px_rgba(7,137,48,0.3)] hover:opacity-95 transition-opacity"
           >
-            <FaPlus /> Add Agent / Conductor
+            <FaPlus /> {t('admin.addAgentConductor', 'Add Agent / Conductor')}
           </button>
         }
       />
 
-      {/* Create staff modal */}
       {showModal && (
         <div
           onClick={() => setShowModal(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15,23,42,.6)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '20px',
-          }}
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[1000] p-5"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{
-              background: '#fff',
-              borderRadius: '18px',
-              width: '100%',
-              maxWidth: '440px',
-              overflow: 'hidden',
-              boxShadow: '0 20px 50px rgba(0,0,0,.2)',
-            }}
+            className="bg-white rounded-[18px] w-full max-w-[440px] overflow-hidden shadow-2xl"
           >
-            <div
-              style={{
-                background: 'linear-gradient(135deg,#078930,#046623)',
-                padding: '18px 22px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
+            <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 py-[18px] px-[22px] flex justify-between items-center text-white">
               <div>
-                <div style={{ color: '#FCDD09', fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase' }}>
-                  Staff Management
+                <div className="text-amber-300 text-[0.7rem] font-extrabold uppercase">
+                  {t('admin.staffManagement', 'Staff Management')}
                 </div>
-                <h3 style={{ color: '#fff', margin: 0, fontWeight: 800 }}>Create Staff Account</h3>
+                <h3 className="text-white m-0 font-extrabold text-[1.1rem]">{t('admin.createStaffAccount', 'Create Staff Account')}</h3>
               </div>
               <button
                 onClick={() => setShowModal(false)}
-                style={{
-                  background: 'rgba(255,255,255,.15)',
-                  border: 'none',
-                  color: '#fff',
-                  width: 30,
-                  height: 30,
-                  borderRadius: '50%',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+                className="bg-white/15 hover:bg-white/25 border-none text-white w-[30px] h-[30px] rounded-full cursor-pointer flex items-center justify-center transition-colors"
               >
                 <FaTimes />
               </button>
             </div>
 
-            <form onSubmit={handleCreate} style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <form onSubmit={handleCreate} className="p-[22px] flex flex-col gap-3.5">
               <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px' }}>
-                  Account Role
+                <label className="text-[0.75rem] font-bold text-slate-500 block mb-1">
+                  {t('admin.accountRole', 'Account Role')}
                 </label>
                 <select
                   value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
-                  style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', fontWeight: 700 }}
+                  className="w-full py-2 px-3 border-[1.5px] border-slate-200 rounded-lg text-[0.9rem] font-bold outline-none focus:border-emerald-600"
                 >
-                  <option value="agent">Ticket Agent (Counter Booking &amp; Verification)</option>
-                  <option value="conductor">Bus Conductor (Onboard QR Scan &amp; Boarding)</option>
+                  <option value="agent">{t('admin.roleAgentDesc', 'Ticket Agent (Counter Booking & Verification)')}</option>
+                  <option value="conductor">{t('admin.roleConductorDesc', 'Bus Conductor (Onboard QR Scan & Boarding)')}</option>
                 </select>
               </div>
 
               <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px' }}>
-                  Full Name
+                <label className="text-[0.75rem] font-bold text-slate-500 block mb-1">
+                  {t('forms.passengerFullName', 'Full Name')}
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Solomon Kebede"
+                  placeholder=""
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   required
-                  style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem' }}
+                  className="w-full py-2 px-3 border-[1.5px] border-slate-200 rounded-lg text-[0.9rem] outline-none focus:border-emerald-600"
                 />
               </div>
 
               <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px' }}>
-                  Email Address
+                <label className="text-[0.75rem] font-bold text-slate-500 block mb-1">
+                  {t('forms.email', 'Email Address')}
                 </label>
                 <input
                   type="email"
-                  placeholder="e.g. solomon@selambus.com"
+                  placeholder=""
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   required
-                  style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem' }}
+                  className="w-full py-2 px-3 border-[1.5px] border-slate-200 rounded-lg text-[0.9rem] outline-none focus:border-emerald-600"
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px' }}>
-                    Phone Number
+                  <label className="text-[0.75rem] font-bold text-slate-500 block mb-1">
+                    {t('forms.phone', 'Phone Number')}
                   </label>
                   <input
                     type="tel"
-                    placeholder="0911..."
+                    placeholder=""
+                    maxLength={10}
                     value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem' }}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                    onKeyDown={e => {
+                      if (!/[\d]/.test(e.key) && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
+                    className="w-full py-2 px-3 border-[1.5px] border-slate-200 rounded-lg text-[0.9rem] outline-none focus:border-emerald-600"
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px' }}>
-                    City / Station
+                  <label className="text-[0.75rem] font-bold text-slate-500 block mb-1">
+                    {t('admin.stationCity', 'City / Station')}
                   </label>
                   <select
                     value={form.city}
                     onChange={(e) => setForm({ ...form, city: e.target.value })}
-                    style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem' }}
+                    className="w-full py-2 px-3 border-[1.5px] border-slate-200 rounded-lg text-[0.9rem] outline-none focus:border-emerald-600"
                   >
                     {CITIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
+                      <option key={c} value={c}>{t(c, c)}</option>
                     ))}
                   </select>
                 </div>
               </div>
 
               <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px' }}>
-                  Initial Password
+                <label className="text-[0.75rem] font-bold text-slate-500 block mb-1">
+                  {t('admin.initialPassword', 'Initial Password')}
                 </label>
                 <input
                   type="password"
-                  placeholder="Min 6 characters (default: password123)"
+                  placeholder=""
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem' }}
+                  className="w-full py-2 px-3 border-[1.5px] border-slate-200 rounded-lg text-[0.9rem] outline-none focus:border-emerald-600"
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+              <div className="flex gap-2.5 mt-2.5">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  style={{
-                    flex: 1,
-                    padding: '11px',
-                    border: '1.5px solid #e2e8f0',
-                    borderRadius: '8px',
-                    background: '#fff',
-                    color: '#64748b',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
+                  className="flex-1 py-2.5 border-[1.5px] border-slate-200 rounded-lg bg-white text-slate-500 font-bold cursor-pointer hover:bg-slate-50 transition-colors"
                 >
-                  Cancel
+                  {t('common.cancel', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  style={{
-                    flex: 2,
-                    padding: '11px',
-                    border: 'none',
-                    borderRadius: '8px',
-                    background: 'linear-gradient(135deg,#078930,#046623)',
-                    color: '#fff',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                  }}
+                  className="flex-[2] py-2.5 border-none rounded-lg bg-gradient-to-br from-emerald-600 to-emerald-800 text-white font-extrabold cursor-pointer flex items-center justify-center gap-1.5 hover:opacity-95 transition-opacity disabled:opacity-60"
                 >
-                  <FaSave /> {saving ? 'Creating...' : 'Create Account'}
+                  <FaSave /> {saving ? t('admin.creatingStaff', 'Creating...') : t('admin.createAccountBtn', 'Create Account')}
                 </button>
               </div>
             </form>

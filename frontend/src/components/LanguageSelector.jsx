@@ -1,15 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useTranslation } from '../i18n.jsx';
-import { FaGlobeAmericas, FaCheck } from 'react-icons/fa';
+import { useTranslation } from '../i18n';
+import { useAuth } from '../contexts/AuthContext';
+import { storage } from '../utils/storage';
+import { FaCheck } from 'react-icons/fa';
 
 export const LANGUAGES = [
-  { code: 'en', label: 'English', nativeName: 'English', flag: '🇺🇸' },
-  { code: 'am', label: 'አማርኛ', nativeName: 'አማርኛ', flag: '🇪🇹' },
-  { code: 'om', label: 'Afaan Oromoo', nativeName: 'Afaan Oromoo', flag: '🇪🇹' },
+  { code: 'en', label: 'English', nativeName: 'English', short: 'EN', flag: '🇬🇧' },
+  { code: 'am', label: 'አማርኛ', nativeName: 'አማርኛ', short: 'አማ', flag: '🇪🇹' },
+  { code: 'om', label: 'Afaan Oromoo', nativeName: 'Afaan Oromoo', short: 'OM', flag: '🇪🇹' },
 ];
 
 const LanguageSelector = ({ variant = 'default' }) => {
   const { i18n } = useTranslation();
+  const { user, updateUser } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -18,7 +21,10 @@ const LanguageSelector = ({ variant = 'default' }) => {
 
   const handleSelectLanguage = (code) => {
     i18n.changeLanguage(code);
-    localStorage.setItem('ethiotrip_language', code);
+    storage.setLanguage(code);
+    if (user && updateUser) {
+      updateUser({ preferredLanguage: code });
+    }
     setIsOpen(false);
   };
 
@@ -35,51 +41,44 @@ const LanguageSelector = ({ variant = 'default' }) => {
   const isDark = variant === 'dark';
 
   return (
-    <div ref={dropdownRef} style={{ position: 'relative', display: 'inline-block' }}>
+    <div ref={dropdownRef} className="relative inline-flex items-center">
+      {}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.45rem',
-          padding: '0.4rem 0.75rem',
-          background: isDark ? 'rgba(255, 255, 255, 0.08)' : '#ffffff',
-          border: isDark ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid #e2e8f0',
-          borderRadius: 8,
-          fontSize: '0.82rem',
-          fontWeight: 600,
-          color: isDark ? '#f8fafc' : '#334155',
-          cursor: 'pointer',
-          transition: 'all 0.15s ease',
-        }}
-        title="Select Language / ቋንቋ ይምረጡ"
+        aria-label="Select Language / ቋንቋ ይምረጡ / Afaan Filadhaa"
+        title={`Language: ${currentLang.nativeName} (Click to switch)`}
+        className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors outline-none cursor-pointer ${
+          isDark
+            ? 'text-white hover:bg-white/10'
+            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10'
+        }`}
       >
-        <FaGlobeAmericas style={{ color: '#1d6bf3', fontSize: '0.9rem' }} />
-        <span>{currentLang.flag}</span>
-        <span>{currentLang.label}</span>
-        <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>▾</span>
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="block"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="2" y1="12" x2="22" y2="12" />
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+        </svg>
       </button>
 
+      {}
       {isOpen && (
-        <div
-          style={{
-            position: 'absolute',
-            right: 0,
-            top: 'calc(100% + 6px)',
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
-            borderRadius: 12,
-            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08)',
-            zIndex: 1000,
-            minWidth: 170,
-            padding: '0.35rem',
-            overflow: 'hidden',
-          }}
-        >
-          <div style={{ padding: '0.35rem 0.65rem', fontSize: '0.68rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Choose Language
+        <div className="absolute right-0 top-[calc(100%+8px)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-[1000] min-w-[200px] p-2 overflow-hidden animate-in fade-in slide-in-from-top-1">
+          <div className="px-3 py-1.5 text-[0.68rem] font-extrabold text-slate-500 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800 mb-1 flex items-center justify-between">
+            <span>Choose Language / ቋንቋ</span>
+            <span className="text-xs">🌐</span>
           </div>
+
           {LANGUAGES.map((lang) => {
             const isSelected = currentLangCode === lang.code;
             return (
@@ -87,30 +86,20 @@ const LanguageSelector = ({ variant = 'default' }) => {
                 key={lang.code}
                 type="button"
                 onClick={() => handleSelectLanguage(lang.code)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  width: '100%',
-                  padding: '0.55rem 0.75rem',
-                  border: 'none',
-                  borderRadius: 8,
-                  background: isSelected ? '#eff6ff' : 'transparent',
-                  color: isSelected ? '#1d6bf3' : '#1e293b',
-                  fontSize: '0.82rem',
-                  fontWeight: isSelected ? 700 : 500,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'background 0.15s',
-                }}
-                onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = '#f8fafc'; }}
-                onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
+                className={`flex items-center justify-between w-full px-3 py-2 rounded-xl transition-colors cursor-pointer text-left text-sm ${
+                  isSelected
+                    ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 font-bold'
+                    : 'text-slate-700 dark:text-slate-200 font-medium hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                }`}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span>{lang.flag}</span>
-                  <span>{lang.nativeName}</span>
+                <div className="flex items-center gap-2.5">
+                  <span className="text-base">{lang.flag}</span>
+                  <div>
+                    <div className={`leading-tight ${isSelected ? 'font-bold' : 'font-semibold'}`}>{lang.nativeName}</div>
+                    <div className={`text-[0.7rem] ${isSelected ? 'text-blue-500' : 'text-slate-400'}`}>{lang.label}</div>
+                  </div>
                 </div>
-                {isSelected && <FaCheck style={{ fontSize: '0.72rem', color: '#1d6bf3' }} />}
+                {isSelected && <FaCheck className="text-xs text-blue-600" />}
               </button>
             );
           })}

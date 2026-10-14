@@ -7,10 +7,15 @@ import {
   FaCheckCircle, FaMapMarkerAlt, FaLock, FaPhone, FaEnvelope, FaArrowRight,
   FaChevronRight, FaStar, FaDownload, FaCheckDouble, FaTrashAlt, FaClock,
   FaMoneyBillWave, FaShieldAlt, FaSuitcase, FaQrcode, FaExclamationTriangle, FaCreditCard,
-  FaChevronDown
+  FaChevronDown, FaRobot
 } from 'react-icons/fa';
-import { toast } from 'react-toastify';
 import { bookingAPI, scheduleAPI, paymentAPI, notificationAPI, supportAPI, companyAPI } from '../../utils/api';
+import {
+  hasActiveTicket, isAwaitingPayment, isConfirmed, isCancelled,
+  isPaid, isRevenueBearing, isUpcoming, bookingAmount,
+} from '../../utils/bookingStatus';
+import { useNotification } from '../../contexts/NotificationContext';
+import { MESSAGES } from '../../constants/messages';
 import SeatSelectorModal from '../../components/SeatSelectorModal';
 import PaymentModal from '../../components/PaymentModal';
 import TicketModal from '../../components/TicketModal';
@@ -23,11 +28,14 @@ import TripComparison from './modules/TripComparison';
 import ReviewsRatings from './modules/ReviewsRatings';
 import CancelBooking from './modules/CancelBooking';
 import PaymentCenter from './modules/PaymentCenter';
-import { useTranslation } from '../../i18n.jsx';
+import ViewSchedules from './modules/ViewSchedules';
+import AIAssistantPage from './AIAssistantPage';
+import AIAssistantWidget from '../../components/AI/AIAssistantWidget';
+import { useTranslation } from '../../i18n';
 import LanguageSelector from '../../components/LanguageSelector';
 import NotificationPanel from '../../components/NotificationPanel';
+import ThemeToggle from '../../components/ThemeToggle';
 
-// ── Inline countdown timer component ──────────────────────────────────────────
 const CountdownTimer = ({ expiresAt }) => {
   const [timeLeft, setTimeLeft] = useState('');
   const [isUrgent, setIsUrgent] = useState(false);
@@ -39,7 +47,7 @@ const CountdownTimer = ({ expiresAt }) => {
       const h = Math.floor(diff / 3600000);
       const m = Math.floor((diff % 3600000) / 60000);
       const s = Math.floor((diff % 60000) / 1000);
-      setIsUrgent(diff < 30 * 60 * 1000); // urgent if < 30 min left
+      setIsUrgent(diff < 30 * 60 * 1000);
       setTimeLeft(`${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`);
     };
     update();
@@ -48,38 +56,23 @@ const CountdownTimer = ({ expiresAt }) => {
   }, [expiresAt]);
 
   return (
-    <span style={{
-      fontFamily: 'monospace',
-      fontWeight: 900,
-      fontSize: '1rem',
-      color: isUrgent ? '#ef4444' : '#d97706',
-      background: isUrgent ? 'rgba(239,68,68,0.1)' : 'rgba(217,119,6,0.1)',
-      padding: '2px 8px',
-      borderRadius: 6,
-      animation: isUrgent ? 'pulse 1s infinite' : 'none',
-    }}>
+    <span className={`font-mono font-black text-base py-0.5 px-2 rounded-md ${
+      isUrgent ? 'text-red-500 bg-red-500/10 animate-pulse' : 'text-amber-600 bg-amber-600/10'
+    }`}>
       {timeLeft}
     </span>
   );
 };
 
-const CITIES = ['Addis Ababa', 'Dire Dawa', 'Mekelle', 'Hawassa', 'Bahir Dar', 'Jimma', 'Adama', 'Gondar', 'Dessie', 'Jijiga', 'Arba Minch', 'Shashamane'];
-
-const POPULAR_DESTINATIONS = [
-  { from: 'Addis Ababa', to: 'Bahir Dar', price: 'ETB 750', duration: '8 hrs', tag: 'Lake Tana', color: '#047857' },
-  { from: 'Addis Ababa', to: 'Hawassa', price: 'ETB 550', duration: '4.5 hrs', tag: 'Resort City', color: '#0284c7' },
-  { from: 'Addis Ababa', to: 'Dire Dawa', price: 'ETB 850', duration: '9 hrs', tag: 'Eastern Express', color: '#7c3aed' },
-  { from: 'Addis Ababa', to: 'Gondar', price: 'ETB 950', duration: '12 hrs', tag: 'Historic Castles', color: '#b45309' },
-];
-
 const PassengerDashboard = () => {
   const { user, logout } = useAuth();
   const { t } = useTranslation();
+  const notify = useNotification();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Search & Data States
   const [searchParams, setSearchParams] = useState({
     from: 'Addis Ababa',
     to: 'Bahir Dar',
@@ -91,18 +84,15 @@ const PassengerDashboard = () => {
   const [myBookings, setMyBookings] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Notification States — Clean empty state for new passengers
   const [notifications, setNotifications] = useState([]);
   const [showNotificationMenu, setShowNotificationMenu] = useState(false);
-  const [notificationFilter, setNotificationFilter] = useState('all'); // 'all' | 'unread'
+  const [notificationFilter, setNotificationFilter] = useState('all');
   const notifRef = useRef(null);
 
-  // Modals
   const [selectedScheduleForSeat, setSelectedScheduleForSeat] = useState(null);
   const [activeBookingForPayment, setActiveBookingForPayment] = useState(null);
   const [activeTicketForView, setActiveTicketForView] = useState(null);
 
-  // Customer Support State
   const [supportThreads, setSupportThreads] = useState([]);
   const [selectedThread, setSelectedThread] = useState(null);
   const [threadReply, setThreadReply] = useState('');
@@ -117,6 +107,7 @@ const PassengerDashboard = () => {
     description: '',
   });
   const [submittingTicket, setSubmittingTicket] = useState(false);
+  const [deletingTicketId, setDeletingTicketId] = useState(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -158,7 +149,6 @@ const PassengerDashboard = () => {
     fetchData();
   }, []);
 
-  // Real-time polling for support answers when on Support tab
   useEffect(() => {
     if (activeTab !== 'support') return;
     const interval = setInterval(async () => {
@@ -178,11 +168,13 @@ const PassengerDashboard = () => {
 
   const handleSendThreadReply = async (e) => {
     e.preventDefault();
-    if (!threadReply.trim()) return;
+    if (!threadReply.trim()) {
+      notify.warning(MESSAGES.support.replyRequired);
+      return;
+    }
     setSendingReply(true);
     try {
       const res = await supportAPI.addMessage(selectedThread._id, threadReply.trim());
-      toast.success('Reply sent to support agent!');
       setThreadReply('');
       if (res?.ticket) setSelectedThread(res.ticket);
       const supData = await supportAPI.getMyTickets().catch(() => []);
@@ -194,7 +186,7 @@ const PassengerDashboard = () => {
         }
       }
     } catch (err) {
-      toast.error(err.message || 'Failed to send reply');
+      notify.notifyError(err, MESSAGES.support.failed);
     } finally {
       setSendingReply(false);
     }
@@ -203,7 +195,10 @@ const PassengerDashboard = () => {
   const handleCreateSupportTicket = async (e) => {
     e.preventDefault();
     if (!newTicketForm.description.trim() || !newTicketForm.subject.trim()) {
-      toast.warning('Please enter subject and message details');
+      notify.warning({
+        title: t('passenger.subject', 'Subject *'),
+        description: t('passenger.describeQuestion', 'Please enter both a subject and a message before submitting.'),
+      });
       return;
     }
     setSubmittingTicket(true);
@@ -218,7 +213,6 @@ const PassengerDashboard = () => {
         passengerEmail: user?.email,
         passengerPhone: user?.phone,
       });
-      toast.success('Support question submitted successfully!');
       setShowNewTicketModal(false);
       setNewTicketForm({ companyId: companies[0]?._id || '', category: 'Booking Assistance', subject: '', ticketNumber: '', description: '' });
       const supData = await supportAPI.getMyTickets().catch(() => []);
@@ -229,13 +223,12 @@ const PassengerDashboard = () => {
         else if (created && created._id) setSelectedThread(created);
       }
     } catch (err) {
-      toast.error(err.message || 'Failed to submit support question');
+      notify.notifyError(err, MESSAGES.support.failed);
     } finally {
       setSubmittingTicket(false);
     }
   };
 
-  // Close notification popover when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target)) {
@@ -246,8 +239,6 @@ const PassengerDashboard = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
-
   const handleMarkAsRead = async (id) => {
     setNotifications((prev) => prev.map((n) => (n._id === id ? { ...n, isRead: true } : n)));
     try {
@@ -257,7 +248,6 @@ const PassengerDashboard = () => {
 
   const handleMarkAllRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    toast.success('All notifications marked as read');
     try {
       await notificationAPI.markAllAsRead();
     } catch (e) {}
@@ -267,9 +257,8 @@ const PassengerDashboard = () => {
     try {
       await notificationAPI.delete(id);
       setNotifications((prev) => prev.filter((n) => n._id !== id));
-      toast.success('Notification deleted');
     } catch (err) {
-      toast.error('Failed to delete notification');
+      notify.notifyError(err, MESSAGES.notifications.deleteFailed);
     }
   };
 
@@ -277,26 +266,38 @@ const PassengerDashboard = () => {
     try {
       await notificationAPI.clearAll();
       setNotifications([]);
-      toast.success('All notifications cleared');
     } catch (err) {
-      toast.error('Failed to clear notifications');
+      notify.notifyError(err, MESSAGES.notifications.clearFailed);
     }
   };
 
-  const handleDeleteSupportTicket = async (ticketId) => {
-    if (!window.confirm('Are you sure you want to delete this support inquiry?')) return;
+  const handleDeleteSupportTicket = async (ticket) => {
+    const ticketId = ticket?._id || ticket;
+    const subject = ticket?.subject || '';
+
+    const confirmed = await notify.confirm({
+      title: t('passenger.deleteInquiry', 'Delete Support Inquiry?'),
+      message: `${t('passenger.deleteInquiryConfirm', 'Are you sure you want to delete')} ${subject ? `"${subject}"` : ''}?`,
+      description: t('passenger.deleteInquiryDesc', 'The conversation and its messages will be permanently removed.'),
+      confirmLabel: t('common.delete', 'Delete'),
+      cancelLabel: t('common.cancel', 'Cancel'),
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
+    setDeletingTicketId(ticketId);
     try {
       await supportAPI.delete(ticketId);
       setSupportThreads((prev) => prev.filter((t) => t._id !== ticketId));
       if (selectedThread?._id === ticketId) {
         setSelectedThread(null);
       }
-      toast.success('Support inquiry deleted');
     } catch (err) {
-      toast.error('Failed to delete support inquiry');
+      notify.notifyError(err, MESSAGES.support.deleteFailed);
+    } finally {
+      setDeletingTicketId(null);
     }
   };
-
 
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
@@ -309,9 +310,9 @@ const PassengerDashboard = () => {
         date: searchParams.date,
       });
       setSchedules(res || []);
-      if (!res?.length) toast.info('No direct buses found for this date. Check neighboring dates.');
+      if (!res?.length) notify.info(MESSAGES.search.noResults);
     } catch (err) {
-      toast.error('Search failed');
+      notify.notifyError(err, MESSAGES.search.failed);
     } finally {
       setLoading(false);
     }
@@ -325,14 +326,6 @@ const PassengerDashboard = () => {
     }));
   };
 
-  const handleQuickBookCity = (from, to) => {
-    setSearchParams((prev) => ({ ...prev, from, to }));
-    setActiveTab('search');
-    scheduleAPI.search({ from, to, date: searchParams.date })
-      .then((res) => setSchedules(res || []))
-      .catch(() => {});
-  };
-
   const handleSeatSelected = (booking) => {
     setSelectedScheduleForSeat(null);
     setMyBookings((prev) => [booking, ...prev]);
@@ -343,361 +336,246 @@ const PassengerDashboard = () => {
     setActiveBookingForPayment(null);
     setMyBookings((prev) => prev.map((b) => (b._id === updatedBooking._id ? updatedBooking : b)));
     setActiveTicketForView(updatedBooking);
-    toast.success('Payment verified! Your official E-Ticket is ready.');
+    notify.success(MESSAGES.payment.success);
   };
 
   const sidebarNavItems = [
     { id: 'dashboard', label: t('nav.dashboard', 'Dashboard'), icon: <FaBus /> },
+    { id: 'schedules', label: t('nav.schedules', 'View Schedules'), icon: <FaCalendarAlt /> },
     { id: 'search', label: t('nav.searchBook', 'Search & Book Bus'), icon: <FaSearch /> },
-    { id: 'history', label: t('nav.myBookings', 'My Bookings'), icon: <FaCalendarAlt /> },
+    { id: 'history', label: t('nav.myBookings', 'My Bookings'), icon: <FaTicketAlt /> },
     { id: 'tickets', label: t('nav.myTickets', 'My E-Tickets'), icon: <FaTicketAlt /> },
     { id: 'payments', label: t('nav.paymentCenter', 'Payment Center'), icon: <FaWallet /> },
     { id: 'refunds', label: t('nav.cancellationRefund', 'Cancellation & Refund'), icon: <FaMoneyBillWave /> },
-    { id: 'notifications', label: t('common.notifications', 'Notifications'), icon: <FaBell />, badge: unreadCount },
     { id: 'support', label: t('nav.support', 'Customer Support'), icon: <FaHeadset /> },
-    { id: 'profile', label: t('common.profile', 'Profile'), icon: <FaUser /> },
   ];
 
   const passengerName = (() => {
     const raw = user?.name || '';
     const clean = raw.replace(/\s*\([^)]*\)/g, '').replace(/\b(Passenger|Super Admin|Company Admin|Admin|Ticket Agent|Agent|Conductor|Staff|Verified Passenger)\b/gi, '').trim();
-    return clean || 'Samuel';
+    return clean || 'Passenger';
   })();
-  const upcomingBooking = myBookings.find((b) => b.status === 'confirmed');
-
-  const filteredNotifs = notificationFilter === 'unread' ? notifications.filter((n) => !n.isRead) : notifications;
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc', fontFamily: "'Poppins', 'Inter', sans-serif", overflowX: 'hidden', maxWidth: '100vw', position: 'relative' }}>
-      {/* Mobile Backdrop Overlay */}
+    <div className="flex h-screen bg-slate-50 font-sans overflow-hidden max-w-[100vw] relative">
       <div
-        className={`eb-sidebar-overlay ${sidebarOpen ? 'show-mobile' : ''}`}
+        className={`${sidebarOpen ? 'fixed inset-0 bg-black/50 z-[99] backdrop-blur-sm lg:hidden' : 'hidden'}`}
         onClick={() => setSidebarOpen(false)}
       />
 
-      {/* ── Left Passenger Sidebar ── */}
       <aside
-        className={`eb-pax-sidebar ${sidebarOpen ? 'open' : ''}`}
-        style={{
-          width: '260px',
-          background: 'linear-gradient(180deg, #062b1e 0%, #0a3d29 100%)',
-          color: '#fff',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          padding: '24px 16px',
-          position: 'fixed',
-          top: 0,
-          bottom: 0,
-          left: 0,
-          zIndex: 100,
-          boxShadow: '4px 0 24px rgba(0,0,0,0.15)',
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          scrollbarWidth: 'thin',
-        }}
+        className={`w-[260px] bg-gradient-to-b from-[#062b1e] to-[#0a3d29] text-white flex flex-col justify-between py-6 px-4 fixed top-0 bottom-0 left-0 z-[100] shadow-[4px_0_24px_rgba(0,0,0,0.15)] h-screen overflow-y-auto overflow-x-hidden transition-transform duration-250 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
       >
         <div>
-          {/* Logo */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 8px 24px', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '20px' }}>
-            <div
-              style={{
-                width: 42,
-                height: 42,
-                borderRadius: '12px',
-                background: 'linear-gradient(135deg, #078930, #22c55e)',
-                color: '#FCDD09',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1.2rem',
-                boxShadow: '0 4px 12px rgba(7,137,48,0.4)',
-              }}
-            >
+          <div className="flex items-center gap-3 px-2 pb-6 border-b border-white/10 mb-5">
+            <div className="w-[42px] h-[42px] rounded-xl bg-gradient-to-br from-[#078930] to-green-500 text-yellow-300 flex items-center justify-center text-xl shadow-[0_4px_12px_rgba(7,137,48,0.4)]">
               <FaBus />
             </div>
             <div>
-              <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#fff', lineHeight: 1.1 }}>
-                ETHIO <span style={{ color: '#FCDD09' }}>TRIP</span>
+              <div className="text-[1.15rem] font-black text-white leading-tight">
+                ETHIO <span className="text-yellow-300">TRIP</span>
               </div>
-              <div style={{ fontSize: '0.68rem', color: '#86efac', fontWeight: 600 }}>Passenger Travel Portal</div>
+              <div className="text-[0.68rem] text-green-300 font-semibold">{t('nav.passenger', 'Passenger')}</div>
             </div>
           </div>
 
-          {/* Navigation Links */}
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <nav className="flex flex-col gap-1">
             {sidebarNavItems.map((item) => (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setActiveTab(item.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '11px 14px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  background: activeTab === item.id ? 'rgba(74, 222, 128, 0.2)' : 'transparent',
-                  color: activeTab === item.id ? '#4ade80' : '#d1fae5',
-                  fontWeight: activeTab === item.id ? 800 : 600,
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.15s ease',
-                  position: 'relative',
-                }}
+                onClick={() => { setActiveTab(item.id); if (window.innerWidth < 1024) setSidebarOpen(false); }}
+                className={`flex items-center gap-3 py-[11px] px-3.5 rounded-xl border-none font-semibold text-[0.85rem] cursor-pointer text-left transition-all duration-150 relative ${
+                  activeTab === item.id
+                    ? 'bg-green-400/20 text-green-400 font-extrabold'
+                    : 'bg-transparent text-emerald-100 hover:bg-white/5'
+                }`}
               >
-                <span style={{ fontSize: '1rem', color: activeTab === item.id ? '#4ade80' : '#86efac' }}>{item.icon}</span>
-                <span style={{ flex: 1 }}>{item.label}</span>
-                {item.badge > 0 && (
-                  <span style={{ background: '#DA121A', color: '#fff', fontSize: '0.68rem', padding: '2px 7px', borderRadius: '50px', fontWeight: 900 }}>
-                    {item.badge}
-                  </span>
-                )}
+                <span className={`text-base ${activeTab === item.id ? 'text-green-400' : 'text-green-300'}`}>{item.icon}</span>
+                <span className="flex-1">{item.label}</span>
               </button>
             ))}
           </nav>
         </div>
 
-        {/* Sidebar Footer */}
         <div>
           <button
             type="button"
             onClick={logout}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              padding: '10px',
-              background: 'rgba(218, 18, 26, 0.15)',
-              color: '#fca5a5',
-              border: '1px solid rgba(218, 18, 26, 0.3)',
-              borderRadius: '12px',
-              fontWeight: 800,
-              fontSize: '0.85rem',
-              cursor: 'pointer',
-            }}
+            className="w-full flex items-center justify-center gap-2 p-2.5 bg-red-600/15 text-red-300 border border-red-600/30 rounded-xl font-extrabold text-[0.85rem] cursor-pointer hover:bg-red-600/25 transition-colors"
           >
-            <FaSignOutAlt /> Sign Out
+            <FaSignOutAlt /> {t('common.logout', 'Sign Out')}
           </button>
         </div>
       </aside>
 
-      {/* ── Main Content Area ── */}
-      <main className="eb-pax-main" style={{ minHeight: '100vh', minWidth: 0, overflowX: 'hidden' }}>
-        {/* Top Navigation Bar */}
-        <header
-          style={{
-            background: '#ffffff',
-            borderBottom: '1px solid #e2e8f0',
-            padding: '12px 20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            position: 'sticky',
-            top: 0,
-            zIndex: 100,
-            gap: 12,
-            flexWrap: 'wrap',
-            overflow: 'visible',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      <main className="flex-1 flex flex-col h-screen overflow-hidden min-w-0 transition-all duration-250 lg:ml-[260px]">
+        <header className="bg-white border-b border-slate-200 py-3 px-3 sm:px-5 flex items-center justify-between shrink-0 z-[100] gap-3">
+          <div className="flex items-center gap-3.5 min-w-0">
             <button
-              className="eb-menu-btn"
+              className="lg:hidden w-[38px] h-[38px] rounded-xl bg-slate-50 border border-slate-200 text-slate-500 flex items-center justify-center text-lg cursor-pointer transition-all hover:bg-emerald-50 hover:border-emerald-600 hover:text-emerald-600 shrink-0"
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              title="Toggle Menu"
-              style={{ display: 'flex' }}
+              title={t('common.menu', 'Toggle Menu')}
             >
               <FaBars />
             </button>
-            <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>
-              {sidebarNavItems.find(n => n.id === activeTab)?.label || 'Passenger Portal'}
+            <h1 className="m-0 text-[1.1rem] sm:text-[1.25rem] font-extrabold text-slate-900 truncate">
+              {sidebarNavItems.find(n => n.id === activeTab)?.label || t('passenger.portal', 'Passenger Portal')}
             </h1>
           </div>
 
-          {/* Right Topbar Action Controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div className="eb-header-date-badge">
-              <FaCalendarAlt style={{ color: '#078930' }} />
+          <div className="flex items-center gap-2 sm:gap-3.5 shrink-0">
+            <div className="hidden md:flex items-center gap-1.5 text-[0.76rem] text-slate-500 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl font-bold whitespace-nowrap">
+              <FaCalendarAlt className="text-[#078930]" />
               <span>{new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
             </div>
+            <ThemeToggle />
             <LanguageSelector />
-            {/* Unified Role Notification Panel */}
             <NotificationPanel role="passenger" onViewAll={() => setActiveTab('notifications')} />
 
-            {/* Quick Profile Link */}
-            <div
-              onClick={() => setActiveTab('profile')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '6px 12px',
-                borderRadius: '12px',
-                background: '#f8fafc',
-                border: '1.5px solid #e2e8f0',
-                cursor: 'pointer',
-              }}
-            >
+            <div className="relative">
               <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #078930, #046623)',
-                  color: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 900,
-                  fontSize: '0.85rem',
-                }}
+                onClick={() => setProfileDropdownOpen(prev => !prev)}
+                className="flex items-center gap-2 py-1 pl-1 pr-2 sm:pr-3 rounded-full bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors"
               >
-                {passengerName.charAt(0).toUpperCase()}
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#078930] to-[#046623] text-white flex items-center justify-center font-black text-xs shrink-0 overflow-hidden">
+                  {user?.avatar ? <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" /> : passengerName.charAt(0).toUpperCase()}
+                </div>
+                <span className="hidden sm:inline text-[0.85rem] font-extrabold text-slate-800 max-w-[100px] truncate">{passengerName}</span>
               </div>
-              <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b' }}>{passengerName}</span>
+              {profileDropdownOpen && (
+                <div className="absolute top-12 right-0 w-52 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 z-[1200] overflow-hidden" onMouseLeave={() => setProfileDropdownOpen(false)}>
+                  <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#078930] to-[#046623] text-white flex items-center justify-center font-black text-sm shrink-0 overflow-hidden">
+                      {user?.avatar ? <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" /> : passengerName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-900 dark:text-white m-0 truncate">{passengerName}</p>
+                      <p className="text-[10px] text-slate-400 m-0">{t('passenger', 'Passenger')}</p>
+                    </div>
+                  </div>
+                  <div className="p-2">
+                    <button
+                      type="button"
+                      onClick={() => { setActiveTab('profile'); setProfileDropdownOpen(false); }}
+                      className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors cursor-pointer flex items-center gap-2"
+                    >
+                      <FaUser className="text-emerald-600" /> {t('passenger.profile', 'Edit Profile')}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
 
-        {/* ── Main Dashboard Body ── */}
-        <div style={{ padding: '20px 16px', flex: 1, overflowX: 'hidden' }}>
+        <div className="py-4 sm:py-5 px-3 sm:px-6 flex-1 overflow-y-auto overflow-x-hidden">
           {activeTab === 'dashboard' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
-              {/* ═══════════════════════════════════════════════════════════════
-                  ROW 1: 5 Top Stats Cards Grid (Real Passenger Data)
-                  ═══════════════════════════════════════════════════════════════ */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
-                {/* Card 1: Total Bookings */}
+            <div className="flex flex-col gap-[22px]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div
                   onClick={() => setActiveTab('history')}
-                  style={{ background: '#ffffff', borderRadius: '16px', padding: '18px 20px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.02)', cursor: 'pointer' }}
+                  className="bg-white rounded-2xl p-[18px_20px] border border-slate-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '8px' }}>
-                    <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: '#ecfdf5', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', flexShrink: 0 }}>
+                  <div className="flex items-center gap-3.5 mb-2">
+                    <div className="w-[42px] h-[42px] rounded-[10px] bg-green-50 text-emerald-500 flex items-center justify-center text-xl shrink-0">
                       <FaSuitcase />
                     </div>
                     <div>
-                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Total Bookings</div>
-                      <h2 style={{ margin: '2px 0 0', fontSize: '1.65rem', fontWeight: 900, color: '#0f172a', lineHeight: 1 }}>
+                      <div className="text-[0.72rem] font-extrabold text-slate-500 uppercase tracking-[0.4px]">
+                        {t('passenger.totalBookings', 'Total Bookings')}
+                      </div>
+                      <h2 className="mt-0.5 mb-0 text-[1.65rem] font-black text-slate-900 leading-none">
                         {myBookings.length}
                       </h2>
                     </div>
                   </div>
-                  <div style={{ fontSize: '0.74rem', fontWeight: 700, color: myBookings.length > 0 ? '#10b981' : '#94a3b8', marginTop: '6px' }}>
-                    {myBookings.length > 0 ? `${myBookings.length} bookings made` : 'No bookings yet'}
+                  <div className={`text-[0.74rem] font-bold mt-1.5 ${myBookings.length > 0 ? 'text-emerald-500' : 'text-slate-400'}`}>
+                    {myBookings.length > 0 ? `${myBookings.length} ${t('common.bookings', 'bookings')}` : t('passenger.noBookingsYet', 'No bookings yet')}
                   </div>
                 </div>
 
-                {/* Card 2: Active E-Tickets */}
                 <div
                   onClick={() => setActiveTab('tickets')}
-                  style={{ background: '#ffffff', borderRadius: '16px', padding: '18px 20px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.02)', cursor: 'pointer' }}
+                  className="bg-white rounded-2xl p-[18px_20px] border border-slate-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '8px' }}>
-                    <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: '#ecfdf5', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', flexShrink: 0 }}>
+                  <div className="flex items-center gap-3.5 mb-2">
+                    <div className="w-[42px] h-[42px] rounded-[10px] bg-green-50 text-emerald-500 flex items-center justify-center text-xl shrink-0">
                       <FaTicketAlt />
                     </div>
                     <div>
-                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Active E-Tickets</div>
-                      <h2 style={{ margin: '2px 0 0', fontSize: '1.65rem', fontWeight: 900, color: '#0f172a', lineHeight: 1 }}>
-                        {myBookings.filter(b =>
-                          (b.paymentStatus === 'PAID' || b.paymentStatus === 'paid') &&
-                          (b.status === 'confirmed' || b.status === 'CONFIRMED' || b.status === 'completed') &&
-                          Boolean(b.ticketNumber)
-                        ).length}
+                      <div className="text-[0.72rem] font-extrabold text-slate-500 uppercase tracking-[0.4px]">
+                        {t('passenger.activeETickets', 'Active E-Tickets')}
+                      </div>
+                      <h2 className="mt-0.5 mb-0 text-[1.65rem] font-black text-slate-900 leading-none">
+                        {myBookings.filter(hasActiveTicket).length}
                       </h2>
                     </div>
                   </div>
-                  <div style={{ fontSize: '0.74rem', fontWeight: 700, color: '#2563eb', marginTop: '6px' }}>
-                    View E-Tickets
+                  <div className="text-[0.74rem] font-bold text-blue-600 mt-1.5">
+                    {t('passenger.viewETickets', 'View E-Tickets')}
                   </div>
                 </div>
 
-                {/* Card 3: Pending Payments */}
                 <div
                   onClick={() => setActiveTab('payments')}
-                  style={{ background: '#ffffff', borderRadius: '16px', padding: '18px 20px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.02)', cursor: 'pointer' }}
+                  className="bg-white rounded-2xl p-[18px_20px] border border-slate-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '8px' }}>
-                    <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: '#fff7ed', color: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', flexShrink: 0 }}>
+                  <div className="flex items-center gap-3.5 mb-2">
+                    <div className="w-[42px] h-[42px] rounded-[10px] bg-orange-50 text-orange-500 flex items-center justify-center text-xl shrink-0">
                       <FaWallet />
                     </div>
                     <div>
-                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Pending Payments</div>
-                      <h2 style={{ margin: '2px 0 0', fontSize: '1.65rem', fontWeight: 900, color: '#0f172a', lineHeight: 1 }}>
-                        {myBookings.filter(b => b.status === 'pending' || b.status === 'pending_payment' || b.paymentStatus === 'unpaid').length}
+                      <div className="text-[0.72rem] font-extrabold text-slate-500 uppercase tracking-[0.4px]">
+                        {t('passenger.pendingPayments', 'Pending Payments')}
+                      </div>
+                      <h2 className="mt-0.5 mb-0 text-[1.65rem] font-black text-slate-900 leading-none">
+                        {myBookings.filter(isAwaitingPayment).length}
                       </h2>
                     </div>
                   </div>
-                  <div style={{ fontSize: '0.74rem', fontWeight: 700, color: myBookings.some(b => b.status === 'pending') ? '#ea580c' : '#2563eb', marginTop: '6px' }}>
-                    {myBookings.some(b => b.status === 'pending') ? 'Awaiting Payment' : 'Complete Payment'}
+                  <div className={`text-[0.74rem] font-bold mt-1.5 ${myBookings.some(isAwaitingPayment) ? 'text-orange-600' : 'text-blue-600'}`}>
+                    {myBookings.some(isAwaitingPayment) ? t('passenger.awaitingPayment', 'Awaiting Payment') : t('passenger.completePayment', 'Complete Payment')}
                   </div>
                 </div>
 
-                {/* Card 4: Upcoming Trips */}
                 <div
                   onClick={() => setActiveTab('history')}
-                  style={{ background: '#ffffff', borderRadius: '16px', padding: '18px 20px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.02)', cursor: 'pointer' }}
+                  className="bg-white rounded-2xl p-[18px_20px] border border-slate-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '8px' }}>
-                    <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: '#eff6ff', color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', flexShrink: 0 }}>
+                  <div className="flex items-center gap-3.5 mb-2">
+                    <div className="w-[42px] h-[42px] rounded-[10px] bg-blue-50 text-blue-500 flex items-center justify-center text-xl shrink-0">
                       <FaBus />
                     </div>
                     <div>
-                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Upcoming Trips</div>
-                      <h2 style={{ margin: '2px 0 0', fontSize: '1.65rem', fontWeight: 900, color: '#0f172a', lineHeight: 1 }}>
-                        {myBookings.filter(b => b.status === 'confirmed' || b.status === 'CONFIRMED').length}
+                      <div className="text-[0.72rem] font-extrabold text-slate-500 uppercase tracking-[0.4px]">
+                        {t('passenger.upcomingTrips', 'Upcoming Trips')}
+                      </div>
+                      <h2 className="mt-0.5 mb-0 text-[1.65rem] font-black text-slate-900 leading-none">
+                        {myBookings.filter(b => isConfirmed(b) && isUpcoming(b)).length}
                       </h2>
                     </div>
                   </div>
-                  <div style={{ fontSize: '0.74rem', fontWeight: 700, color: '#2563eb', marginTop: '6px' }}>
-                    View Trips
-                  </div>
-                </div>
-
-                {/* Card 5: Loyalty Points */}
-                <div style={{ background: '#ffffff', borderRadius: '16px', padding: '18px 20px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.02)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '8px' }}>
-                    <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: '#fefce8', color: '#eab308', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', flexShrink: 0 }}>
-                      <FaStar />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Loyalty Points</div>
-                      <h2 style={{ margin: '2px 0 0', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a', lineHeight: 1 }}>
-                        {user?.loyaltyPoints !== undefined ? user.loyaltyPoints : myBookings.length * 10} <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>pts</span>
-                      </h2>
-                    </div>
-                  </div>
-                  <div style={{ fontSize: '0.74rem', fontWeight: 700, color: '#ca8a04', marginTop: '6px' }}>
-                    {myBookings.length >= 10 ? 'Gold Member' : myBookings.length >= 3 ? 'Silver Member' : 'Member'}
+                  <div className="text-[0.74rem] font-bold text-blue-600 mt-1.5">
+                    {t('passenger.viewTrips', 'View Trips')}
                   </div>
                 </div>
               </div>
 
-              {/* ═══════════════════════════════════════════════════════════════
-                  ROW 2: 3-Column Content (Area Chart / Recent Bookings / Spending Summary)
-                  ═══════════════════════════════════════════════════════════════ */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.35fr 1.35fr 1fr', gap: '18px' }}>
-                {/* Column 1: Booking Overview (This Year) */}
-                <div style={{ background: '#ffffff', borderRadius: '18px', padding: '22px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#0f172a' }}>
-                      Booking Overview <span style={{ color: '#64748b', fontWeight: 500 }}>(This Year)</span>
+              <div className="grid grid-cols-1 lg:grid-cols-[1.35fr_1.35fr_1fr] gap-4.5">
+                <div className="bg-white rounded-[18px] p-[22px] border border-slate-200 flex flex-col justify-between">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="m-0 text-[0.98rem] font-extrabold text-slate-900">
+                      {t('passenger.bookingOverview', 'Booking Overview')} <span className="text-slate-500 font-medium">({t('passenger.thisYear', 'This Year')})</span>
                     </h3>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#475569', background: '#f8fafc', border: '1px solid #e2e8f0', padding: '3px 8px', borderRadius: '6px', fontWeight: 700 }}>
-                      <span>This Year</span>
-                      <FaChevronDown style={{ fontSize: '0.6rem' }} />
+                    <div className="flex items-center gap-1.5 text-[0.75rem] text-slate-600 bg-slate-50 border border-slate-200 py-[3px] px-2 rounded-md font-bold">
+                      <span>{t('passenger.thisYear', 'This Year')}</span>
+                      <FaChevronDown className="text-[0.6rem]" />
                     </div>
                   </div>
 
-                  {/* SVG Area Line Chart */}
-                  <div style={{ width: '100%', height: '170px', position: 'relative' }}>
-                    <svg viewBox="0 0 400 130" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+                  <div className="w-full h-[170px] relative">
+                    <svg viewBox="0 0 400 130" className="w-full h-full overflow-visible">
                       <defs>
                         <linearGradient id="paxGreenGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
@@ -705,13 +583,11 @@ const PassengerDashboard = () => {
                         </linearGradient>
                       </defs>
 
-                      {/* Grid lines */}
                       <line x1="25" y1="15" x2="385" y2="15" stroke="#f1f5f9" strokeDasharray="3 3" />
                       <line x1="25" y1="45" x2="385" y2="45" stroke="#f1f5f9" strokeDasharray="3 3" />
                       <line x1="25" y1="75" x2="385" y2="75" stroke="#f1f5f9" strokeDasharray="3 3" />
                       <line x1="25" y1="105" x2="385" y2="105" stroke="#f1f5f9" strokeDasharray="3 3" />
 
-                      {/* Y-axis labels */}
                       <text x="14" y="18" fontSize="8" fill="#94a3b8" fontWeight="600" textAnchor="end">20</text>
                       <text x="14" y="48" fontSize="8" fill="#94a3b8" fontWeight="600" textAnchor="end">15</text>
                       <text x="14" y="78" fontSize="8" fill="#94a3b8" fontWeight="600" textAnchor="end">10</text>
@@ -749,8 +625,7 @@ const PassengerDashboard = () => {
                       )}
                     </svg>
 
-                    {/* Months X-axis labels */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '30px', paddingRight: '15px', marginTop: '4px', fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>
+                    <div className="flex justify-between pl-[30px] pr-[15px] mt-1 text-[0.7rem] text-slate-400 font-semibold">
                       <span>Jan</span>
                       <span>Feb</span>
                       <span>Mar</span>
@@ -763,163 +638,127 @@ const PassengerDashboard = () => {
                   </div>
                 </div>
 
-                {/* Column 2: Recent Bookings */}
-                <div style={{ background: '#ffffff', borderRadius: '18px', padding: '22px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                    <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#0f172a' }}>Recent Bookings</h3>
+                <div className="bg-white rounded-[18px] p-[22px] border border-slate-200">
+                  <div className="flex justify-between items-center mb-3.5">
+                    <h3 className="m-0 text-[0.98rem] font-extrabold text-slate-900">{t('passenger.recentBookings', 'Recent Bookings')}</h3>
                     <button
                       type="button"
                       onClick={() => setActiveTab('history')}
-                      style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer' }}
+                      className="bg-transparent border-none text-blue-600 text-[0.78rem] font-bold cursor-pointer hover:underline"
                     >
-                      View All
+                      {t('passenger.viewAll', 'View All')}
                     </button>
                   </div>
 
                   {myBookings.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '30px 10px', color: '#94a3b8', fontSize: '0.8rem' }}>
-                      No bookings recorded yet. Search buses above to book your journey!
+                    <div className="text-center py-[30px] px-2.5 text-slate-400 text-[0.8rem]">
+                      {t('passenger.noBookingsRecorded', 'No bookings recorded yet. Search buses above to book your journey!')}
                     </div>
                   ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
-                      <thead>
-                        <tr style={{ textAlign: 'left', color: '#64748b', borderBottom: '1px solid #f1f5f9' }}>
-                          <th style={{ paddingBottom: '8px', fontWeight: 600 }}>Booking ID</th>
-                          <th style={{ paddingBottom: '8px', fontWeight: 600 }}>Route</th>
-                          <th style={{ paddingBottom: '8px', fontWeight: 600 }}>Date</th>
-                          <th style={{ paddingBottom: '8px', fontWeight: 600 }}>Status</th>
-                          <th style={{ paddingBottom: '8px', fontWeight: 600, textAlign: 'right' }}>Ticket</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {myBookings.slice(0, 4).map((b) => {
-                          const isPaidAndConfirmed =
-                            (b.paymentStatus === 'PAID' || b.paymentStatus === 'paid') &&
-                            (b.status === 'confirmed' || b.status === 'CONFIRMED' || b.status === 'completed') &&
-                            Boolean(b.ticketNumber);
-                          const isCancelled = b.status === 'cancelled' || b.status === 'CANCELLED';
-                          return (
-                            <tr key={b._id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                              <td style={{ padding: '8px 0', fontWeight: 700, color: '#0f172a' }}>
-                                {isPaidAndConfirmed ? b.ticketNumber : <span style={{ color: '#94a3b8' }}>—</span>}
-                              </td>
-                              <td style={{ padding: '8px 0', color: '#334155' }}>
-                                <div>{b.schedule?.route?.from || 'Origin'} → {b.schedule?.route?.to || 'Destination'}</div>
-                                <span style={{
-                                  fontSize: '0.62rem',
-                                  fontWeight: 800,
-                                  color: b.tripType === 'round' ? '#92400e' : '#475569',
-                                  background: b.tripType === 'round' ? '#fef3c7' : '#f1f5f9',
-                                  padding: '1px 5px',
-                                  borderRadius: 4,
-                                  border: `1px solid ${b.tripType === 'round' ? '#fde68a' : '#e2e8f0'}`,
-                                  display: 'inline-block',
-                                  marginTop: 2
-                                }}>
-                                  {b.tripType === 'round' ? '🔁 Round-Trip' : 'One-Way'}
-                                </span>
-                              </td>
-                              <td style={{ padding: '8px 0', color: '#64748b' }}>
-                                {b.schedule?.date || 'Scheduled'}
-                              </td>
-                              <td style={{ padding: '8px 0' }}>
-                                <span style={{
-                                  background: (b.status === 'confirmed' || b.status === 'CONFIRMED') ? '#ecfdf5' : isCancelled ? '#fef2f2' : '#fffbeb',
-                                  color: (b.status === 'confirmed' || b.status === 'CONFIRMED') ? '#10b981' : isCancelled ? '#ef4444' : '#d97706',
-                                  fontSize: '0.68rem',
-                                  fontWeight: 700,
-                                  padding: '2px 7px',
-                                  borderRadius: '50px'
-                                }}>
-                                  {b.status}
-                                </span>
-                              </td>
-                              <td style={{ padding: '8px 0', textAlign: 'right' }}>
-                                {isPaidAndConfirmed ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => setActiveTicketForView(b)}
-                                    style={{
-                                      background: '#078930',
-                                      color: '#fff',
-                                      border: 'none',
-                                      borderRadius: '6px',
-                                      padding: '3px 8px',
-                                      fontSize: '0.68rem',
-                                      fontWeight: 800,
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: '3px'
-                                    }}
-                                    title="Open and view E-Ticket"
-                                  >
-                                    <FaTicketAlt style={{ fontSize: '0.6rem' }} /> E-Ticket
-                                  </button>
-                                ) : isCancelled ? (
-                                  <span style={{ color: '#ef4444', fontSize: '0.68rem', fontWeight: 700 }}>Cancelled</span>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => setActiveBookingForPayment(b)}
-                                    style={{
-                                      background: '#d97706',
-                                      color: '#fff',
-                                      border: 'none',
-                                      borderRadius: '6px',
-                                      padding: '3px 8px',
-                                      fontSize: '0.68rem',
-                                      fontWeight: 800,
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: '3px'
-                                    }}
-                                    title="Pay to get your E-Ticket"
-                                  >
-                                    <FaCreditCard style={{ fontSize: '0.6rem' }} /> Pay Now
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse text-[0.78rem]">
+                        <thead>
+                          <tr className="text-left text-slate-500 border-b border-slate-100">
+                            <th className="pb-2 font-semibold">{t('ticket.ticketNo', 'Booking ID')}</th>
+                            <th className="pb-2 font-semibold">{t('ticket.route', 'Route')}</th>
+                            <th className="pb-2 font-semibold">{t('common.date', 'Date')}</th>
+                            <th className="pb-2 font-semibold">{t('common.status', 'Status')}</th>
+                            <th className="pb-2 font-semibold text-right">{t('ticket.title', 'Ticket')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {myBookings.slice(0, 4).map((b) => {
+                            const isPaidAndConfirmed = hasActiveTicket(b);
+                            const cancelled = isCancelled(b);
+                            return (
+                              <tr key={b._id} className="border-b border-slate-50">
+                                <td className="py-2 font-bold text-slate-900">
+                                  {isPaidAndConfirmed ? b.ticketNumber : <span className="text-slate-400">—</span>}
+                                </td>
+                                <td className="py-2 text-slate-700">
+                                  <div>{b.schedule?.route?.from || 'Origin'} → {b.schedule?.route?.to || 'Destination'}</div>
+                                  <span className={`text-[0.62rem] font-extrabold py-[1px] px-[5px] rounded border inline-block mt-0.5 ${
+                                    b.tripType === 'round'
+                                      ? 'text-amber-800 bg-amber-100 border-amber-200'
+                                      : 'text-slate-600 bg-slate-100 border-slate-200'
+                                  }`}>
+                                    {b.tripType === 'round' ? `🔁 ${t('home.tripTypeRound', 'Round-Trip')}` : t('home.tripTypeOneWay', 'One-Way')}
+                                  </span>
+                                </td>
+                                <td className="py-2 text-slate-500">
+                                  {b.schedule?.date || 'Scheduled'}
+                                </td>
+                                <td className="py-2">
+                                  <span className={`text-[0.68rem] font-bold py-0.5 px-2 rounded-full ${
+                                    isConfirmed(b)
+                                      ? 'bg-emerald-50 text-emerald-600'
+                                      : cancelled
+                                        ? 'bg-red-50 text-red-500'
+                                        : 'bg-amber-50 text-amber-600'
+                                  }`}>
+                                    {b.status}
+                                  </span>
+                                </td>
+                                <td className="py-2 text-right">
+                                  {isPaidAndConfirmed ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveTicketForView(b)}
+                                      className="bg-[#078930] text-white border-none rounded-md py-[3px] px-2 text-[0.68rem] font-extrabold cursor-pointer inline-flex items-center gap-1 hover:bg-[#066d26] transition-colors"
+                                      title="Open and view E-Ticket"
+                                    >
+                                      <FaTicketAlt className="text-[0.6rem]" /> {t('ticket.title', 'E-Ticket')}
+                                    </button>
+                                  ) : cancelled ? (
+                                    <span className="text-red-500 text-[0.68rem] font-bold">{t('common.cancelled', 'Cancelled')}</span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveBookingForPayment(b)}
+                                      className="bg-amber-600 text-white border-none rounded-md py-[3px] px-2 text-[0.68rem] font-extrabold cursor-pointer inline-flex items-center gap-1 hover:bg-amber-700 transition-colors"
+                                      title="Pay to get your E-Ticket"
+                                    >
+                                      <FaCreditCard className="text-[0.6rem]" /> {t('common.payNow', 'Pay Now')}
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
 
-                {/* Column 3: Spending Summary */}
-                <div style={{ background: '#ffffff', borderRadius: '18px', padding: '22px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div className="bg-white rounded-[18px] p-[22px] border border-slate-200 flex flex-col justify-between">
                   {(() => {
                     const totalSpent = myBookings
-                      .filter(b => b.status === 'confirmed' || b.paymentStatus === 'paid')
-                      .reduce((sum, b) => sum + (Number(b.totalPrice) || Number(b.totalAmount) || 0), 0);
+                      .filter(isRevenueBearing)
+                      .reduce((sum, b) => sum + bookingAmount(b), 0);
                     const cancelledSpent = myBookings
-                      .filter(b => b.status === 'cancelled')
-                      .reduce((sum, b) => sum + (Number(b.totalPrice) || Number(b.totalAmount) || 0), 0);
+                      .filter(b => isCancelled(b) && isPaid(b))
+                      .reduce((sum, b) => sum + bookingAmount(b), 0);
                     const totalAll = totalSpent + cancelledSpent || 1;
                     const ticketPercent = totalSpent > 0 ? Math.round((totalSpent / totalAll) * 100) : 0;
                     const cancelPercent = cancelledSpent > 0 ? Math.round((cancelledSpent / totalAll) * 100) : 0;
-                    const otherPercent = 100 - ticketPercent - cancelPercent;
 
                     return (
                       <>
                         <div>
-                          <h3 style={{ margin: '0 0 10px', fontSize: '0.98rem', fontWeight: 800, color: '#0f172a' }}>Spending Summary</h3>
-                          <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>Total Spent</div>
-                          <div style={{ fontSize: '1.35rem', fontWeight: 900, color: '#0f172a', marginTop: '2px' }}>
+                          <h3 className="m-0 mb-2.5 text-[0.98rem] font-extrabold text-slate-900">{t('passenger.spendingSummary', 'Spending Summary')}</h3>
+                          <div className="text-[0.72rem] text-slate-500 font-semibold">{t('passenger.totalSpent', 'Total Spent')}</div>
+                          <div className="text-[1.35rem] font-black text-slate-900 mt-0.5">
                             Birr {totalSpent.toLocaleString()}
                           </div>
-                          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: totalSpent > 0 ? '#10b981' : '#94a3b8', marginTop: '2px' }}>
-                            {totalSpent > 0 ? 'Verified transactions' : 'No payments made yet'}
+                          <div className={`text-[0.72rem] font-bold mt-0.5 ${totalSpent > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {totalSpent > 0 ? t('passenger.verifiedTransactions', 'Verified transactions') : t('passenger.noPaymentsYet', 'No payments made yet')}
                           </div>
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginTop: '12px' }}>
-                          {/* SVG Donut */}
-                          <div style={{ position: 'relative', width: '80px', height: '80px', flexShrink: 0 }}>
-                            <svg viewBox="0 0 36 36" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
+                        <div className="flex items-center justify-between gap-2.5 mt-3">
+                          <div className="relative w-20 h-20 shrink-0">
+                            <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
                               <circle cx="18" cy="18" r="14" fill="transparent" stroke="#f1f5f9" strokeWidth="4" />
                               {totalSpent > 0 ? (
                                 <>
@@ -934,22 +773,21 @@ const PassengerDashboard = () => {
                             </svg>
                           </div>
 
-                          {/* Breakdown */}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.72rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10b981' }} />
-                              <span style={{ color: '#64748b' }}>Tickets</span>
-                              <strong style={{ marginLeft: 'auto', color: '#0f172a' }}>Birr {totalSpent.toLocaleString()} ({totalSpent > 0 ? ticketPercent : 0}%)</strong>
+                          <div className="flex flex-col gap-1.5 text-[0.72rem]">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-[7px] h-[7px] rounded-full bg-emerald-500" />
+                              <span className="text-slate-500">{t('passenger.tickets', 'Tickets')}</span>
+                              <strong className="ml-auto text-slate-900">Birr {totalSpent.toLocaleString()} ({totalSpent > 0 ? ticketPercent : 0}%)</strong>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#f59e0b' }} />
-                              <span style={{ color: '#64748b' }}>Cancellation</span>
-                              <strong style={{ marginLeft: 'auto', color: '#0f172a' }}>Birr {cancelledSpent.toLocaleString()} ({cancelledSpent > 0 ? cancelPercent : 0}%)</strong>
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-[7px] h-[7px] rounded-full bg-amber-500" />
+                              <span className="text-slate-500">{t('passenger.cancellation', 'Cancellation')}</span>
+                              <strong className="ml-auto text-slate-900">Birr {cancelledSpent.toLocaleString()} ({cancelledSpent > 0 ? cancelPercent : 0}%)</strong>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#cbd5e1' }} />
-                              <span style={{ color: '#64748b' }}>Others</span>
-                              <strong style={{ marginLeft: 'auto', color: '#0f172a' }}>Birr 0 (0%)</strong>
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-[7px] h-[7px] rounded-full bg-slate-300" />
+                              <span className="text-slate-500">{t('passenger.others', 'Others')}</span>
+                              <strong className="ml-auto text-slate-900">Birr 0 (0%)</strong>
                             </div>
                           </div>
                         </div>
@@ -959,87 +797,77 @@ const PassengerDashboard = () => {
                 </div>
               </div>
 
-              {/* ═══════════════════════════════════════════════════════════════
-                  ROW 3: Quick Actions & Support Help
-                  ═══════════════════════════════════════════════════════════════ */}
-              <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr', gap: '18px' }}>
-                {/* Left: Quick Actions */}
-                <div style={{ background: '#ffffff', borderRadius: '18px', padding: '20px', border: '1px solid #e2e8f0' }}>
-                  <h3 style={{ margin: '0 0 14px', fontSize: '0.98rem', fontWeight: 800, color: '#0f172a' }}>Quick Actions</h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-                    {/* Action 1 */}
+              <div className="grid grid-cols-1 lg:grid-cols-[2.5fr_1fr] gap-4.5">
+                <div className="bg-white rounded-[18px] p-5 border border-slate-200">
+                  <h3 className="m-0 mb-3.5 text-[0.98rem] font-extrabold text-slate-900">{t('passenger.quickActions', 'Quick Actions')}</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <button
                       type="button"
                       onClick={() => setActiveTab('search')}
-                      style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', borderRadius: '12px', border: '1px solid #e2e8f0', background: '#ffffff', cursor: 'pointer', textAlign: 'left' }}
+                      className="flex items-center gap-2.5 p-3 rounded-xl border border-slate-200 bg-white cursor-pointer text-left hover:bg-slate-50 transition-colors"
                     >
-                      <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#ecfdf5', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', flexShrink: 0 }}>
+                      <div className="w-8 h-8 rounded-lg bg-green-50 text-emerald-500 flex items-center justify-center text-base shrink-0">
                         <FaBus />
                       </div>
-                      <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0f172a' }}>Book a Bus Ticket</span>
+                      <span className="text-[0.8rem] font-extrabold text-slate-900">{t('passenger.bookBusTicket', 'Book a Bus Ticket')}</span>
                     </button>
 
-                    {/* Action 2 */}
                     <button
                       type="button"
                       onClick={() => setActiveTab('tickets')}
-                      style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', borderRadius: '12px', border: '1px solid #e2e8f0', background: '#ffffff', cursor: 'pointer', textAlign: 'left' }}
+                      className="flex items-center gap-2.5 p-3 rounded-xl border border-slate-200 bg-white cursor-pointer text-left hover:bg-slate-50 transition-colors"
                     >
-                      <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#fefce8', color: '#eab308', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', flexShrink: 0 }}>
+                      <div className="w-8 h-8 rounded-lg bg-yellow-50 text-yellow-500 flex items-center justify-center text-base shrink-0">
                         <FaTicketAlt />
                       </div>
-                      <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0f172a' }}>View My E-Tickets</span>
+                      <span className="text-[0.8rem] font-extrabold text-slate-900">{t('passenger.viewMyETickets', 'View My E-Tickets')}</span>
                     </button>
 
-                    {/* Action 3 */}
                     <button
                       type="button"
                       onClick={() => setActiveTab('payments')}
-                      style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', borderRadius: '12px', border: '1px solid #e2e8f0', background: '#ffffff', cursor: 'pointer', textAlign: 'left' }}
+                      className="flex items-center gap-2.5 p-3 rounded-xl border border-slate-200 bg-white cursor-pointer text-left hover:bg-slate-50 transition-colors"
                     >
-                      <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#eff6ff', color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', flexShrink: 0 }}>
+                      <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-500 flex items-center justify-center text-base shrink-0">
                         <FaCreditCard />
                       </div>
-                      <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0f172a' }}>Payment Center</span>
+                      <span className="text-[0.8rem] font-extrabold text-slate-900">{t('passenger.paymentCenter', 'Payment Center')}</span>
                     </button>
 
-                    {/* Action 4 */}
                     <button
                       type="button"
                       onClick={() => setActiveTab('refunds')}
-                      style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', borderRadius: '12px', border: '1px solid #e2e8f0', background: '#ffffff', cursor: 'pointer', textAlign: 'left' }}
+                      className="flex items-center gap-2.5 p-3 rounded-xl border border-slate-200 bg-white cursor-pointer text-left hover:bg-slate-50 transition-colors"
                     >
-                      <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#fef2f2', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', flexShrink: 0 }}>
+                      <div className="w-8 h-8 rounded-lg bg-red-50 text-red-500 flex items-center justify-center text-base shrink-0">
                         <FaMoneyBillWave />
                       </div>
-                      <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0f172a' }}>Cancellation &amp; Refund</span>
+                      <span className="text-[0.8rem] font-extrabold text-slate-900">{t('passenger.cancellationRefund', 'Cancellation & Refund')}</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Right: Support & Help */}
-                <div style={{ background: '#ffffff', borderRadius: '18px', padding: '20px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div className="bg-white rounded-[18px] p-5 border border-slate-200 flex flex-col justify-between">
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800, fontSize: '0.92rem', color: '#4f46e5', marginBottom: '6px' }}>
-                      <FaHeadset /> Support &amp; Help
+                    <div className="flex items-center gap-2 font-extrabold text-[0.92rem] text-indigo-600 mb-1.5">
+                      <FaHeadset /> {t('passenger.supportHelp', 'Support & Help')}
                     </div>
-                    <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b', lineHeight: 1.4 }}>
-                      Need help with your booking? Our support team is available 24/7 to assist you.
+                    <p className="m-0 text-[0.78rem] text-slate-500 leading-relaxed">
+                      {t('passenger.supportDesc', 'Need help with your booking? Our support team is available 24/7 to assist you.')}
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setActiveTab('support')}
-                    style={{ width: '100%', padding: '10px', background: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: '10px', fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer', marginTop: '12px' }}
+                    className="w-full p-2.5 bg-indigo-600 text-white border-none rounded-[10px] font-extrabold text-[0.82rem] cursor-pointer mt-3 hover:bg-indigo-700 transition-colors"
                   >
-                    Contact Support
+                    {t('passenger.contactSupport', 'Contact Support')}
                   </button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Module Views */}
           {activeTab === 'search' && (
             <BusSearch
               schedules={schedules}
@@ -1049,6 +877,8 @@ const PassengerDashboard = () => {
               onSelectSchedule={(s) => setSelectedScheduleForSeat(s)}
             />
           )}
+
+          {activeTab === 'schedules' && <ViewSchedules />}
 
           {activeTab === 'compare' && (
             <TripComparison
@@ -1079,69 +909,65 @@ const PassengerDashboard = () => {
 
           {activeTab === 'refunds' && <CancelBooking />}
 
+          {activeTab === 'assistant' && <AIAssistantPage />}
+
           {activeTab === 'reviews' && <ReviewsRatings />}
 
           {activeTab === 'notifications' && (
-            <div style={{ background: '#ffffff', borderRadius: '18px', padding: '22px', border: '1px solid #e2e8f0', maxWidth: '720px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
+            <div className="bg-white rounded-[18px] p-[22px] border border-slate-200 max-w-[720px]">
+              <div className="flex justify-between items-center mb-[18px] border-b border-slate-100 pb-3 flex-wrap gap-2">
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, color: '#0f172a' }}>All Notifications</h3>
-                  <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: '#64748b' }}>Trip reminders, booking alerts &amp; payment receipts</p>
+                  <h3 className="m-0 text-[1.15rem] font-black text-slate-900">{t('passenger.allNotifications', 'All Notifications')}</h3>
+                  <p className="mt-0.5 mb-0 text-[0.78rem] text-slate-500">{t('passenger.notificationsSubtitle', 'Trip reminders, booking alerts & payment receipts')}</p>
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div className="flex gap-2">
                   {notifications.length > 0 && (
                     <button
                       type="button"
                       onClick={handleClearAllNotifications}
-                      style={{ padding: '6px 12px', background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '8px', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+                      className="py-1.5 px-3 bg-red-50 text-red-500 border border-red-200 rounded-lg font-bold text-[0.78rem] cursor-pointer flex items-center gap-1.5 hover:bg-red-100 transition-colors"
                     >
-                      <FaTrashAlt /> Clear All
+                      <FaTrashAlt /> {t('passenger.clearAll', 'Clear All')}
                     </button>
                   )}
                   <button
                     type="button"
                     onClick={handleMarkAllRead}
-                    style={{ padding: '6px 12px', background: '#f0fdf4', color: '#078930', border: '1px solid #bbf7d0', borderRadius: '8px', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+                    className="py-1.5 px-3 bg-green-50 text-emerald-700 border border-green-200 rounded-lg font-bold text-[0.78rem] cursor-pointer flex items-center gap-1.5 hover:bg-green-100 transition-colors"
                   >
-                    <FaCheckDouble /> Mark All as Read
+                    <FaCheckDouble /> {t('passenger.markAllRead', 'Mark All as Read')}
                   </button>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div className="flex flex-col gap-2.5">
                 {notifications.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8' }}>
-                    <FaBell style={{ fontSize: '2.2rem', marginBottom: '10px', color: '#cbd5e1' }} />
-                    <h4 style={{ margin: '0 0 4px', color: '#64748b', fontSize: '0.95rem', fontWeight: 800 }}>No notifications yet</h4>
-                    <p style={{ margin: 0, fontSize: '0.8rem' }}>You're all caught up! New booking, payment, and trip alerts will appear here.</p>
+                  <div className="text-center py-10 px-5 text-slate-400">
+                    <FaBell className="text-4xl mb-2.5 text-slate-300 mx-auto" />
+                    <h4 className="m-0 mb-1 text-slate-500 text-[0.95rem] font-extrabold">{t('passenger.noNotifications', 'No notifications yet')}</h4>
+                    <p className="m-0 text-[0.8rem]">{t('passenger.notificationsEmpty', "You're all caught up! New booking, payment, and trip alerts will appear here.")}</p>
                   </div>
                 ) : (
                   notifications.map((n) => (
                     <div
                       key={n._id}
                       onClick={() => handleMarkAsRead(n._id)}
-                      style={{
-                        padding: '12px 16px',
-                        borderRadius: '12px',
-                        background: n.isRead ? '#ffffff' : '#f0fdf4',
-                        border: n.isRead ? '1px solid #e2e8f0' : '1.5px solid #86efac',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        gap: '12px',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                      }}
+                      className={`p-3 md:p-4 rounded-xl cursor-pointer flex gap-3 items-center justify-between transition-colors ${
+                        n.isRead ? 'bg-white border border-slate-200' : 'bg-green-50/50 border-[1.5px] border-green-300'
+                      }`}
                     >
-                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flex: 1 }}>
-                        <div style={{ width: 36, height: 36, borderRadius: '10px', background: n.type === 'payment' ? '#f3e8ff' : '#dcfce7', color: n.type === 'payment' ? '#7e22ce' : '#15803d', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.95rem', flexShrink: 0 }}>
+                      <div className="flex gap-3 items-center flex-1">
+                        <div className={`w-9 h-9 rounded-[10px] flex items-center justify-center text-base shrink-0 ${
+                          n.type === 'payment' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'
+                        }`}>
                           {n.type === 'payment' ? <FaWallet /> : <FaTicketAlt />}
                         </div>
                         <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <h4 style={{ margin: 0, fontSize: '0.88rem', fontWeight: 800, color: '#0f172a' }}>{n.title}</h4>
-                            <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>{n.time}</span>
+                          <div className="flex items-center gap-2">
+                            <h4 className="m-0 text-[0.88rem] font-extrabold text-slate-900">{n.title}</h4>
+                            <span className="text-[0.68rem] text-slate-400">{n.time}</span>
                           </div>
-                          <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: '#475569', lineHeight: 1.3 }}>{n.message}</p>
+                          <p className="mt-0.5 mb-0 text-[0.8rem] text-slate-600 leading-snug">{n.message}</p>
                         </div>
                       </div>
 
@@ -1151,22 +977,8 @@ const PassengerDashboard = () => {
                           e.stopPropagation();
                           handleDeleteNotification(n._id);
                         }}
-                        title="Delete Notification"
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#94a3b8',
-                          padding: '6px',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontSize: '0.85rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          transition: 'color 0.15s ease',
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
+                        title={t('common.delete', 'Delete')}
+                        className="bg-transparent border-none text-slate-400 p-1.5 rounded-md cursor-pointer text-sm flex items-center justify-center hover:text-red-500 transition-colors"
                       >
                         <FaTrashAlt />
                       </button>
@@ -1180,83 +992,62 @@ const PassengerDashboard = () => {
           {activeTab === 'profile' && <PassengerProfile user={user} />}
 
           {activeTab === 'support' && (
-            <div style={{ maxWidth: '860px', margin: '0 auto', width: '100%' }}>
-              {/* Single Sleek Action Bar */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '4px 0' }}>
-                <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0f172a' }}>
-                  My Support Inquiries ({supportThreads.length})
+            <div className="max-w-[860px] mx-auto w-full">
+              <div className="flex justify-between items-center mb-3 py-1 flex-wrap gap-2">
+                <span className="text-[0.9rem] font-extrabold text-slate-900">
+                  {t('passenger.myInquiries', 'My Support Inquiries')} ({supportThreads.length})
                 </span>
                 <button
                   type="button"
                   onClick={() => setShowNewTicketModal(true)}
-                  style={{
-                    padding: '7px 14px',
-                    background: '#078930',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontWeight: 700,
-                    fontSize: '0.78rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    boxShadow: '0 2px 6px rgba(7,137,48,0.15)',
-                  }}
+                  className="py-[7px] px-3.5 bg-[#078930] text-white border-none rounded-lg font-bold text-[0.78rem] cursor-pointer flex items-center gap-1.5 shadow-[0_2px_6px_rgba(7,137,48,0.15)] hover:bg-[#066d26] transition-colors"
                 >
-                  <FaHeadset /> Ask Question
+                  <FaHeadset /> {t('passenger.askQuestion', 'Ask Question')}
                 </button>
               </div>
 
-              {/* Responsive Grid: Inquiries on Left, Active Chat on Right */}
-              <div style={{ display: 'grid', gridTemplateColumns: selectedThread ? 'repeat(auto-fit, minmax(280px, 1fr))' : '1fr', gap: 12 }}>
-                {/* Conversations List */}
-                <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 12 }}>
-
+              <div className={`grid gap-3 ${selectedThread ? 'grid-cols-1 md:grid-cols-[repeat(auto-fit,minmax(280px,1fr))]' : 'grid-cols-1'}`}>
+                <div className="bg-white rounded-xl border border-slate-200 p-3">
                   {supportThreads.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '24px 12px', color: '#94a3b8' }}>
-                      <FaHeadset style={{ fontSize: '1.5rem', marginBottom: 6, color: '#cbd5e1' }} />
-                      <p style={{ margin: '0 0 8px', fontSize: '0.78rem' }}>You haven't opened any support questions yet.</p>
+                    <div className="text-center py-6 px-3 text-slate-400">
+                      <FaHeadset className="text-2xl mb-1.5 text-slate-300 mx-auto" />
+                      <p className="m-0 mb-2 text-[0.78rem]">{t('passenger.supportEmpty', "You haven't opened any support questions yet.")}</p>
                       <button
                         type="button"
                         onClick={() => setShowNewTicketModal(true)}
-                        style={{ padding: '5px 12px', background: '#078930', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, fontSize: '0.74rem', cursor: 'pointer' }}
+                        className="py-1 px-3 bg-[#078930] text-white border-none rounded-md font-bold text-[0.74rem] cursor-pointer hover:bg-[#066d26] transition-colors"
                       >
-                        Ask a Question
+                        {t('passenger.askQuestion', 'Ask a Question')}
                       </button>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: '380px', overflowY: 'auto' }}>
-                      {supportThreads.map((t) => {
-                        const isSelected = selectedThread?._id === t._id;
-                        const status = (t.status || 'OPEN').toUpperCase();
+                    <div className="flex flex-col gap-1.5 max-h-[380px] overflow-y-auto">
+                      {supportThreads.map((tItem) => {
+                        const isSelected = selectedThread?._id === tItem._id;
+                        const status = (tItem.status || 'OPEN').toUpperCase();
                         return (
                           <div
-                            key={t._id}
-                            onClick={() => setSelectedThread(t)}
-                            style={{
-                              padding: '9px 11px',
-                              borderRadius: 8,
-                              border: `1.5px solid ${isSelected ? '#078930' : '#e2e8f0'}`,
-                              background: isSelected ? '#f0fdf4' : '#f8fafc',
-                              cursor: 'pointer',
-                              transition: 'all 0.12s ease',
-                            }}
+                            key={tItem._id}
+                            onClick={() => setSelectedThread(tItem)}
+                            className={`p-[9px_11px] rounded-lg cursor-pointer transition-all duration-150 border-[1.5px] ${
+                              isSelected ? 'border-[#078930] bg-green-50' : 'border-slate-200 bg-slate-50 hover:bg-slate-100'
+                            }`}
                           >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                              <span style={{ fontWeight: 800, color: '#078930', fontSize: '0.74rem' }}>
-                                {t.companyId?.companyName || 'Bus Operator'}
+                            <div className="flex justify-between items-center mb-0.5">
+                              <span className="font-extrabold text-[#078930] text-[0.74rem]">
+                                {tItem.companyId?.companyName || t('passenger.busOperator', 'Bus Operator')}
                               </span>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <div className="flex items-center gap-1">
                                 <span
-                                  style={{
-                                    fontSize: '0.62rem',
-                                    fontWeight: 800,
-                                    padding: '1px 5px',
-                                    borderRadius: 6,
-                                    background: status === 'OPEN' ? '#fee2e2' : status === 'IN_PROGRESS' ? '#fef3c7' : status === 'ANSWERED' ? '#dcfce7' : '#f1f5f9',
-                                    color: status === 'OPEN' ? '#dc2626' : status === 'IN_PROGRESS' ? '#d97706' : status === 'ANSWERED' ? '#16a34a' : '#64748b',
-                                  }}
+                                  className={`text-[0.62rem] font-extrabold py-[1px] px-[5px] rounded-md ${
+                                    status === 'OPEN'
+                                      ? 'bg-red-100 text-red-600'
+                                      : status === 'IN_PROGRESS'
+                                        ? 'bg-amber-100 text-amber-600'
+                                        : status === 'ANSWERED'
+                                          ? 'bg-green-100 text-green-600'
+                                          : 'bg-slate-100 text-slate-500'
+                                  }`}
                                 >
                                   {status}
                                 </span>
@@ -1264,37 +1055,29 @@ const PassengerDashboard = () => {
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleDeleteSupportTicket(t._id);
+                                    handleDeleteSupportTicket(tItem);
                                   }}
-                                  title="Delete Inquiry"
-                                  style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    color: '#94a3b8',
-                                    padding: '1px 3px',
-                                    borderRadius: '3px',
-                                    cursor: 'pointer',
-                                    fontSize: '0.72rem',
-                                  }}
-                                  onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
-                                  onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
+                                  disabled={deletingTicketId === tItem._id}
+                                  title={t('passenger.deleteInquiry', 'Delete Inquiry')}
+                                  aria-label={`Delete inquiry ${tItem.subject || ''}`}
+                                  className="bg-transparent border-none text-slate-400 py-[1px] px-[3px] rounded cursor-pointer text-[0.72rem] hover:text-red-500 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                                 >
                                   <FaTrashAlt />
                                 </button>
                               </div>
                             </div>
 
-                            <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.78rem', marginBottom: 2 }}>
-                              {t.subject}
+                            <div className="font-bold text-slate-900 text-[0.78rem] mb-0.5">
+                              {tItem.subject}
                             </div>
 
-                            <div style={{ fontSize: '0.7rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>
-                              {t.messages && t.messages.length > 0 ? t.messages[t.messages.length - 1].message : t.description}
+                            <div className="text-[0.7rem] text-slate-500 overflow-hidden text-ellipsis whitespace-nowrap mb-0.5">
+                              {tItem.messages && tItem.messages.length > 0 ? tItem.messages[tItem.messages.length - 1].message : tItem.description}
                             </div>
 
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.64rem', color: '#94a3b8' }}>
-                              <span>{t.category}</span>
-                              <span>{new Date(t.updatedAt || t.createdAt).toLocaleDateString()}</span>
+                            <div className="flex justify-between text-[0.64rem] text-slate-400">
+                              <span>{tItem.category}</span>
+                              <span>{new Date(tItem.updatedAt || tItem.createdAt).toLocaleDateString()}</span>
                             </div>
                           </div>
                         );
@@ -1303,94 +1086,69 @@ const PassengerDashboard = () => {
                   )}
                 </div>
 
-                {/* Active Thread Message Stream */}
                 {selectedThread && (
-                  <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', height: '380px' }}>
-                    <div style={{ padding: '8px 12px', borderBottom: '1px solid #e2e8f0' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div className="bg-white rounded-xl border border-slate-200 flex flex-col h-[380px]">
+                    <div className="py-2 px-3 border-b border-slate-200">
+                      <div className="flex justify-between items-center">
                         <div>
-                          <h4 style={{ margin: 0, fontSize: '0.84rem', fontWeight: 800, color: '#0f172a' }}>
+                          <h4 className="m-0 text-[0.84rem] font-extrabold text-slate-900">
                             {selectedThread.subject}
                           </h4>
-                          <div style={{ fontSize: '0.68rem', color: '#64748b' }}>
-                            <strong>{selectedThread.companyId?.companyName || 'Bus Operator'}</strong>
+                          <div className="text-[0.68rem] text-slate-500">
+                            <strong>{selectedThread.companyId?.companyName || t('passenger.busOperator', 'Bus Operator')}</strong>
                             {selectedThread.ticketNumber && ` • Ticket: ${selectedThread.ticketNumber}`}
                           </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div className="flex items-center gap-1.5">
                           <span
-                            style={{
-                              fontSize: '0.64rem',
-                              fontWeight: 800,
-                              padding: '1px 6px',
-                              borderRadius: 6,
-                              background: selectedThread.status === 'ANSWERED' ? '#dcfce7' : '#fee2e2',
-                              color: selectedThread.status === 'ANSWERED' ? '#16a34a' : '#dc2626',
-                            }}
+                            className={`text-[0.64rem] font-extrabold py-[1px] px-1.5 rounded-md ${
+                              selectedThread.status === 'ANSWERED' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                            }`}
                           >
                             {selectedThread.status}
                           </span>
                           <button
                             type="button"
-                            onClick={() => handleDeleteSupportTicket(selectedThread._id)}
-                            title="Delete Support Inquiry"
-                            style={{
-                              background: '#fef2f2',
-                              border: '1px solid #fecaca',
-                              color: '#ef4444',
-                              padding: '2px 6px',
-                              borderRadius: '5px',
-                              cursor: 'pointer',
-                              fontSize: '0.68rem',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 3,
-                              fontWeight: 700,
-                            }}
+                            onClick={() => handleDeleteSupportTicket(selectedThread)}
+                            disabled={deletingTicketId === selectedThread._id}
+                            title={t('passenger.deleteInquiry', 'Delete Inquiry')}
+                            className="bg-red-50 border border-red-200 text-red-600 py-0.5 px-1.5 rounded text-[0.68rem] cursor-pointer flex items-center gap-1 font-bold hover:bg-red-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                           >
-                            <FaTrashAlt /> Delete
+                            <FaTrashAlt /> {deletingTicketId === selectedThread._id ? '...' : t('common.delete', 'Delete')}
                           </button>
                         </div>
                       </div>
                     </div>
 
-                    {/* Messages Container */}
-                    <div style={{ flex: 1, padding: '10px 12px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, background: '#f8fafc' }}>
-                      {/* Initial inquiry description if messages empty */}
+                    <div className="flex-1 p-2.5 md:p-3 overflow-y-auto flex flex-col gap-1.5 bg-slate-50">
                       {(!selectedThread.messages || selectedThread.messages.length === 0) && (
-                        <div style={{ alignSelf: 'flex-end', maxWidth: '85%', background: '#078930', color: '#fff', padding: '7px 11px', borderRadius: 9 }}>
-                          <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#86efac', marginBottom: 1 }}>You (Passenger)</div>
-                          <div style={{ fontSize: '0.76rem', lineHeight: 1.3 }}>{selectedThread.description}</div>
-                          <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.7)', marginTop: 2, textAlign: 'right' }}>
+                        <div className="self-end max-w-[85%] bg-[#078930] text-white py-[7px] px-[11px] rounded-[9px]">
+                          <div className="text-[0.62rem] font-extrabold text-green-200 mb-0.5">{t('passenger.youPassenger', 'You (Passenger)')}</div>
+                          <div className="text-[0.76rem] leading-snug">{selectedThread.description}</div>
+                          <div className="text-[0.6rem] text-white/70 mt-0.5 text-right">
                             {new Date(selectedThread.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </div>
                         </div>
                       )}
 
-                      {/* Messages Thread */}
                       {selectedThread.messages && selectedThread.messages.map((msg, idx) => {
                         const isPassenger = msg.senderRole === 'passenger' || !msg.senderRole;
                         return (
                           <div
                             key={idx}
-                            style={{
-                              alignSelf: isPassenger ? 'flex-end' : 'flex-start',
-                              maxWidth: '85%',
-                              background: isPassenger ? '#078930' : '#ffffff',
-                              color: isPassenger ? '#ffffff' : '#0f172a',
-                              padding: '7px 11px',
-                              borderRadius: 9,
-                              border: isPassenger ? 'none' : '1px solid #e2e8f0',
-                              boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-                            }}
+                            className={`max-w-[85%] py-[7px] px-[11px] rounded-[9px] ${
+                              isPassenger
+                                ? 'self-end bg-[#078930] text-white'
+                                : 'self-start bg-white text-slate-900 border border-slate-200 shadow-sm'
+                            }`}
                           >
-                            <div style={{ fontSize: '0.62rem', fontWeight: 800, color: isPassenger ? '#86efac' : '#2563eb', marginBottom: 1 }}>
-                              {isPassenger ? 'You (Passenger)' : `${msg.senderName} (Support)`}
+                            <div className={`text-[0.62rem] font-extrabold mb-0.5 ${isPassenger ? 'text-green-200' : 'text-blue-600'}`}>
+                              {isPassenger ? t('passenger.youPassenger', 'You (Passenger)') : `${msg.senderName} (${t('passenger.supportDesk', 'Support')})`}
                             </div>
-                            <div style={{ fontSize: '0.76rem', lineHeight: 1.3, whiteSpace: 'pre-wrap' }}>
+                            <div className="text-[0.76rem] leading-snug whitespace-pre-wrap">
                               {msg.message}
                             </div>
-                            <div style={{ fontSize: '0.6rem', color: isPassenger ? 'rgba(255,255,255,0.7)' : '#94a3b8', marginTop: 2, textAlign: 'right' }}>
+                            <div className={`text-[0.6rem] mt-0.5 text-right ${isPassenger ? 'text-white/70' : 'text-slate-400'}`}>
                               {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </div>
                           </div>
@@ -1398,21 +1156,20 @@ const PassengerDashboard = () => {
                       })}
                     </div>
 
-                    {/* Passenger Reply Input */}
-                    <form onSubmit={handleSendThreadReply} style={{ padding: '7px 10px', borderTop: '1px solid #e2e8f0', background: '#fff', display: 'flex', gap: 6 }}>
+                    <form onSubmit={handleSendThreadReply} className="py-[7px] px-2.5 border-t border-slate-200 bg-white flex gap-1.5">
                       <input
                         type="text"
-                        placeholder="Type reply..."
+                        placeholder={t('passenger.typeReply', 'Type reply...')}
                         value={threadReply}
                         onChange={(e) => setThreadReply(e.target.value)}
-                        style={{ flex: 1, padding: '6px 10px', borderRadius: 6, border: '1.5px solid #cbd5e1', fontSize: '0.76rem', outline: 'none' }}
+                        className="flex-1 py-1.5 px-2.5 rounded-md border border-[1.5px] border-slate-300 text-[0.76rem] outline-none focus:border-green-500"
                       />
                       <button
                         type="submit"
                         disabled={sendingReply}
-                        style={{ padding: '6px 12px', background: '#078930', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, fontSize: '0.74rem', cursor: 'pointer' }}
+                        className="py-1.5 px-3 bg-[#078930] text-white border-none rounded-md font-bold text-[0.74rem] cursor-pointer hover:bg-[#066d26] transition-colors disabled:opacity-60"
                       >
-                        {sendingReply ? '...' : 'Send'}
+                        {sendingReply ? '...' : t('common.save', 'Send')}
                       </button>
                     </form>
                   </div>
@@ -1420,11 +1177,9 @@ const PassengerDashboard = () => {
               </div>
             </div>
           )}
-
         </div>
       </main>
 
-      {/* ── Modals ── */}
       {selectedScheduleForSeat && (
         <SeatSelectorModal
           schedule={selectedScheduleForSeat}
@@ -1442,22 +1197,21 @@ const PassengerDashboard = () => {
         />
       )}
 
-      {/* ── New Support Inquiry Modal ── */}
       {showNewTicketModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div style={{ background: '#fff', borderRadius: 14, maxWidth: 440, width: '100%', padding: 18, maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 10px 30px rgba(0,0,0,0.15)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h3 style={{ margin: 0, fontWeight: 800, fontSize: '1.05rem', color: '#0f172a' }}>Ask a Support Question</h3>
-              <button onClick={() => setShowNewTicketModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.1rem', cursor: 'pointer', color: '#64748b' }}>✕</button>
+        <div className="fixed inset-0 bg-black/50 z-[1000] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[14px] max-w-[440px] w-full p-[18px] max-h-[88vh] overflow-y-auto shadow-[0_10px_30px_rgba(0,0,0,0.15)]">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="m-0 font-extrabold text-[1.05rem] text-slate-900">{t('passenger.askSupportQuestion', 'Ask a Support Question')}</h3>
+              <button onClick={() => setShowNewTicketModal(false)} className="bg-transparent border-none text-lg cursor-pointer text-slate-500 hover:text-slate-800">✕</button>
             </div>
 
-            <form onSubmit={handleCreateSupportTicket} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <form onSubmit={handleCreateSupportTicket} className="flex flex-col gap-2.5">
               <div>
-                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, marginBottom: 3, color: '#334155' }}>Select Bus Company *</label>
+                <label className="block text-[0.74rem] font-bold mb-[3px] text-slate-700">{t('passenger.selectBusCompany', 'Select Bus Company *')}</label>
                 <select
                   value={newTicketForm.companyId}
                   onChange={(e) => setNewTicketForm({ ...newTicketForm, companyId: e.target.value })}
-                  style={{ width: '100%', padding: '7px 10px', borderRadius: 7, border: '1.5px solid #cbd5e1', fontSize: '0.82rem', outline: 'none' }}
+                  className="w-full py-[7px] px-2.5 rounded-[7px] border border-[1.5px] border-slate-300 text-[0.82rem] outline-none bg-white focus:border-green-500"
                 >
                   {companies.map((c) => (
                     <option key={c._id} value={c._id}>{c.companyName} ({c.city})</option>
@@ -1466,71 +1220,71 @@ const PassengerDashboard = () => {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, marginBottom: 3, color: '#334155' }}>Issue Category *</label>
+                <label className="block text-[0.74rem] font-bold mb-[3px] text-slate-700">{t('passenger.issueCategory', 'Issue Category *')}</label>
                 <select
                   value={newTicketForm.category}
                   onChange={(e) => setNewTicketForm({ ...newTicketForm, category: e.target.value })}
-                  style={{ width: '100%', padding: '7px 10px', borderRadius: 7, border: '1.5px solid #cbd5e1', fontSize: '0.82rem', outline: 'none' }}
+                  className="w-full py-[7px] px-2.5 rounded-[7px] border border-[1.5px] border-slate-300 text-[0.82rem] outline-none bg-white focus:border-green-500"
                 >
-                  <option value="Booking Assistance">Booking Assistance</option>
-                  <option value="Ticket Query">Ticket Query</option>
-                  <option value="Chapa Payment">Chapa Payment</option>
-                  <option value="Cancellation & Refund">Cancellation & Refund</option>
-                  <option value="Schedule / Route Query">Schedule / Route Query</option>
-                  <option value="Luggage / Lost Item">Luggage / Lost Item</option>
-                  <option value="General Inquiry">General Inquiry</option>
+                  <option value="Booking Assistance">{t('passenger.bookingAssistance', 'Booking Assistance')}</option>
+                  <option value="Ticket Query">{t('passenger.ticketQuery', 'Ticket Query')}</option>
+                  <option value="Chapa Payment">{t('passenger.chapaPayment', 'Chapa Payment')}</option>
+                  <option value="Cancellation & Refund">{t('passenger.cancellationRefund', 'Cancellation & Refund')}</option>
+                  <option value="Schedule / Route Query">{t('passenger.scheduleRouteQuery', 'Schedule / Route Query')}</option>
+                  <option value="Luggage / Lost Item">{t('passenger.luggageLostItem', 'Luggage / Lost Item')}</option>
+                  <option value="General Inquiry">{t('passenger.generalInquiry', 'General Inquiry')}</option>
                 </select>
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, marginBottom: 3, color: '#334155' }}>Subject *</label>
+                <label className="block text-[0.74rem] font-bold mb-[3px] text-slate-700">{t('passenger.subject', 'Subject *')}</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Question about morning bus to Gondar..."
+                  placeholder=""
                   value={newTicketForm.subject}
                   onChange={(e) => setNewTicketForm({ ...newTicketForm, subject: e.target.value })}
-                  style={{ width: '100%', padding: '7px 10px', borderRadius: 7, border: '1.5px solid #cbd5e1', fontSize: '0.82rem', outline: 'none' }}
+                  className="w-full py-[7px] px-2.5 rounded-[7px] border border-[1.5px] border-slate-300 text-[0.82rem] outline-none box-border focus:border-green-500"
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, marginBottom: 3, color: '#334155' }}>Ticket Number (Optional)</label>
+                <label className="block text-[0.74rem] font-bold mb-[3px] text-slate-700">{t('passenger.ticketNumberOptional', 'Ticket Number (Optional)')}</label>
                 <input
                   type="text"
-                  placeholder="e.g. TKT-102938"
+                  placeholder=""
                   value={newTicketForm.ticketNumber}
                   onChange={(e) => setNewTicketForm({ ...newTicketForm, ticketNumber: e.target.value })}
-                  style={{ width: '100%', padding: '7px 10px', borderRadius: 7, border: '1.5px solid #cbd5e1', fontSize: '0.82rem', outline: 'none' }}
+                  className="w-full py-[7px] px-2.5 rounded-[7px] border border-[1.5px] border-slate-300 text-[0.82rem] outline-none box-border focus:border-green-500"
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, marginBottom: 3, color: '#334155' }}>Your Question / Details *</label>
+                <label className="block text-[0.74rem] font-bold mb-[3px] text-slate-700">{t('passenger.yourQuestionDetails', 'Your Question / Details *')}</label>
                 <textarea
                   rows={3}
                   required
-                  placeholder="Describe your question or problem..."
+                  placeholder={t('passenger.describeQuestion', 'Describe your question or problem...')}
                   value={newTicketForm.description}
                   onChange={(e) => setNewTicketForm({ ...newTicketForm, description: e.target.value })}
-                  style={{ width: '100%', padding: '7px 10px', borderRadius: 7, border: '1.5px solid #cbd5e1', fontSize: '0.82rem', outline: 'none' }}
+                  className="w-full py-[7px] px-2.5 rounded-[7px] border border-[1.5px] border-slate-300 text-[0.82rem] outline-none box-border focus:border-green-500"
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
+              <div className="flex justify-end gap-2 mt-1.5">
                 <button
                   type="button"
                   onClick={() => setShowNewTicketModal(false)}
-                  style={{ padding: '7px 14px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', color: '#64748b' }}
+                  className="py-[7px] px-3.5 bg-slate-100 border border-slate-200 rounded-[7px] font-bold text-[0.78rem] cursor-pointer text-slate-600 hover:bg-slate-200 transition-colors"
                 >
-                  Cancel
+                  {t('common.cancel', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={submittingTicket}
-                  style={{ padding: '8px 18px', background: '#078930', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 800, cursor: 'pointer' }}
+                  className="py-2 px-4.5 bg-[#078930] text-white border-none rounded-lg font-extrabold text-[0.82rem] cursor-pointer hover:bg-[#066d26] transition-colors disabled:opacity-70"
                 >
-                  {submittingTicket ? 'Submitting...' : 'Send Support Request'}
+                  {submittingTicket ? t('common.loading', 'Submitting...') : t('passenger.sendSupportRequest', 'Send Support Request')}
                 </button>
               </div>
             </form>
@@ -1538,25 +1292,14 @@ const PassengerDashboard = () => {
         </div>
       )}
 
-      {/* ── Pay Now Modal (for unpaid bookings from Recent Bookings table) ── */}
-      {activeBookingForPayment && (
-        <PaymentModal
-          booking={activeBookingForPayment}
-          onClose={() => setActiveBookingForPayment(null)}
-          onSuccess={() => {
-            setActiveBookingForPayment(null);
-            fetchData();
-          }}
-        />
-      )}
-
-      {/* ── Official E-Ticket Modal Viewer ── */}
       {activeTicketForView && (
         <TicketModal
           booking={activeTicketForView}
           onClose={() => setActiveTicketForView(null)}
         />
       )}
+
+      <AIAssistantWidget />
     </div>
   );
 };

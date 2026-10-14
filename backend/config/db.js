@@ -1,21 +1,106 @@
 const mongoose = require('mongoose');
 
-const connectDB = async () => {
-  const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ethiobus';
-  try {
-    const conn = await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 5000,
-    });
-    console.log(`✅ MongoDB Connected: ${conn.connection.host} / Database: ${conn.connection.name}`);
-  } catch (err) { 
-    console.error(`❌ MongoDB Connection Error: ${err.message}`);
-    console.error('\n📌 HOW TO FIX THIS:');
-    console.error('Option 1: Start your local MongoDB service (Windows Administrator)');
-    console.error('  Run PowerShell as Administrator and execute: net start MongoDB');
-    console.error('Option 2: Use MongoDB Atlas (Cloud)');
-    console.error('  Update MONGODB_URI in backend/.env with your MongoDB Atlas connection string.\n');
-    process.exit(1);
-  } 
+let isConnected = false;
+
+let reconnectTimer = null;
+
+const scheduleReconnect = (uri, options) => {
+  if (reconnectTimer) return;
+  reconnectTimer = setInterval(async () => {
+    if (isConnected || mongoose.connection.readyState === 1) {
+      clearInterval(reconnectTimer);
+      reconnectTimer = null;
+      return;
+    }
+    try {
+      console.log('🔄 Attempting MongoDB reconnection...');
+      const conn = await mongoose.connect(uri, options);
+      isConnected = true;
+      console.log(`✅ MongoDB Connected successfully: ${conn.connection.host} / Database: ${conn.connection.name}`);
+      clearInterval(reconnectTimer);
+      reconnectTimer = null;
+      runIndexHygiene(conn);
+    } catch (retryErr) {
+      console.warn(`⏳ MongoDB reconnection attempt failed: ${retryErr.message}. Retrying in 5s...`);
+    }
+  }, 5000);
 };
 
+const runIndexHygiene = async (conn) => {
+  try {
+    const bookingsColl = conn.connection.db.collection('bookings');
+    const nulls = await bookingsColl.find({
+      $or: [{ ticketNumber: null }, { ticketNumber: '' }]
+    }).toArray();
+    for (const b of nulls) {
+      const ts = Date.now().toString().slice(-6);
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      await bookingsColl.updateOne({ _id: b._id }, { $set: { ticketNumber: `ETH-${ts}-${rand}` } });
+    }
+    const indexes = await bookingsColl.indexes();
+    const tktIdx = indexes.find(i => i.name === 'ticketNumber_1');
+    if (tktIdx && !tktIdx.sparse) {
+      await bookingsColl.dropIndex('ticketNumber_1');
+      await bookingsColl.createIndex({ ticketNumber: 1 }, { unique: true, sparse: true });
+    }
+  } catch (hygieneErr) {
+    console.warn('Notice: Booking index check:', hygieneErr.message);
+  }
+};
+
+const connectDB = async () => {
+  const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ethio_trip';
+
+  const options = {
+    autoIndex: true,
+    family: 4,  
+    socketTimeoutMS: 45000,
+  };
+
+  if (process.env.MONGODB_TIMEOUT_MS) {
+    options.serverSelectionTimeoutMS = parseInt(process.env.MONGODB_TIMEOUT_MS, 10);
+  }
+
+  mongoose.connection.removeAllListeners('connected');
+  mongoose.connection.removeAllListeners('disconnected');
+  mongoose.connection.removeAllListeners('reconnected');
+  mongoose.connection.removeAllListeners('error');
+
+  mongoose.connection.on('connected', () => {
+    isConnected = true;
+  });
+
+  mongoose.connection.on('disconnected', () => {
+    isConnected = false;
+    console.warn('⚠️ MongoDB disconnected. Attempting reconnection in background...');
+    scheduleReconnect(uri, options);
+  });
+
+  mongoose.connection.on('reconnected', () => {
+    isConnected = true;
+    console.log('✅ MongoDB reconnected successfully.');
+  });
+
+  mongoose.connection.on('error', (err) => {
+    isConnected = false;
+    console.error('❌ MongoDB connection error event:', err.message);
+  });
+
+  try {
+    const conn = await mongoose.connect(uri, options);
+    isConnected = true;
+    console.log(`✅ MongoDB Connected: ${conn.connection.host} / Database: ${conn.connection.name}`);
+    runIndexHygiene(conn);
+    return conn;
+  } catch (err) {
+    isConnected = false;
+    console.error(`❌ MongoDB Connection Error: ${err.message}`);
+    scheduleReconnect(uri, options);
+    return null;
+  }
+};
+
+const getIsConnected = () => isConnected && mongoose.connection.readyState === 1;
+
 module.exports = connectDB;
+module.exports.getIsConnected = getIsConnected;

@@ -1,25 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { FaTimesCircle, FaDownload, FaTicketAlt } from 'react-icons/fa';
 import { bookingAPI } from '../../../utils/api';
-import { toast } from 'react-toastify';
 import TicketModal from '../../../components/TicketModal';
 import DataTable from '../../../components/DataTable';
-import AdminPageHeader from '../../../components/AdminPageHeader';
+import { useNotification } from '../../../contexts/NotificationContext';
+import { MESSAGES } from '../../../constants/messages';
+import { useTranslation } from '../../../i18n';
 
 const AdminBookings = () => {
+  const { t } = useTranslation();
+  const notify = useNotification();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [cancellingId, setCancellingId] = useState(null);
+  const [boardingFilter, setBoardingFilter] = useState('ALL');
 
   const load = async () => {
     setLoading(true);
     try {
       const data = await bookingAPI.getAll();
       setBookings((data || []).sort((a, b) => new Date(b.createdAt || b.bookingDate) - new Date(a.createdAt || a.bookingDate)));
-    } catch {
-      toast.error('Failed to load bookings');
+    } catch (err) {
+      notify.notifyError(err, MESSAGES.reports.loadFailed);
     } finally {
       setLoading(false);
     }
@@ -27,24 +31,36 @@ const AdminBookings = () => {
 
   useEffect(() => { load(); }, []);
 
-  const handleCancel = async (id) => {
-    if (!window.confirm('Cancel and refund this passenger booking?')) return;
+  const handleCancel = async (booking) => {
+    const id = booking?._id;
+    const tktNo = booking?.ticketNumber;
+    const passenger = booking?.passenger?.name;
+
+    const confirmed = await notify.confirm({
+      title: t('cancel and refund booking', 'Cancel and Refund Booking?'),
+      message: `${t('are you sure you want to cancel', 'Are you sure you want to cancel')} ${tktNo ? `${t('ticket no', 'Ticket No')} ${tktNo}` : t('this booking', 'this booking')}${passenger ? ` ${t('for', 'for')} ${passenger}` : ''}?`,
+      description: t('booked seats will be released back', 'The booked seats will be released back to available inventory and a refund will be requested. This action cannot be undone.'),
+      confirmLabel: t('cancel & refund', 'Cancel & Refund'),
+      cancelLabel: t('keep booking', 'Keep Booking'),
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
     setCancellingId(id);
     try {
       await bookingAPI.cancel(id);
-      toast.success('Booking cancelled and seats released');
+      setBookings((prev) =>
+        prev.map((b) => (b._id === id ? { ...b, status: 'cancelled', paymentStatus: 'refund_requested' } : b))
+      );
       load();
     } catch (err) {
-      toast.error(err.message || 'Failed to cancel booking');
+      notify.notifyError(err, MESSAGES.booking.cancelFailed);
     } finally {
       setCancellingId(null);
     }
   };
 
-  const [boardingFilter, setBoardingFilter] = useState('ALL'); // 'ALL' | 'BOARDED' | 'NOT_BOARDED'
-
   const filtered = bookings.filter((b) => {
-    // Boarding filter
     if (boardingFilter === 'BOARDED' && b.boardingStatus !== 'BOARDED' && !b.isBoarded) return false;
     if (boardingFilter === 'NOT_BOARDED' && (b.boardingStatus === 'BOARDED' || b.isBoarded)) return false;
 
@@ -59,65 +75,55 @@ const AdminBookings = () => {
     );
   });
 
-  const totalRevenue = bookings
-    .filter((b) => b.paymentStatus === 'completed' || b.paymentStatus === 'PAID' || b.status === 'confirmed' || b.status === 'CONFIRMED')
-    .reduce((s, b) => s + (b.totalPrice || 0), 0);
-
   const boardedCount = bookings.filter(b => b.boardingStatus === 'BOARDED' || b.isBoarded).length;
   const notBoardedCount = bookings.filter(b => (b.status === 'confirmed' || b.status === 'CONFIRMED' || b.paymentStatus === 'PAID') && b.boardingStatus !== 'BOARDED' && !b.isBoarded).length;
 
   const columns = [
     {
-      header: 'Ticket Number',
+      header: t('ticket.ticketNo', 'Ticket Number'),
       render: (b) => (
         <div>
-          <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#078930', display: 'block' }}>
+          <span className="font-mono font-extrabold text-eb-green block">
             {b.ticketNumber || 'TKT-' + b._id?.slice(-6).toUpperCase()}
           </span>
-          <span style={{
-            display: 'inline-block',
-            marginTop: 3,
-            fontSize: '0.66rem',
-            fontWeight: 800,
-            padding: '2px 6px',
-            borderRadius: 4,
-            background: b.tripType === 'round' ? '#fef3c7' : '#f1f5f9',
-            color: b.tripType === 'round' ? '#92400e' : '#475569',
-            border: `1px solid ${b.tripType === 'round' ? '#fde68a' : '#e2e8f0'}`
-          }}>
-            {b.tripType === 'round' ? '🔁 Round-Trip' : 'One-Way'}
+          <span className={`inline-block mt-0.5 text-[0.66rem] font-extrabold px-1.5 py-0.5 rounded border ${
+            b.tripType === 'round'
+              ? 'bg-amber-50 text-amber-800 border-amber-200'
+              : 'bg-slate-100 text-slate-500 border-slate-200'
+          }`}>
+            {b.tripType === 'round' ? `🔁 ${t('round-trip', 'Round-Trip')}` : t('one-way', 'One-Way')}
           </span>
         </div>
       ),
     },
     {
-      header: 'Passenger',
+      header: t('passenger', 'Passenger'),
       render: (b) => (
         <div>
-          <div style={{ fontWeight: 700, color: '#0f172a' }}>{b.passenger?.name || 'Passenger'}</div>
-          <div style={{ color: '#64748b', fontSize: '0.75rem' }}>{b.passenger?.phone || b.passenger?.email || 'N/A'}</div>
+          <div className="font-bold text-slate-900">{b.passenger?.name || t('passenger', 'Passenger')}</div>
+          <div className="text-slate-500 text-xs">{b.passenger?.phone || b.passenger?.email || '—'}</div>
         </div>
       ),
     },
     {
-      header: 'Route & Seats',
+      header: t('route & seats', 'Route & Seats'),
       render: (b) => (
         <div>
-          <div style={{ fontWeight: 600, color: '#0f172a' }}>
-            {b.schedule?.route?.from || 'Origin'} → {b.schedule?.route?.to || 'Destination'}
+          <div className="font-semibold text-slate-900">
+            {t(b.schedule?.route?.from || 'Origin', b.schedule?.route?.from || 'Origin')} → {t(b.schedule?.route?.to || 'Destination', b.schedule?.route?.to || 'Destination')}
           </div>
-          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-            Seats: <strong style={{ color: '#0284c7' }}>{Array.isArray(b.selectedSeats) ? b.selectedSeats.join(', ') : b.selectedSeats || '—'}</strong>
+          <div className="text-[0.72rem] text-slate-500">
+            {t('seats', 'Seats')}: <strong className="text-sky-600">{Array.isArray(b.selectedSeats) ? b.selectedSeats.join(', ') : b.selectedSeats || '—'}</strong>
           </div>
         </div>
       ),
     },
     {
-      header: 'Travel Date',
-      render: (b) => <span style={{ color: '#64748b', fontSize: '0.8rem', fontWeight: 600 }}>{b.schedule?.date || 'Scheduled'}</span>,
+      header: t('travel date', 'Travel Date'),
+      render: (b) => <span className="text-slate-500 text-[0.8rem] font-semibold">{b.schedule?.date || t('scheduled', 'Scheduled')}</span>,
     },
     {
-      header: 'Boarding Status',
+      header: t('boarding status', 'Boarding Status'),
       render: (b) => {
         const isBrd = b.boardingStatus === 'BOARDED' || b.isBoarded;
         const isPart = b.boardingStatus === 'PARTIALLY_BOARDED';
@@ -125,75 +131,78 @@ const AdminBookings = () => {
         const isCancelled = (b.status === 'CANCELLED' || b.status === 'cancelled');
 
         if (isCancelled) {
-          return <span style={{ color: '#ef4444', fontSize: '0.72rem', fontWeight: 700 }}>Cancelled</span>;
+          return <span className="text-red-500 text-[0.72rem] font-bold">{t('cancelled', 'Cancelled')}</span>;
         }
         if (!isPaid) {
-          return <span style={{ color: '#94a3b8', fontSize: '0.72rem', fontStyle: 'italic' }}>Unpaid</span>;
+          return <span className="text-slate-400 text-[0.72rem] italic">{t('unpaid', 'Unpaid')}</span>;
         }
 
         return (
-          <span style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 4,
-            padding: '3px 8px',
-            borderRadius: 6,
-            fontSize: '0.72rem',
-            fontWeight: 800,
-            background: isBrd ? '#ecfdf5' : isPart ? '#fffbeb' : '#f8fafc',
-            color: isBrd ? '#059669' : isPart ? '#d97706' : '#64748b',
-            border: `1.5px solid ${isBrd ? '#a7f3d0' : isPart ? '#fde68a' : '#cbd5e1'}`
-          }}>
-            {isBrd ? '✓ BOARDED' : isPart ? '⏳ PARTIAL' : '○ NOT BOARDED'}
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[0.72rem] font-extrabold border-[1.5px] ${
+            isBrd
+              ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+              : isPart
+              ? 'bg-amber-50 text-amber-600 border-amber-200'
+              : 'bg-slate-50 text-slate-500 border-slate-300'
+          }`}>
+            {isBrd ? `✓ ${t('boarded', 'BOARDED')}` : isPart ? `⏳ ${t('partial', 'PARTIAL')}` : `○ ${t('not boarded', 'NOT BOARDED')}`}
           </span>
         );
       },
     },
     {
-      header: 'Fare Paid',
-      render: (b) => <span style={{ fontWeight: 800, color: '#0f172a' }}>ETB {b.totalPrice}</span>,
+      header: t('fare paid', 'Fare Paid'),
+      render: (b) => <span className="font-extrabold text-slate-900">ETB {b.totalPrice}</span>,
     },
     {
-      header: 'Status',
+      header: t('common.status', 'Status'),
       render: (b) => {
         const statusClass = (b.status || 'pending').toLowerCase();
-        return <span className={`eb-badge eb-badge-${statusClass}`}>{b.status}</span>;
+        return (
+          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[0.72rem] font-extrabold capitalize border ${
+            statusClass === 'confirmed' || statusClass === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+            statusClass === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+            'bg-red-50 text-red-600 border-red-200'
+          }`}>
+            {t(b.status, b.status)}
+          </span>
+        );
       },
     },
     {
-      header: 'Actions',
+      header: t('common.actions', 'Actions'),
       render: (b) => {
         const isPaid = (b.paymentStatus === 'PAID' || b.paymentStatus === 'completed' || b.status === 'confirmed' || b.status === 'CONFIRMED');
         const isCancelled = (b.status === 'CANCELLED' || b.status === 'cancelled' || b.paymentStatus === 'FAILED' || b.paymentStatus === 'failed');
         const canViewTicket = isPaid && !isCancelled;
 
         return (
-          <div className="eb-action-group">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {canViewTicket ? (
               <button
                 onClick={() => setSelectedBooking(b)}
-                className="eb-btn-action eb-btn-view"
-                title="View & Download Ticket"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[0.76rem] font-bold cursor-pointer border-none transition-colors"
+                title={t('view e-ticket', 'View & Download Ticket')}
               >
-                <FaDownload /> Ticket
+                <FaDownload /> {t('ticket', 'Ticket')}
               </button>
             ) : (
               <button
                 disabled
-                title={isCancelled ? "Booking is cancelled — ticket inactive" : "Payment pending — ticket inactive"}
-                className="eb-btn-action"
-                style={{ opacity: 0.5, cursor: 'not-allowed', background: '#f1f5f9', color: '#94a3b8', border: '1px solid #cbd5e1' }}
+                title={isCancelled ? t('booking cancelled', 'Booking is cancelled — ticket inactive') : t('payment pending', 'Payment pending — ticket inactive')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg opacity-50 cursor-not-allowed bg-slate-100 text-slate-400 border border-slate-300 text-[0.76rem] font-bold"
               >
-                <FaDownload /> {isCancelled ? 'Cancelled' : 'Unpaid'}
+                <FaDownload /> {isCancelled ? t('cancelled', 'Cancelled') : t('unpaid', 'Unpaid')}
               </button>
             )}
             {b.status === 'confirmed' && (
               <button
-                onClick={() => handleCancel(b._id)}
+                onClick={() => handleCancel(b)}
                 disabled={cancellingId === b._id}
-                className="eb-btn-action eb-btn-delete"
+                aria-label={`Cancel booking ${b.ticketNumber || ''}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-[0.76rem] font-bold cursor-pointer border-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <FaTimesCircle /> Cancel
+                <FaTimesCircle /> {cancellingId === b._id ? t('cancelling...', 'Cancelling…') : t('common.cancel', 'Cancel')}
               </button>
             )}
           </div>
@@ -204,41 +213,25 @@ const AdminBookings = () => {
 
   return (
     <div>
-      <AdminPageHeader
-        category="RESERVATIONS & TICKETING"
-        title="Passenger Bookings & Boarding Manifest"
-        icon={<FaTicketAlt />}
-        subtitle="Review passenger reservations, ticket verification numbers, trip types, and live boarded vs not-boarded passenger status."
-        stats={[
-          { label: 'Total Bookings', value: bookings.length, color: '#0284c7' },
-          { label: 'Boarded Passengers', value: boardedCount, color: '#16a34a' },
-          { label: 'Awaiting Boarding', value: notBoardedCount, color: '#d97706' },
-          { label: 'Total Revenue', value: `ETB ${totalRevenue.toLocaleString()}`, color: '#078930' },
-        ]}
-      />
-
-      {/* Boarding Status Filters */}
-      <div style={{ display: 'flex', gap: 8, margin: '14px 0', flexWrap: 'wrap' }}>
+      <div className="flex gap-2 my-3.5 flex-wrap">
         {[
-          { id: 'ALL', label: `All Bookings (${bookings.length})` },
-          { id: 'BOARDED', label: `Boarded (${boardedCount})`, color: '#059669' },
-          { id: 'NOT_BOARDED', label: `Not Boarded (${notBoardedCount})`, color: '#d97706' },
+          { id: 'ALL', label: `${t('all bookings', 'All Bookings')} (${bookings.length})` },
+          { id: 'BOARDED', label: `${t('boarded', 'Boarded')} (${boardedCount})` },
+          { id: 'NOT_BOARDED', label: `${t('not boarded', 'Not Boarded')} (${notBoardedCount})` },
         ].map((f) => (
           <button
             key={f.id}
             type="button"
             onClick={() => setBoardingFilter(f.id)}
-            style={{
-              padding: '6px 14px',
-              borderRadius: 8,
-              border: `1.5px solid ${boardingFilter === f.id ? (f.color || '#078930') : '#cbd5e1'}`,
-              background: boardingFilter === f.id ? (f.color ? `${f.color}15` : '#ecfdf5') : '#ffffff',
-              color: boardingFilter === f.id ? (f.color || '#078930') : '#475569',
-              fontSize: '0.78rem',
-              fontWeight: 800,
-              cursor: 'pointer',
-              transition: 'all .15s'
-            }}
+            className={`px-3.5 py-1.5 rounded-lg border-[1.5px] text-[0.78rem] font-extrabold cursor-pointer transition-all duration-150 ${
+              boardingFilter === f.id
+                ? f.id === 'BOARDED'
+                  ? 'border-emerald-500 bg-emerald-50 text-emerald-600'
+                  : f.id === 'NOT_BOARDED'
+                  ? 'border-amber-500 bg-amber-50 text-amber-600'
+                  : 'border-eb-green bg-emerald-50 text-eb-green'
+                : 'border-slate-300 bg-white text-slate-500'
+            }`}
           >
             {f.label}
           </button>
@@ -251,8 +244,8 @@ const AdminBookings = () => {
         loading={loading}
         searchTerm={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search bookings by ticket number, passenger name, phone..."
-        emptyMessage="No passenger bookings found matching your filter criteria."
+        searchPlaceholder={t('search bookings by ticket number, passenger name, phone...', 'Search bookings by ticket number, passenger name, phone...')}
+        emptyMessage={t('no passenger bookings found matching criteria', 'No passenger bookings found matching your filter criteria.')}
       />
 
       {selectedBooking && <TicketModal booking={selectedBooking} onClose={() => setSelectedBooking(null)} />}

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { TICKET_STATUS_LIST, TICKET_STATUS, BOARDING_STATUS_LIST, BOARDING_STATUS } = require('../constants/statuses');
 
 const ticketSchema = new mongoose.Schema(
   {
@@ -6,6 +7,7 @@ const ticketSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
+      index: true,
     },
     companyId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -89,14 +91,12 @@ const ticketSchema = new mongoose.Schema(
       default: '',
     },
 
-    // Ticket Lifecycle Status
     status: {
       type: String,
-      enum: ['ACTIVE', 'CANCELLED', 'REFUNDED', 'EXPIRED', 'valid', 'used', 'cancelled'],
-      default: 'ACTIVE',
+      enum: TICKET_STATUS_LIST,
+      default: TICKET_STATUS.ACTIVE,
     },
 
-    // Agent Verification Status (Handled formally by Ticket Agent)
     verificationStatus: {
       type: String,
       enum: ['PENDING', 'VERIFIED', 'INVALID', 'REJECTED'],
@@ -116,11 +116,10 @@ const ticketSchema = new mongoose.Schema(
       default: '',
     },
 
-    // Boarding Status (Handled by Conductor during passenger boarding)
     boardingStatus: {
       type: String,
-      enum: ['NOT_BOARDED', 'BOARDED'],
-      default: 'NOT_BOARDED',
+      enum: BOARDING_STATUS_LIST,
+      default: BOARDING_STATUS.NOT_BOARDED,
     },
     boardedBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -146,7 +145,16 @@ const ticketSchema = new mongoose.Schema(
 
 ticketSchema.index({ companyId: 1, ticketNumber: 1 });
 ticketSchema.index({ booking: 1 });
-ticketSchema.index({ schedule: 1, verificationStatus: 1 });
+ticketSchema.index({ user: 1 });
 ticketSchema.index({ schedule: 1, boardingStatus: 1 });
+
+ticketSchema.pre('validate', function (next) {
+  if (this.status) {
+    const s = String(this.status).toUpperCase();
+    if (s === 'VALID') this.status = TICKET_STATUS.ACTIVE;
+    else if (TICKET_STATUS_LIST.includes(s)) this.status = s;
+  }
+  next();
+});
 
 module.exports = mongoose.model('Ticket', ticketSchema);

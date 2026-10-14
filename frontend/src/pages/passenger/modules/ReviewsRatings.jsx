@@ -1,103 +1,202 @@
-import React, { useState } from 'react';
-import { FaStar, FaPaperPlane, FaSmile } from 'react-icons/fa';
+import React, { useState, useEffect } from 'react';
+import { FaStar, FaPaperPlane, FaBuilding } from 'react-icons/fa';
 import { toast } from 'react-toastify';
+import { companyAPI, reviewAPI } from '../../../utils/api';
+import { useAuth } from '../../../contexts/AuthContext';
+import { useTranslation } from '../../../i18n';
 
 const ReviewsRatings = () => {
-  const [form, setForm] = useState({
-    company: 'selma Bus Line',
-    rating: 5,
-    comment: ''
-  });
+  const { user } = useAuth();
+  const { t } = useTranslation();
+  const [companies, setCompanies] = useState([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState('');
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [reviewsList, setReviewsList] = useState([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
 
-  const [reviewsList, setReviewsList] = useState([
-    { id: 'r1', passenger: 'Meskerem Tadesse', company: 'Selam Bus Line', rating: 5, comment: 'Excellent bus, very comfortable seats and punctual departure!', date: '2024-05-18' },
-    { id: 'r2', passenger: 'Abebe Bikila', company: 'Abay Bus Transport', rating: 4, comment: 'Good service and safe driver.', date: '2024-05-15' },
-  ]);
+  useEffect(() => {
+    loadCompanies();
+  }, []);
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    if (selectedCompanyId) {
+      loadReviews(selectedCompanyId);
+    }
+  }, [selectedCompanyId]);
+
+  const loadCompanies = async () => {
+    try {
+      const list = await companyAPI.getActiveCompanies();
+      const validCompanies = Array.isArray(list) ? list : [];
+      setCompanies(validCompanies);
+      if (validCompanies.length > 0) {
+        setSelectedCompanyId(validCompanies[0]._id);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const loadReviews = async (compId) => {
+    try {
+      setLoadingReviews(true);
+      const res = await reviewAPI.getByCompany(compId);
+      const reviews = Array.isArray(res) ? res : res?.reviews || [];
+      setReviewsList(reviews);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.comment.trim()) {
-      toast.warn('Please enter a review message');
+    if (!selectedCompanyId) {
+      toast.warning(t('reviews.selectOperator', 'Please select a bus company to review'));
+      return;
+    }
+    if (!comment.trim()) {
+      toast.warning(t('enter review message', 'Please enter a review message'));
       return;
     }
 
-    const newRev = {
-      id: `r${Date.now()}`,
-      passenger: 'You (Passenger)',
-      company: form.company,
-      rating: form.rating,
-      comment: form.comment,
-      date: new Date().toISOString().split('T')[0]
-    };
-
-    setReviewsList([newRev, ...reviewsList]);
-    toast.success('Thank you for rating your travel experience!');
-    setForm({ company: 'Selam Bus Line', rating: 5, comment: '' });
+    setSubmitting(true);
+    try {
+      await reviewAPI.create({
+        companyId: selectedCompanyId,
+        rating,
+        comment: comment.trim(),
+      });
+      toast.success(t('review submitted successfully', 'Thank you for rating your travel experience! Your review has been submitted.'));
+      setComment('');
+      setRating(5);
+      loadReviews(selectedCompanyId);
+    } catch (err) {
+      toast.error(err.message || 'Failed to submit review');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
+  const selectedCompany = companies.find((c) => c._id === selectedCompanyId);
+
   return (
-    <div className="db-card-widget" style={{ maxWidth: 700 }}>
-      <div className="db-card-header">
+    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm max-w-[750px] mx-auto">
+      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4 mb-5">
         <div>
-          <h3>Rate & Review Bus Companies</h3>
-          <p>Share feedback on bus comfort, driver safety, and service quality after completing your trip</p>
+          <h3 className="m-0 text-[1.2rem] font-extrabold text-slate-900 dark:text-white">
+            {t('reviews.title', 'Rate & Review Bus Operators')}
+          </h3>
+          <p className="m-0 mt-1 text-slate-500 dark:text-slate-400 text-[0.85rem]">
+            {t('reviews.subtitle', 'Share authentic feedback on bus comfort, driver punctuality, and service quality')}
+          </p>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 24 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          <div className="form-group-field">
-            <label>Bus Operator</label>
-            <select value={form.company} onChange={e => setForm({ ...form, company: e.target.value })}>
-              <option value="Selam Bus Line">Selam Bus Line</option>
-              <option value="Abay Bus Transport">Abay Bus Transport</option>
-              <option value="Habesha Bus Express">Habesha Bus Express</option>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3.5 mb-7">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          <div className="flex flex-col gap-1.5">
+            <label className="block text-[0.82rem] font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+              {t('reviews.selectOperator', 'Select Bus Operator')}
+            </label>
+            <select
+              value={selectedCompanyId}
+              onChange={(e) => setSelectedCompanyId(e.target.value)}
+              className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-[0.88rem] outline-none"
+            >
+              {companies.map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.companyName} ({c.rating ? `★ ${c.rating}` : t('new', 'New')})
+                </option>
+              ))}
             </select>
           </div>
 
-          <div className="form-group-field">
-            <label>Rating (1 to 5 Stars)</label>
-            <select value={form.rating} onChange={e => setForm({ ...form, rating: Number(e.target.value) })}>
-              <option value="5">⭐⭐⭐⭐⭐ 5 - Excellent</option>
-              <option value="4">⭐⭐⭐⭐ 4 - Good</option>
-              <option value="3">⭐⭐⭐ 3 - Average</option>
-              <option value="2">⭐⭐ 2 - Poor</option>
-              <option value="1">⭐ 1 - Very Bad</option>
+          <div className="flex flex-col gap-1.5">
+            <label className="block text-[0.82rem] font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+              {t('reviews.yourRating', 'Your Rating (1 to 5 Stars)')}
+            </label>
+            <select
+              value={rating}
+              onChange={(e) => setRating(Number(e.target.value))}
+              className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-[0.88rem] outline-none"
+            >
+              <option value="5">⭐⭐⭐⭐⭐ 5 - {t('excellent', 'Excellent')}</option>
+              <option value="4">⭐⭐⭐⭐ 4 - {t('good', 'Good')}</option>
+              <option value="3">⭐⭐⭐ 3 - {t('average', 'Average')}</option>
+              <option value="2">⭐⭐ 2 - {t('poor', 'Poor')}</option>
+              <option value="1">⭐ 1 - {t('very bad', 'Very Bad')}</option>
             </select>
           </div>
         </div>
 
-        <div className="form-group-field">
-          <label>Your Review & Feedback</label>
+        <div className="flex flex-col gap-1.5">
+          <label className="block text-[0.82rem] font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+            {t('reviews.yourReview', 'Your Review & Feedback')}
+          </label>
           <textarea
             rows="3"
-            placeholder="Write your review here..."
-            value={form.comment}
-            onChange={e => setForm({ ...form, comment: e.target.value })}
-            style={{ padding: 10, borderRadius: 8, border: '1px solid #cbd5e1', fontSize: '0.88rem' }}
+            placeholder={t('reviews.reviewPlaceholder', 'Share your experience (punctuality, seat comfort, cleanliness, staff courtesy)...')}
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-[0.88rem] font-inherit outline-none transition focus:border-emerald-500"
           />
         </div>
 
         <div>
-          <button type="submit" className="btn-primary-role purple">
-            <FaPaperPlane /> Submit Review
+          <button
+            type="submit"
+            disabled={submitting}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white border-none rounded-lg py-2.5 px-5 font-bold text-[0.88rem] flex items-center gap-2 cursor-pointer transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+          >
+            <FaPaperPlane /> {submitting ? t('processing...', 'Submitting...') : t('reviews.submitReview', 'Submit Review')}
           </button>
         </div>
       </form>
 
-      {/* Community Reviews List */}
-      <h4 style={{ margin: '0 0 12px 0', fontSize: '0.95rem', fontWeight: 800 }}>Recent Community Ratings</h4>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {reviewsList.map(r => (
-          <div key={r.id} style={{ padding: 14, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>{r.passenger} - <span style={{ color: '#7c3aed' }}>{r.company}</span></div>
-              <div style={{ color: '#eab308', fontWeight: 700 }}>{'⭐'.repeat(r.rating)}</div>
-            </div>
-            <div style={{ fontSize: '0.82rem', color: '#475569', marginTop: 4 }}>{r.comment}</div>
-            <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 6 }}>{r.date}</div>
+      <div className="border-t border-slate-200 dark:border-slate-800 pt-5">
+        <h4 className="m-0 mb-3.5 text-[0.98rem] font-extrabold text-slate-900 dark:text-white">
+          {t('reviews.reviewsFor', 'Reviews for')} {selectedCompany?.companyName || t('operator', 'Operator')}
+        </h4>
+
+        {loadingReviews ? (
+          <div className="p-5 text-center text-slate-500">
+            {t('reviews.loadingReviews', 'Loading reviews...')}
           </div>
-        ))}
+        ) : reviewsList.length === 0 ? (
+          <div className="p-6 text-center text-slate-400 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200 dark:border-slate-800">
+            {t('reviews.noReviewsYet', 'No reviews yet for this bus operator. Be the first to leave feedback!')}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {reviewsList.map((r) => {
+              const reviewerName = r.user?.name || r.passenger || t('verified passenger', 'Verified Passenger');
+              const dateStr = r.createdAt ? new Date(r.createdAt).toLocaleDateString() : r.date || t('recent', 'Recent');
+
+              return (
+                <div key={r._id || r.id} className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/60">
+                  <div className="flex justify-between items-center">
+                    <div className="font-extrabold text-[0.88rem] text-slate-900 dark:text-white">
+                      {reviewerName}
+                    </div>
+                    <div className="text-yellow-500 font-extrabold text-[0.9rem]">
+                      {'★'.repeat(r.rating || 5)}{'☆'.repeat(5 - (r.rating || 5))}
+                    </div>
+                  </div>
+                  <div className="text-[0.84rem] text-slate-700 dark:text-slate-300 mt-1.5 leading-relaxed">
+                    {r.comment}
+                  </div>
+                  <div className="text-[0.72rem] text-slate-400 dark:text-slate-500 mt-2">
+                    {dateStr}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

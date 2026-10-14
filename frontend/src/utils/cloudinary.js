@@ -1,19 +1,13 @@
-/**
- * Upload image to Cloudinary via backend API or fallback safely
- * Supports file object, blob, or data URL
- * @param {File|Blob|string} fileOrData
- * @param {string} folder - Optional Cloudinary folder e.g. 'profiles', 'companies', 'buses'
- * @returns {Promise<string>} - Returns image URL (Cloudinary https URL or robust data URL)
- */
+
+import { storage } from './storage';
+
 export const uploadToCloudinary = async (fileOrData, folder = 'general') => {
   if (!fileOrData) return '';
 
-  // If already a remote URL, return it
   if (typeof fileOrData === 'string' && (fileOrData.startsWith('http://') || fileOrData.startsWith('https://'))) {
     return fileOrData;
   }
 
-  // Convert File/Blob to Base64 string first
   let base64Data = '';
   if (typeof fileOrData === 'string' && fileOrData.startsWith('data:image')) {
     base64Data = fileOrData;
@@ -31,16 +25,16 @@ export const uploadToCloudinary = async (fileOrData, folder = 'general') => {
   }
 
   try {
-    // Attempt upload through backend Cloudinary endpoint
+    const token = storage.getToken();
     const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/upload/image`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: localStorage.getItem('ethiobus_token') ? `Bearer ${localStorage.getItem('ethiobus_token')}` : '',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({
         image: base64Data,
-        folder: `ethiotrip/${folder}`,
+        folder,
       }),
     });
 
@@ -49,12 +43,15 @@ export const uploadToCloudinary = async (fileOrData, folder = 'general') => {
       if (data && data.url) {
         return data.url;
       }
+      console.warn('[Cloudinary Upload] Response contained no url:', data);
+    } else {
+      const body = await response.text().catch(() => '');
+      console.warn(`[Cloudinary Upload] Failed with ${response.status}:`, body.slice(0, 200));
     }
   } catch (err) {
     console.warn('[Cloudinary Upload] Falling back to local data format:', err?.message || err);
   }
 
-  // Graceful fallback: return the high quality base64 image data URI directly so it NEVER crashes
   return base64Data;
 };
 

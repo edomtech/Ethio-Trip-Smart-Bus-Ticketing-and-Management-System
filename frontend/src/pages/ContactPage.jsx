@@ -1,17 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import {
-  FaPhoneAlt, FaEnvelope, FaClock, FaMapMarkerAlt,
-  FaPaperPlane, FaHeadset, FaCommentDots, FaBuilding
+  FaPhoneAlt, FaEnvelope, FaMapMarkerAlt,
+  FaPaperPlane, FaHeadset, FaBuilding, FaCheckCircle
 } from 'react-icons/fa';
-import { toast } from 'react-toastify';
 import MainLayout from '../layouts/MainLayout';
-import { supportAPI, companyAPI } from '../utils/api';
-import { useTranslation } from '../i18n.jsx';
+import { supportAPI, companyAPI, platformSettingAPI } from '../utils/api';
+import { useTranslation } from '../i18n';
 const CENTRAL_SUPPORT = { _id: 'all', companyName: 'Ethio Trip General Support Desk (Central)' };
 
 const ContactPage = () => {
   const { t } = useTranslation();
   const [companies, setCompanies] = useState([CENTRAL_SUPPORT]);
+  const [platformSettings, setPlatformSettings] = useState({
+    supportPhone: '+251 911 002 233',
+    supportEmail: 'support@ethiotrip.et',
+    systemAddress: 'Emare ICT Hub, Debre Birhan, Ethiopia',
+  });
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -21,6 +25,7 @@ const ContactPage = () => {
     message: ''
   });
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
     const fetchCompanies = async () => {
@@ -30,14 +35,27 @@ const ContactPage = () => {
         if (list.length > 0) {
           setCompanies([
             CENTRAL_SUPPORT,
-            ...list.map(c => ({ _id: c._id, companyName: c.companyName }))
+            ...list
           ]);
         }
       } catch (err) {
         console.error('Error fetching registered companies:', err);
       }
     };
+    const fetchPlatformSettings = async () => {
+      try {
+        const data = await platformSettingAPI.getSettings();
+        if (data) {
+          setPlatformSettings({
+            supportPhone: data.supportPhone || '+251 911 002 233',
+            supportEmail: data.supportEmail || 'support@ethiotrip.et',
+            systemAddress: data.systemAddress || 'Emare ICT Hub, Debre Birhan, Ethiopia',
+          });
+        }
+      } catch {}
+    };
     fetchCompanies();
+    fetchPlatformSettings();
   }, []);
 
   const handleSubmit = async (e) => {
@@ -53,10 +71,10 @@ const ContactPage = () => {
         passengerPhone: formData.phone,
         subject: formData.subject,
       });
-      toast.success('Thank you! Your message and inquiry have been sent to our support desk.');
+      setSubmitted(true);
       setFormData({ name: '', email: '', phone: '', companyId: 'all', subject: '', message: '' });
     } catch (err) {
-      toast.info('Thank you! Your inquiry has been submitted.');
+      setSubmitted(true);
       setFormData({ name: '', email: '', phone: '', companyId: 'all', subject: '', message: '' });
     } finally {
       setLoading(false);
@@ -65,44 +83,39 @@ const ContactPage = () => {
 
   return (
     <MainLayout>
-      <div className="eb-contact-page">
+      <div className="w-full bg-slate-50 dark:bg-[#071410] font-poppins text-slate-900 dark:text-slate-100 transition-colors duration-200">
 
-        {/* ══ HERO BANNER ══ */}
-        <section className="eb-ct-hero">
-          <div className="eb-ct-hero-container">
-            <div className="eb-ct-hero-left">
-              <h1 className="eb-ct-hero-title">
-                Contact <span className="eb-text-yellow">Us</span>
+        {/* Compact Green Header */}
+        <section className="relative bg-gradient-to-br from-[#042d17] via-[#078930] to-[#034b17] py-8 sm:py-10 px-4 sm:px-6">
+          <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+            <div className="lg:col-span-8 space-y-2.5">
+              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                {t('contact.heroTitle', 'Contact')} <span className="text-amber-300">{t('contact.heroUs', 'Us')}</span>
               </h1>
-              <p className="eb-ct-hero-subtitle">
-                We'd love to hear from you. Reach out to us for inquiries, support or feedback.
+              <p className="text-xs sm:text-sm text-emerald-100/90 leading-relaxed max-w-xl m-0">
+                {t('contact.heroSubtitle', "We'd love to hear from you. Reach out to us for inquiries, support or feedback.")}
               </p>
 
-              {/* 3 Quick Info Pills */}
-              <div className="eb-ct-pills-row">
-                <div className="eb-ct-pill">
-                  <FaPhoneAlt className="eb-ct-pill-icon" />
-                  <span>+251 900 123 456</span>
+              {/* Quick Contacts */}
+              <div className="flex flex-wrap gap-2 pt-1">
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-xs font-semibold">
+                  <FaPhoneAlt className="text-emerald-300 text-[10px]" />
+                  <span>{platformSettings.supportPhone}</span>
                 </div>
 
-                <div className="eb-ct-pill">
-                  <FaEnvelope className="eb-ct-pill-icon" />
-                  <span>info@ethiotrip.com</span>
-                </div>
-
-                <div className="eb-ct-pill">
-                  <FaClock className="eb-ct-pill-icon" />
-                  <span>Mon - Sun: 6AM - 10PM</span>
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-xs font-semibold">
+                  <FaEnvelope className="text-emerald-300 text-[10px]" />
+                  <span>{platformSettings.supportEmail}</span>
                 </div>
               </div>
             </div>
 
-            <div className="eb-ct-hero-right">
-              <div className="eb-ct-bus-frame">
+            <div className="lg:col-span-4 hidden sm:flex justify-end">
+              <div className="rounded-xl overflow-hidden border border-white/20 shadow-lg p-1 bg-emerald-950/40 max-w-xs w-full">
                 <img
-                  src="/images/hero_bus.jpg"
+                  src="/images/hero_bus_clean.jpg"
                   alt="Ethio Trip Contact"
-                  className="eb-ct-hero-img"
+                  className="w-full h-28 object-cover rounded-lg"
                   onError={(e) => {
                     e.target.onerror = null;
                     e.target.src = 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=1000&auto=format&fit=crop';
@@ -111,167 +124,184 @@ const ContactPage = () => {
               </div>
             </div>
           </div>
-
-          {/* Wavy Divider */}
-          <div className="eb-ct-wave-divider">
-            <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M0,32L60,42.7C120,53,240,75,360,80C480,85,600,75,720,58.7C840,43,960,21,1080,16C1200,11,1320,21,1380,26.7L1440,32L1440,120L1380,120C1320,120,1200,120,1080,120C960,120,840,120,720,120C600,120,480,120,360,120C240,120,120,120,60,120L0,120Z" fill="#ffffff"></path>
-            </svg>
-          </div>
         </section>
 
-        {/* ══ MAIN CONTENT (Get in Touch & Offices) ══ */}
-        <section className="eb-ct-content-section">
-          <div className="eb-ct-container">
-            <div className="eb-ct-split-grid">
+        {}
+        <section className="py-16 px-4 sm:px-6 bg-slate-50 dark:bg-[#071410]">
+          <div className="max-w-7xl mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
 
-              {/* LEFT COLUMN: Contact Form */}
-              <div className="eb-ct-form-wrap">
-                <h2 className="eb-ct-section-title">
-                  Get <span className="eb-text-green">in Touch</span>
+              {}
+              <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+                <h2 className="text-2xl font-black text-slate-900 dark:text-white m-0">
+                  {t('contact.getInTouch', 'Get in Touch')}
                 </h2>
 
-                <form onSubmit={handleSubmit} className="eb-ct-form">
-                  <div className="eb-ct-fg">
+                {submitted ? (
+                  <div className="flex flex-col items-center justify-center py-10 space-y-3 text-center">
+                    <div className="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-2xl">
+                      <FaCheckCircle />
+                    </div>
+                    <h3 className="text-base font-black text-slate-900 dark:text-white m-0">Message Sent!</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 m-0 max-w-xs">Thank you! Your inquiry has been submitted to our support desk. We'll get back to you soon.</p>
+                    <button
+                      type="button"
+                      onClick={() => setSubmitted(false)}
+                      className="mt-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    >
+                      Send Another Message
+                    </button>
+                  </div>
+                ) : (
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
                     <input
                       type="text"
-                      placeholder="Your Name"
+                      placeholder={t('contact.yourName', 'Your Name')}
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       required
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                     />
                   </div>
 
-                  <div className="eb-ct-fg">
+                  <div>
                     <input
                       type="email"
-                      placeholder="Email Address"
+                      placeholder={t('contact.emailAddress', 'Email Address')}
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       required
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                     />
                   </div>
 
-                  <div className="eb-ct-fg">
+                  <div>
                     <input
                       type="tel"
-                      placeholder="Phone Number"
+                      placeholder={t('contact.phoneNumber', 'Phone Number')}
+                      maxLength={10}
                       value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                      onKeyDown={e => {
+                        if (!/[\d]/.test(e.key) && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) {
+                          e.preventDefault();
+                        }
+                      }}
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                     />
                   </div>
 
-                  <div className="eb-ct-fg">
-                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                      Choose Bus Operator / Company to Contact *
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                      {t('contact.chooseOperator', 'Choose Bus Operator / Company to Contact *')}
                     </label>
                     <select
                       value={formData.companyId}
                       onChange={(e) => setFormData({ ...formData, companyId: e.target.value })}
-                      style={{
-                        width: '100%',
-                        padding: '12px 14px',
-                        borderRadius: '10px',
-                        border: '1.5px solid #cbd5e1',
-                        background: '#fff',
-                        fontSize: '0.9rem',
-                        color: '#0f172a',
-                        outline: 'none',
-                        cursor: 'pointer'
-                      }}
                       required
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-900 dark:text-white outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                     >
                       {companies.map((c) => (
-                        <option key={c._id} value={c._id}>
+                        <option key={c._id} value={c._id} className="dark:bg-slate-900">
                           {c.companyName}
                         </option>
                       ))}
                     </select>
                   </div>
 
-                  <div className="eb-ct-fg">
+                  <div>
                     <input
                       type="text"
-                      placeholder="Inquiry Subject / Topic"
+                      placeholder={t('contact.subject', 'Inquiry Subject / Topic')}
                       value={formData.subject}
                       onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
                       required
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                     />
                   </div>
 
-                  <div className="eb-ct-fg">
+                  <div>
                     <textarea
                       rows={4}
-                      placeholder="Type your question, message, or feedback in detail..."
+                      placeholder={t('contact.message', 'Type your question, message, or feedback in detail...')}
                       value={formData.message}
                       onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                       required
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all resize-y"
                     />
                   </div>
 
-                  <button type="submit" className="eb-ct-submit-btn" disabled={loading}>
-                    {loading ? 'Sending...' : 'Send Message'} <FaPaperPlane />
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+                  >
+                    {loading ? t('contact.sending', 'Sending...') : t('contact.sendMessage', 'Send Message')} <FaPaperPlane />
                   </button>
                 </form>
+                )}
               </div>
 
-              {/* RIGHT COLUMN: Our Offices */}
-              <div className="eb-ct-offices-wrap">
-                <h2 className="eb-ct-section-title">
-                  Our <span className="eb-text-green">Offices</span>
+              {}
+              <div className="lg:col-span-5 space-y-4">
+                <h2 className="text-2xl font-black text-slate-900 dark:text-white m-0 mb-2">
+                  {t('contact.ourOffices', 'Our Offices')}
                 </h2>
 
-                <div className="eb-ct-offices-list">
-                  {/* Addis Ababa */}
-                  <div className="eb-ct-office-card">
-                    <div className="eb-ct-oc-icon">
+                <div className="space-y-3">
+                  {}
+                  <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800/50 shadow-sm flex items-start gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-lg shrink-0">
                       <FaMapMarkerAlt />
                     </div>
-                    <div className="eb-ct-oc-info">
-                      <h4>Addis Ababa (Head Office)</h4>
-                      <p>Bole Road, Near Friendship Square, Addis Ababa, Ethiopia</p>
-                      <span className="eb-ct-oc-phone">
-                        <FaPhoneAlt /> +251 900 123 456
+                    <div className="flex-1 space-y-1">
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white m-0">Emare ICT Hub (Platform Support & Tech Center)</h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 m-0">{platformSettings.systemAddress}</p>
+                      <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 pt-1">
+                        <FaPhoneAlt className="text-[10px]" /> {platformSettings.supportPhone}
                       </span>
-                    </div>
-                    <div className="eb-ct-oc-map-badge">
-                      <span>📌 Addis Ababa</span>
+                      <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                        <FaEnvelope className="text-[10px]" /> {platformSettings.supportEmail}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Dire Dawa */}
-                  <div className="eb-ct-office-card">
-                    <div className="eb-ct-oc-icon">
-                      <FaMapMarkerAlt />
-                    </div>
-                    <div className="eb-ct-oc-info">
-                      <h4>Dire Dawa Office</h4>
-                      <p>Dire Dawa City Administration, Dire Dawa, Ethiopia</p>
-                      <span className="eb-ct-oc-phone">
-                        <FaPhoneAlt /> +251 912 345 678
-                      </span>
-                    </div>
-                    <div className="eb-ct-oc-map-badge">
-                      <span>📌 Dire Dawa</span>
-                    </div>
-                  </div>
-
-                  {/* Hawassa */}
-                  <div className="eb-ct-office-card">
-                    <div className="eb-ct-oc-icon">
-                      <FaMapMarkerAlt />
-                    </div>
-                    <div className="eb-ct-oc-info">
-                      <h4>Hawassa Office</h4>
-                      <p>SNNPR Region, Hawassa City, Hawassa, Ethiopia</p>
-                      <span className="eb-ct-oc-phone">
-                        <FaPhoneAlt /> +251 911 234 567
-                      </span>
-                    </div>
-                    <div className="eb-ct-oc-map-badge">
-                      <span>📌 Hawassa</span>
-                    </div>
-                  </div>
+                  {}
+                  {companies.filter(c => c._id !== 'all').length > 0 && (
+                    <>
+                      <h3 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-4 mb-2 flex items-center gap-2">
+                        <FaBuilding /> Registered Bus Companies
+                      </h3>
+                      {companies.filter(c => c._id !== 'all').map((comp) => (
+                        <div key={comp._id} className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-start gap-3 hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors">
+                          <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-base shrink-0 border border-slate-200 dark:border-slate-700">
+                            <FaBuilding />
+                          </div>
+                          <div className="flex-1 min-w-0 space-y-0.5">
+                            <h4 className="text-xs font-bold text-slate-900 dark:text-white m-0">{comp.companyName}</h4>
+                            {comp.city && (
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 m-0 flex items-center gap-1">
+                                <FaMapMarkerAlt className="text-[9px] shrink-0" />
+                                {comp.address ? `${comp.address}, ` : ''}{comp.city}
+                              </p>
+                            )}
+                            {comp.phone && (
+                              <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                <FaPhoneAlt className="text-[9px]" /> {comp.phone}
+                              </span>
+                            )}
+                            {comp.email && (
+                              <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                <FaEnvelope className="text-[9px]" /> {comp.email}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -279,25 +309,20 @@ const ContactPage = () => {
           </div>
         </section>
 
-        {/* ══ 24/7 SUPPORT BANNER ══ */}
-        <section className="eb-ct-help-section">
-          <div className="eb-ct-container">
-            <div className="eb-ct-help-card">
-              <div className="eb-ct-hc-left">
-                <h2>We are here to help!</h2>
-                <p>Our customer support team is available 24/7 to assist you with your booking and travel needs.</p>
-              </div>
+        {}
+        <section className="py-12 px-4 sm:px-6 bg-slate-100 dark:bg-slate-900/60">
+          <div className="max-w-5xl mx-auto rounded-3xl bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-950 border border-slate-800 p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl text-white">
+            <div className="space-y-1 text-center md:text-left">
+              <h2 className="text-xl sm:text-2xl font-black text-white m-0">{t('home.supportAlways', '24/7 Support')}</h2>
+              <p className="text-xs sm:text-sm text-slate-300 m-0">{t('home.supportAlwaysDesc', 'Our customer support team is available 24/7 to assist you with your booking and travel needs.')}</p>
+            </div>
 
-              <div className="eb-ct-hc-right">
-                <div className="eb-ct-badge-247">
-                  <span>24/7</span>
-                </div>
-                <div className="eb-ct-chat-bubble">
-                  <FaCommentDots />
-                </div>
-                <div className="eb-ct-agent-illus">
-                  <FaHeadset />
-                </div>
+            <div className="flex items-center gap-3">
+              <div className="px-3.5 py-1.5 rounded-full bg-emerald-600 text-white font-black text-xs shadow-md">
+                24/7
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-xl text-emerald-400">
+                <FaHeadset />
               </div>
             </div>
           </div>

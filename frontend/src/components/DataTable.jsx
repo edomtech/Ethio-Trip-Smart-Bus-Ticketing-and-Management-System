@@ -1,22 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { FaSearch, FaSpinner, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { useTranslation } from '../i18n';
 
-/**
- * Standardized Ultra-Modern Data Table Component
- * Used across all roles: Super Admin, Company Admin, Ticket Agent, and Passenger.
- *
- * @param {Array} columns - Array of { header, accessor, render, style, thStyle, width }
- * @param {Array} data - Array of row items
- * @param {boolean} loading - Loading state
- * @param {string} searchPlaceholder - Placeholder text for search bar
- * @param {string} searchTerm - Controlled search term (optional)
- * @param {function} onSearchChange - Controlled search change handler (optional)
- * @param {boolean} searchable - Show search toolbar (default: true)
- * @param {ReactNode} actions - Custom action buttons in the toolbar (e.g., "Add Item")
- * @param {string} emptyMessage - Message when no records match
- * @param {number} pageSize - Number of items per page (default: 10, set 0 for no pagination)
- * @param {string} cardTitle - Optional title inside card header
- */
 const DataTable = ({
   columns = [],
   data = [],
@@ -30,6 +15,7 @@ const DataTable = ({
   pageSize = 10,
   cardTitle = null,
 }) => {
+  const { t } = useTranslation();
   const [internalSearch, setInternalSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -44,7 +30,6 @@ const DataTable = ({
     setCurrentPage(1);
   };
 
-  // If internal search is active and data is not already filtered externally
   const filteredData = useMemo(() => {
     if (isControlled || !activeSearch.trim()) return data;
     const q = activeSearch.toLowerCase();
@@ -59,7 +44,6 @@ const DataTable = ({
     });
   }, [data, activeSearch, isControlled]);
 
-  // Pagination
   const totalPages = pageSize > 0 ? Math.ceil(filteredData.length / pageSize) : 1;
   const paginatedData = useMemo(() => {
     if (pageSize <= 0) return filteredData;
@@ -68,57 +52,73 @@ const DataTable = ({
   }, [filteredData, currentPage, pageSize]);
 
   return (
-    <div className="eb-datatable-container">
-      {/* Top Toolbar */}
+    <div className="w-full space-y-3">
+      {}
       {(searchable || actions || cardTitle) && (
-        <div className="eb-table-toolbar">
-          {cardTitle && <div className="eb-table-card-title">{cardTitle}</div>}
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+          {cardTitle && (
+            <div className="text-sm font-bold text-slate-800 dark:text-slate-200 tracking-wide">
+              {typeof cardTitle === 'string' ? t(cardTitle, cardTitle) : cardTitle}
+            </div>
+          )}
           {searchable && (
-            <div className="eb-search-input-box">
-              <FaSearch className="eb-search-icon" />
+            <div className="relative flex items-center min-w-[240px] max-w-sm">
+              <FaSearch className="absolute left-3 text-slate-400 text-xs pointer-events-none" />
               <input
                 type="text"
-                placeholder={searchPlaceholder}
+                placeholder={t(searchPlaceholder, searchPlaceholder)}
                 value={activeSearch}
                 onChange={(e) => handleSearchChange(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 transition-all shadow-sm"
               />
             </div>
           )}
-          {actions && <div className="eb-table-actions-slot">{actions}</div>}
+          {actions && <div className="flex items-center gap-2">{actions}</div>}
         </div>
       )}
 
-      {/* Modern Table Card */}
-      <div className="eb-table-card">
+      {}
+      <div className="bg-white dark:bg-[#0d1b14] rounded-2xl shadow-sm border border-slate-200 dark:border-[#1e352b] overflow-hidden">
         {loading ? (
-          <div className="eb-table-loading">
-            <FaSpinner className="eb-spin-icon" />
-            <span>Loading records...</span>
+          <div className="flex flex-col items-center justify-center py-12 gap-2 text-slate-400 text-xs">
+            <FaSpinner className="animate-spin text-emerald-600 text-xl" />
+            <span>{t('Loading records...', 'Loading records...')}</span>
           </div>
         ) : (
-          <div className="eb-table-responsive-wrapper">
-            <table className="eb-modern-table">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
               <thead>
-                <tr>
+                <tr className="bg-gradient-to-r from-slate-900 to-slate-800 text-white">
                   {columns.map((col, idx) => (
-                    <th key={idx} style={{ ...(col.thStyle || {}), width: col.width || 'auto' }}>
-                      {col.header}
+                    <th
+                      key={idx}
+                      style={{ ...(col.thStyle || {}), width: col.width || 'auto' }}
+                      className="px-4 py-3.5 text-[11px] font-extrabold uppercase tracking-wider text-slate-200"
+                    >
+                      {typeof col.header === 'string' ? t(col.header, col.header) : col.header}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100 dark:divide-[#1e352b]">
                 {paginatedData.length === 0 ? (
                   <tr>
-                    <td colSpan={columns.length} className="eb-table-empty">
-                      {emptyMessage}
+                    <td colSpan={columns.length} className="px-4 py-8 text-center text-xs text-slate-400 font-medium">
+                      {t(emptyMessage, emptyMessage)}
                     </td>
                   </tr>
                 ) : (
                   paginatedData.map((row, rowIdx) => (
-                    <tr key={row._id || row.id || rowIdx}>
+                    <tr
+                      key={row._id || row.id || rowIdx}
+                      className="hover:bg-emerald-50/40 dark:hover:bg-[#142a20] transition-colors"
+                    >
                       {columns.map((col, colIdx) => (
-                        <td key={colIdx} style={col.style || {}}>
+                        <td
+                          key={colIdx}
+                          style={col.style || {}}
+                          className="px-4 py-3.5 text-xs text-slate-700 dark:text-slate-300 align-middle"
+                        >
                           {col.render
                             ? col.render(row, rowIdx)
                             : col.accessor
@@ -134,32 +134,31 @@ const DataTable = ({
           </div>
         )}
 
-        {/* Footer / Pagination */}
+        {}
         {!loading && filteredData.length > 0 && pageSize > 0 && totalPages > 1 && (
-          <div className="eb-table-pagination">
-            <div className="eb-pagination-info">
-              Showing {(currentPage - 1) * pageSize + 1} to{' '}
-              {Math.min(currentPage * pageSize, filteredData.length)} of {filteredData.length} entries
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-[#1e352b] text-xs text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-900/40">
+            <div>
+              {t('showing', 'Showing')} {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, filteredData.length)} / {filteredData.length}
             </div>
-            <div className="eb-pagination-controls">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
                 disabled={currentPage === 1}
-                className="eb-page-btn"
+                className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
-                <FaChevronLeft />
+                <FaChevronLeft className="text-[10px]" />
               </button>
-              <span className="eb-page-indicator">
+              <span className="font-semibold text-slate-700 dark:text-slate-200">
                 {currentPage} / {totalPages}
               </span>
               <button
                 type="button"
                 onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
                 disabled={currentPage === totalPages}
-                className="eb-page-btn"
+                className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
-                <FaChevronRight />
+                <FaChevronRight className="text-[10px]" />
               </button>
             </div>
           </div>

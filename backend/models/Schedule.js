@@ -21,8 +21,10 @@ scheduleSchema.index({ assignedConductor: 1 });
 
 scheduleSchema.pre('save', function (next) {
   if (!this.tripId) {
-    const rand = Math.floor(1000 + Math.random() * 9000);
-    this.tripId = `TRP-${rand}`;
+    const crypto = require('crypto');
+    const ts = Date.now().toString(36).toUpperCase();
+    const rand = crypto.randomBytes(3).toString('hex').toUpperCase();
+    this.tripId = `TRP-${ts}-${rand}`;
   }
   next();
 });
