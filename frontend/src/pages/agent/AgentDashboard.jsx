@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { bookingAPI, scheduleAPI, companyAPI, ticketAPI, supportAPI } from '../../utils/api';
+import { bookingAPI, scheduleAPI, companyAPI, ticketAPI, supportAPI, reportAPI } from '../../utils/api';
 import {
   todayDateString, isConfirmed, isAwaitingPayment, isCancelled, isRefunded,
   isRevenueBearing, bookingAmount, bookingSeats, bookingRouteLabel,
@@ -66,10 +66,11 @@ const AgentDashboard = () => {
     setLoading(true);
     try {
       const today = todayDateString();
-      const [schedulesRes, bookingsRes, supportRes] = await Promise.all([
+      const [schedulesRes, bookingsRes, supportRes, reportOverview] = await Promise.all([
         scheduleAPI.getAll().catch(() => []),
         bookingAPI.getAll().catch(() => []),
         supportAPI.getAll().catch(() => []),
+        reportAPI.getOverview().catch(() => null),
       ]);
 
       const companyId = user?.companyId?._id || user?.companyId;
@@ -91,6 +92,33 @@ const AgentDashboard = () => {
         .filter(isRevenueBearing)
         .reduce((sum, b) => sum + bookingAmount(b), 0);
       const totalPax = companyBookings.reduce((sum, b) => sum + bookingSeats(b).length, 0);
+
+      // Deduplicate unique passengers (count each passenger once, even if they booked multiple times)
+      const passengerMap = new Map();
+      companyBookings.forEach((b) => {
+        const isStaff = b.user?.role === 'company_staff' || b.user?.role === 'conductor' || b.user?.role === 'company_admin' || b.user?.role === 'super_admin';
+        const email = b.passenger?.email || (!isStaff && (b.user && b.user.email)) || b.contactEmail;
+        const phone = b.passenger?.phone || (!isStaff && (b.user && b.user.phone)) || b.contactPhone;
+        const userId = (!isStaff && (b.user?._id || b.user)) ? (b.user?._id || b.user).toString() : null;
+        const name = b.passenger?.name || (!isStaff && (b.user && b.user.name));
+
+        const key = (email ? email.toLowerCase().trim() : null)
+          || (phone ? phone.trim() : null)
+          || userId
+          || (name ? name.toLowerCase().trim() : null);
+
+        if (key && !passengerMap.has(key)) {
+          passengerMap.set(key, {
+            name: name || 'Passenger',
+            email: email || '',
+            phone: phone || '',
+          });
+        }
+      });
+
+      const uniquePassengersCount = passengerMap.size > 0
+        ? passengerMap.size
+        : (reportOverview?.totalPassengers || 0);
 
       const routeMap = {};
       companyBookings.forEach(b => {
@@ -121,7 +149,8 @@ const AgentDashboard = () => {
         refundedTickets: refunded,
         pendingRefundApprovals: companyBookings.filter(b => b.refundStatus === 'APPROVED' || b.refundDecision === 'APPROVED').length,
         totalRevenue: totalRev,
-        passengersServed: totalPax,
+        passengersServed: uniquePassengersCount,
+        totalSeatsSold: totalPax,
         allCompanyBookings: companyBookings,
         recentBookings: companyBookings.slice(0, 5),
         popularRoutes: popRoutes,
@@ -136,8 +165,8 @@ const AgentDashboard = () => {
   const companyName = company?.companyName || user?.companyId?.companyName || 'Ethio Trip';
   const staffName = (() => {
     const raw = user?.name || '';
-    const clean = raw.replace(/\s*\([^)]*\)/g, '').replace(/\b(Passenger|Super Admin|Company Admin|Admin|Ticket Agent|Agent|Conductor|Staff)\b/gi, '').trim();
-    return clean || 'Agent';
+    const clean = raw.replace(/\s*\([^)]*\)/g, '').replace(/\b(Passenger|Super Admin|Company Admin|Admin|Ticket Agent|Agent|Conductor)\b/gi, '').trim();
+    return clean || 'Staff';
   })();
 
   const sidebarNavItems = [
@@ -177,7 +206,7 @@ const AgentDashboard = () => {
             </div>
             <div>
               <div className="font-extrabold text-[1rem] text-white tracking-tight">{companyName}</div>
-              <div className="text-[0.72rem] text-emerald-200 font-medium">{t('ticket agent', 'Ticket Agent')}</div>
+              <div className="text-[0.72rem] text-emerald-200 font-medium">{t('staff', 'Staff')}</div>
             </div>
           </div>
 
@@ -216,12 +245,20 @@ const AgentDashboard = () => {
 
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <div className="shrink-0 py-4 px-4 md:px-8 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3">
-          <button
-            className="lg:hidden w-10 h-10 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 cursor-pointer hover:bg-slate-50"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <FaBars />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              className="lg:hidden w-10 h-10 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 cursor-pointer hover:bg-slate-50"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <FaBars />
+            </button>
+            <div className="hidden sm:flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-100">{companyName}</span>
+              <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                {t('staff', 'Staff')}
+              </span>
+            </div>
+          </div>
           <div className="flex-1" />
           <ThemeToggle />
           <LanguageSelector />
@@ -234,9 +271,14 @@ const AgentDashboard = () => {
               <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[0.85rem] font-extrabold overflow-hidden shrink-0">
                 {user?.avatar ? <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" /> : staffName[0]}
               </div>
-              <span className="hidden sm:block text-[0.85rem] font-bold text-slate-900">
-                {staffName}
-              </span>
+              <div className="hidden sm:flex flex-col text-left leading-tight">
+                <span className="text-[0.85rem] font-bold text-slate-900 dark:text-slate-100">
+                  {staffName}
+                </span>
+                <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                  {t('staff', 'Staff')}
+                </span>
+              </div>
             </div>
             {profileDropdownOpen && (
               <div className="absolute top-12 right-0 w-52 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 z-[1200] overflow-hidden" onMouseLeave={() => setProfileDropdownOpen(false)}>
@@ -245,8 +287,8 @@ const AgentDashboard = () => {
                     {user?.avatar ? <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" /> : staffName[0]}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-bold text-slate-900 dark:text-white m-0 truncate">{staffName}</p>
-                    <p className="text-[10px] text-slate-400 m-0">{t('ticket agent', 'Ticket Agent / Staff')}</p>
+                    <p className="text-xs font-bold text-slate-900 dark:text-white m-0 truncate">{user?.name || staffName}</p>
+                    <p className="text-[10px] text-slate-400 m-0">{t('staff', 'Staff')}</p>
                   </div>
                 </div>
                 <div className="p-2">
@@ -352,7 +394,11 @@ const AgentDashboard = () => {
                       </h2>
                     </div>
                     <div className="text-[0.82rem] font-bold text-slate-500">{t('agent.passengersServed', 'Passengers Served')}</div>
-                    <div className="text-[0.74rem] font-bold text-emerald-500 mt-1">{t('agent.totalPassengers', 'Total passengers')}</div>
+                    <div className={`text-[0.74rem] font-bold ${stats.passengersServed > 0 ? 'text-emerald-500' : 'text-slate-400'}`}>
+                      {stats.passengersServed > 0
+                        ? `${stats.totalSeatsSold > stats.passengersServed ? `${stats.totalSeatsSold} seats booked` : `${stats.passengersServed} booked`}`
+                        : t('agent.noPassengersYet', 'No passengers yet')}
+                    </div>
                   </div>
                 </div>
 

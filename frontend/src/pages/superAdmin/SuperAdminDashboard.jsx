@@ -92,8 +92,18 @@ const SuperAdminDashboard = () => {
   };
   const [companyForm, setCompanyForm] = useState(initialCompanyForm);
 
+  const formatAdminName = (rawName) => {
+    if (!rawName) return 'Platform Admin';
+    const clean = String(rawName)
+      .replace(/\s*\([^)]*\)/g, '')
+      .replace(/\bSuper\s*Admin\b/gi, 'Platform Admin')
+      .replace(/^Ethio\s*Trip\s*Platform\s*Admin$/i, 'Platform Admin')
+      .trim();
+    return clean || 'Platform Admin';
+  };
+
   const [profileForm, setProfileForm] = useState({
-    name: user?.name || 'Platform Admin',
+    name: formatAdminName(user?.name),
     email: user?.email || '',
     phone: user?.phone || '',
     avatar: user?.avatar || '',
@@ -543,7 +553,7 @@ const SuperAdminDashboard = () => {
                 <FaCrown />
               </div>
               <div className="flex flex-col min-w-0">
-                <h4 className="m-0 text-[0.82rem] font-bold text-white truncate">{user?.name || 'Platform Admin'}</h4>
+                <h4 className="m-0 text-[0.82rem] font-bold text-white truncate">{formatAdminName(user?.name)}</h4>
                 <p className="m-0 text-[0.68rem] text-slate-400 truncate">Platform Administrator</p>
               </div>
             </div>
@@ -613,7 +623,7 @@ const SuperAdminDashboard = () => {
                   {user?.avatar ? <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" /> : <FaCrown />}
                 </div>
                 <span className="text-xs font-bold text-blue-800 hidden sm:block max-w-[120px] truncate">
-                  {user?.name?.replace(/\s*\([^)]*\)/g, '').trim() || 'Platform Admin'}
+                  {formatAdminName(user?.name)}
                 </span>
               </div>
               {profileDropdownOpen && (
@@ -623,7 +633,7 @@ const SuperAdminDashboard = () => {
                       {user?.avatar ? <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" /> : <FaCrown />}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-900 dark:text-white m-0 truncate">{user?.name || 'Platform Admin'}</p>
+                      <p className="text-xs font-bold text-slate-900 dark:text-white m-0 truncate">{formatAdminName(user?.name)}</p>
                       <p className="text-[10px] text-slate-400 m-0">Platform Admin</p>
                     </div>
                   </div>
@@ -1503,7 +1513,7 @@ const SuperAdminDashboard = () => {
                     </label>
                   </div>
                   <div>
-                    <h3 className="text-base font-black text-slate-900 dark:text-white m-0">{user?.name || 'Platform Administrator'}</h3>
+                    <h3 className="text-base font-black text-slate-900 dark:text-white m-0">{formatAdminName(user?.name)}</h3>
                     <p className="text-xs text-slate-500 m-0">{user?.email || 'platformadmin@ethiotrip.et'}</p>
                     <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-200 dark:border-purple-800 mt-1">
                       Platform Administrator

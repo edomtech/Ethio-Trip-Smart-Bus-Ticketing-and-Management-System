@@ -25,6 +25,7 @@ const getOverviewMetrics = async (user) => {
     Schedule.find(companyQuery),
     Booking.find(companyQuery)
       .populate('companyId', 'companyName logo')
+      .populate('user', 'name email phone role')
       .populate({ path: 'schedule', populate: ['bus', 'route'] }),
     Payment.find(companyQuery),
     ConductorReport.find(companyQuery),
@@ -75,11 +76,20 @@ const getOverviewMetrics = async (user) => {
   const uniquePassengers = (list) => {
     const ids = new Set();
     for (const b of list) {
-      if (b.user) ids.add(b.user.toString());
-      else if (b.passenger?.email) ids.add(b.passenger.email.toLowerCase().trim());
-      else if (b.passenger?.phone) ids.add(b.passenger.phone.trim());
-      else if (b.passenger?.name) ids.add(b.passenger.name.trim().toLowerCase());
-      else if (b._id) ids.add(b._id.toString());
+      const userObj = b.user && typeof b.user === 'object' ? b.user : null;
+      const isStaff = userObj && ['company_staff', 'conductor', 'company_admin', 'super_admin'].includes(userObj.role);
+
+      const email = b.passenger?.email || (!isStaff && userObj?.email) || b.contactEmail;
+      const phone = b.passenger?.phone || (!isStaff && userObj?.phone) || b.contactPhone;
+      const userId = (!isStaff && b.user) ? (b.user._id || b.user).toString() : null;
+      const name = b.passenger?.name || (!isStaff && userObj?.name);
+
+      const key = (email ? email.toLowerCase().trim() : null)
+        || (phone ? phone.trim() : null)
+        || userId
+        || (name ? name.toLowerCase().trim() : null);
+
+      if (key) ids.add(key);
     }
     return ids.size;
   };
@@ -117,7 +127,7 @@ const getOverviewMetrics = async (user) => {
     activeBuses,
     activeRoutes,
     totalPassengers: scopedToCompany
-      ? (allTimeUniquePassengers || totalSeatsBooked)
+      ? allTimeUniquePassengers
       : (users.filter((u) => u.role === 'passenger').length || allTimeUniquePassengers),
     totalSeatsBooked,
     allTimeUniquePassengers,

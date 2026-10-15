@@ -50,15 +50,16 @@ const runIndexHygiene = async (conn) => {
 
 const connectDB = async () => {
   const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ethio_trip';
+  const isAtlas = uri.startsWith('mongodb+srv://');
 
   const options = {
     autoIndex: true,
-    family: 4,  
     socketTimeoutMS: 45000,
+    serverSelectionTimeoutMS: parseInt(process.env.MONGODB_TIMEOUT_MS, 10) || (isAtlas ? 10000 : 5000),
   };
 
-  if (process.env.MONGODB_TIMEOUT_MS) {
-    options.serverSelectionTimeoutMS = parseInt(process.env.MONGODB_TIMEOUT_MS, 10);
+  if (!isAtlas) {
+    options.family = 4;
   }
 
   mongoose.connection.removeAllListeners('connected');
@@ -95,6 +96,13 @@ const connectDB = async () => {
   } catch (err) {
     isConnected = false;
     console.error(`❌ MongoDB Connection Error: ${err.message}`);
+    if (
+      err.message.includes('SSL routines') ||
+      err.message.includes('tlsv1 alert internal error') ||
+      err.name === 'MongooseServerSelectionError'
+    ) {
+      console.error('👉 TIP: If connecting to MongoDB Atlas, ensure your current IP address (or 0.0.0.0/0) is added to the Atlas Network Access IP Access List.');
+    }
     scheduleReconnect(uri, options);
     return null;
   }

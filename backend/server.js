@@ -25,16 +25,27 @@ const PORT = process.env.PORT || 5000;
 
 app.use(helmet());
 
+const configuredOrigins = (process.env.FRONTEND_URL || '')
+  .split(',')
+  .map((url) => url.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
 const allowedOrigins = [
-  process.env.FRONTEND_URL,
+  ...configuredOrigins,
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
-].filter(Boolean);
+];
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+    if (
+      !origin ||
+      allowedOrigins.includes(origin) ||
+      origin.endsWith('.vercel.app') ||
+      origin.endsWith('.onrender.com') ||
+      process.env.NODE_ENV !== 'production'
+    ) {
       callback(null, true);
     } else {
       callback(new Error(`CORS origin ${origin} not allowed`));

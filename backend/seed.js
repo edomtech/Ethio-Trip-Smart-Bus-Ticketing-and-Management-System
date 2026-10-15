@@ -29,7 +29,11 @@ const getFutureDate = (daysAhead) => {
 
 const seed = async () => {
   try {
-    await connectDB();
+    const conn = await connectDB();
+    if (!conn) {
+      console.error('❌ Could not connect to database. Aborting seed.');
+      process.exit(1);
+    }
     console.log('🌱 Starting database seed for Ethio Trip — Smart Multi-Operator Bus Ticketing System...');
 
     await Promise.all([
@@ -164,7 +168,7 @@ const seed = async () => {
 
     const rawUsers = [
       {
-        name: 'Ethio Trip Super Admin',
+        name: 'Platform Admin',
         email: 'superadmin@ethiotrip.com',
         phone: '0911000000',
         password: 'SuperAdmin@2026',
@@ -583,7 +587,7 @@ const seed = async () => {
         entityId: superAdminUser?._id?.toString() || 'SA-01',
         details: {
           role: 'super_admin',
-          name: 'Ethio Trip Super Admin',
+          name: 'Platform Admin',
           email: 'superadmin@ethiotrip.com',
           loginTime: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
           ip: '197.156.104.2',

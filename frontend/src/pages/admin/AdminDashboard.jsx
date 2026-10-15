@@ -124,10 +124,16 @@ const AdminDashboard = () => {
     let seatsCount = 0;
 
     bookings.forEach((b) => {
-      const email = b.passenger?.email || (b.user && b.user.email);
-      const phone = b.passenger?.phone || (b.user && b.user.phone);
-      const name = b.passenger?.name || (b.user && b.user.name);
-      const key = (email || phone || b.user?._id || b.user || name || b._id)?.toString().toLowerCase().trim();
+      const isStaff = b.user?.role === 'company_staff' || b.user?.role === 'conductor' || b.user?.role === 'company_admin' || b.user?.role === 'super_admin';
+      const email = b.passenger?.email || (!isStaff && (b.user && b.user.email)) || b.contactEmail;
+      const phone = b.passenger?.phone || (!isStaff && (b.user && b.user.phone)) || b.contactPhone;
+      const name = b.passenger?.name || (!isStaff && (b.user && b.user.name));
+      const userId = (!isStaff && (b.user?._id || b.user)) ? (b.user?._id || b.user).toString() : null;
+
+      const key = (email ? email.toLowerCase().trim() : null)
+        || (phone ? phone.trim() : null)
+        || userId
+        || (name ? name.toLowerCase().trim() : null);
 
       if (key && !passengerMap.has(key)) {
         passengerMap.set(key, {
@@ -154,7 +160,7 @@ const AdminDashboard = () => {
   const totalBookingsCount = overview?.totalBookings ?? bookings.length;
   const totalPassengerCount = passengerStats.uniquePassengers > 0
     ? passengerStats.uniquePassengers
-    : (overview?.totalPassengers || users.length || passengerStats.totalSeats);
+    : (overview?.totalPassengers || users.length || 0);
   const activeBusCount = overview?.activeBuses ?? (activeBuses.length || buses.length);
   const confirmedBookingCount = overview?.bookingsBreakdown?.confirmed ?? confirmedBookings.length;
   const todayRevenueCount = overview?.todayRevenue ?? 0;
