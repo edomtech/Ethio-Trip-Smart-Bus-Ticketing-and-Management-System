@@ -54,6 +54,18 @@ app.use(cors({
   credentials: true,
 }));
 
+// Ensure active database connection across warm/cold serverless invocations
+app.use(async (req, res, next) => {
+  if (mongoose.connection.readyState !== 1) {
+    try {
+      await connectDB();
+    } catch (e) {
+      console.warn('⚠️ Serverless DB connection check failed:', e.message);
+    }
+  }
+  next();
+});
+
 app.use('/api/payments', require('./routes/chapaWebhook'));
 
 app.use(express.json({ limit: '10mb' }));
@@ -223,4 +235,6 @@ if (require.main === module) {
   startServer();
 }
 
-module.exports = { app, startServer };
+module.exports = app;
+module.exports.app = app;
+module.exports.startServer = startServer;
