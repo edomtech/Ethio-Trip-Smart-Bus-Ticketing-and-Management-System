@@ -3,11 +3,11 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://ethio-bus-backend.onrender.com/api/$1"
+      "destination": "https://ethio-trip-smart-bus-ticketing-and.onrender.com/api/$1"
     },
     {
       "source": "/health",
-      "destination": "https://ethio-bus-backend.onrender.com/health"
+      "destination": "https://ethio-trip-smart-bus-ticketing-and.onrender.com/health"
     }
   ],
   "headers": [
