@@ -48,8 +48,23 @@ const runIndexHygiene = async (conn) => {
   }
 };
 
+const sanitizeUri = (raw) => {
+  if (!raw) return raw;
+  let value = String(raw).trim();
+  if (/^MONGODB_URI\s*=/i.test(value)) {
+    value = value.replace(/^MONGODB_URI\s*=/i, '').trim();
+  }
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    value = value.slice(1, -1).trim();
+  }
+  return value;
+};
+
 const connectDB = async () => {
-  const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ethio_trip';
+  const uri = sanitizeUri(process.env.MONGODB_URI) || 'mongodb://127.0.0.1:27017/ethio_trip';
   const isAtlas = uri.startsWith('mongodb+srv://');
 
   const options = {
