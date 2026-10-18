@@ -19,33 +19,46 @@ const scheduleReconnect = (uri, options) => {
       console.log('🔄 Attempting MongoDB reconnection...');
       const conn = await mongoose.connect(uri, options);
       isConnected = true;
-      console.log(`✅ MongoDB Connected successfully: ${conn?.connection?.host || 'host'} / Database: ${conn?.connection?.name || 'db'}`);
+      console.log(`✅ MongoDB Connected successfully: ${mongoose.connection.host || 'host'} / Database: ${mongoose.connection.name || 'db'}`);
       clearInterval(reconnectTimer);
       reconnectTimer = null;
-      runIndexHygiene(conn);
+      runIndexHygiene();
     } catch (retryErr) {
       console.warn(`⏳ MongoDB reconnection attempt failed: ${retryErr.message}. Retrying in 5s...`);
     }
   }, 5000);
 };
 
-const runIndexHygiene = async (conn) => {
+const runIndexHygiene = async () => {
   try {
-    if (!conn?.connection?.db) return;
-    const bookingsColl = conn.connection.db.collection('bookings');
+    const db = mongoose.connection.db;
+    if (!db) return;
+    const bookingsColl = db.collection('bookings');
     const nulls = await bookingsColl.find({
       $or: [{ ticketNumber: null }, { ticketNumber: '' }]
     }).toArray();
     for (const b of nulls) {
       const ts = Date.now().toString().slice(-6);
       const rand = Math.floor(1000 + Math.random() * 9000);
-      await bookingsColl.updateOne({ _id: b._id }, { $set: { ticketNumber: `ETH-${ts}-${rand}` } });
+      try {
+        await bookingsColl.updateOne({ _id: b._id, ticketNumber: { $in: [null, ''] } }, { $set: { ticketNumber: `ETH-${ts}-${rand}` } });
+      } catch (e) {
+        // ignore
+      }
     }
-    const indexes = await bookingsColl.indexes();
+    const indexes = await bookingsColl.indexes().catch(() => []);
     const tktIdx = indexes.find(i => i.name === 'ticketNumber_1');
     if (tktIdx && !tktIdx.sparse) {
-      await bookingsColl.dropIndex('ticketNumber_1');
-      await bookingsColl.createIndex({ ticketNumber: 1 }, { unique: true, sparse: true });
+      try {
+        await bookingsColl.dropIndex('ticketNumber_1');
+      } catch (e) {
+        // ignore
+      }
+      try {
+        await bookingsColl.createIndex({ ticketNumber: 1 }, { unique: true, sparse: true });
+      } catch (e) {
+        // ignore
+      }
     }
   } catch (hygieneErr) {
     console.warn('Notice: Booking index check:', hygieneErr.message);
@@ -127,8 +140,8 @@ const connectDB = async () => {
     try {
       const conn = await mongoose.connect(uri, options);
       isConnected = true;
-      console.log(`✅ MongoDB Connected: ${conn?.connection?.host} / Database: ${conn?.connection?.name}`);
-      runIndexHygiene(conn);
+      console.log(`✅ MongoDB Connected: ${mongoose.connection.host || 'host'} / Database: ${mongoose.connection.name || 'db'}`);
+      runIndexHygiene();
       return conn;
     } catch (err) {
       isConnected = false;
