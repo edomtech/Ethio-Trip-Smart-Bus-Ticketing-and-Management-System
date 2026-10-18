@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
 
 let isConnected = false;
-
 let reconnectTimer = null;
+let connectPromise = null;
 
 const scheduleReconnect = (uri, options) => {
   if (reconnectTimer) return;
@@ -12,11 +12,14 @@ const scheduleReconnect = (uri, options) => {
       reconnectTimer = null;
       return;
     }
+    if (mongoose.connection.readyState === 2) {
+      return; // Connection attempt already in flight
+    }
     try {
       console.log('🔄 Attempting MongoDB reconnection...');
       const conn = await mongoose.connect(uri, options);
       isConnected = true;
-      console.log(`✅ MongoDB Connected successfully: ${conn.connection.host} / Database: ${conn.connection.name}`);
+      console.log(`✅ MongoDB Connected successfully: ${conn?.connection?.host || 'host'} / Database: ${conn?.connection?.name || 'db'}`);
       clearInterval(reconnectTimer);
       reconnectTimer = null;
       runIndexHygiene(conn);
@@ -28,6 +31,7 @@ const scheduleReconnect = (uri, options) => {
 
 const runIndexHygiene = async (conn) => {
   try {
+    if (!conn?.connection?.db) return;
     const bookingsColl = conn.connection.db.collection('bookings');
     const nulls = await bookingsColl.find({
       $or: [{ ticketNumber: null }, { ticketNumber: '' }]
@@ -64,6 +68,15 @@ const sanitizeUri = (raw) => {
 };
 
 const connectDB = async () => {
+  if (mongoose.connection.readyState === 1) {
+    isConnected = true;
+    return mongoose;
+  }
+
+  if (connectPromise) {
+    return connectPromise;
+  }
+
   const uri = sanitizeUri(process.env.MONGODB_URI) || 'mongodb://127.0.0.1:27017/ethio_trip';
   const isAtlas = uri.startsWith('mongodb+srv://');
 
@@ -84,6 +97,10 @@ const connectDB = async () => {
 
   mongoose.connection.on('connected', () => {
     isConnected = true;
+    if (reconnectTimer) {
+      clearInterval(reconnectTimer);
+      reconnectTimer = null;
+    }
   });
 
   mongoose.connection.on('disconnected', () => {
@@ -95,6 +112,10 @@ const connectDB = async () => {
   mongoose.connection.on('reconnected', () => {
     isConnected = true;
     console.log('✅ MongoDB reconnected successfully.');
+    if (reconnectTimer) {
+      clearInterval(reconnectTimer);
+      reconnectTimer = null;
+    }
   });
 
   mongoose.connection.on('error', (err) => {
@@ -102,25 +123,31 @@ const connectDB = async () => {
     console.error('❌ MongoDB connection error event:', err.message);
   });
 
-  try {
-    const conn = await mongoose.connect(uri, options);
-    isConnected = true;
-    console.log(`✅ MongoDB Connected: ${conn.connection.host} / Database: ${conn.connection.name}`);
-    runIndexHygiene(conn);
-    return conn;
-  } catch (err) {
-    isConnected = false;
-    console.error(`❌ MongoDB Connection Error: ${err.message}`);
-    if (
-      err.message.includes('SSL routines') ||
-      err.message.includes('tlsv1 alert internal error') ||
-      err.name === 'MongooseServerSelectionError'
-    ) {
-      console.error('👉 TIP: If connecting to MongoDB Atlas, ensure your current IP address (or 0.0.0.0/0) is added to the Atlas Network Access IP Access List.');
+  connectPromise = (async () => {
+    try {
+      const conn = await mongoose.connect(uri, options);
+      isConnected = true;
+      console.log(`✅ MongoDB Connected: ${conn?.connection?.host} / Database: ${conn?.connection?.name}`);
+      runIndexHygiene(conn);
+      return conn;
+    } catch (err) {
+      isConnected = false;
+      console.error(`❌ MongoDB Connection Error: ${err.message}`);
+      if (
+        err.message.includes('SSL routines') ||
+        err.message.includes('tlsv1 alert internal error') ||
+        err.name === 'MongooseServerSelectionError'
+      ) {
+        console.error('👉 TIP: If connecting to MongoDB Atlas, ensure your current IP address (or 0.0.0.0/0) is added to the Atlas Network Access IP Access List.');
+      }
+      scheduleReconnect(uri, options);
+      return null;
+    } finally {
+      connectPromise = null;
     }
-    scheduleReconnect(uri, options);
-    return null;
-  }
+  })();
+
+  return connectPromise;
 };
 
 const getIsConnected = () => isConnected && mongoose.connection.readyState === 1;

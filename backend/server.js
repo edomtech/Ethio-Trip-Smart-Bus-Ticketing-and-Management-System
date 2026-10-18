@@ -56,7 +56,7 @@ app.use(cors({
 
 // Ensure active database connection across warm/cold serverless invocations
 app.use(async (req, res, next) => {
-  if (mongoose.connection.readyState !== 1) {
+  if (mongoose.connection.readyState === 0) {
     try {
       await connectDB();
     } catch (e) {
