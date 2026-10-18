@@ -15,16 +15,6 @@ export default defineConfig({
     },
   },
   build: {
-    chunkSizeWarningLimit: 1500,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-charts': ['chart.js', 'react-chartjs-2'],
-          'vendor-pdf': ['jspdf'],
-          'vendor-icons': ['react-icons'],
-        },
-      },
-    },
+    chunkSizeWarningLimit: 2500,
   },
 })
