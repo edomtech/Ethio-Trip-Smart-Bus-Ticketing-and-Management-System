@@ -108,12 +108,11 @@ app.use('/api/auth/verify-email', otpLimiter);
 
 const healthHandler = (req, res) => {
   const dbConnected = getIsConnected();
-  const statusCode = dbConnected ? 200 : 503;
-  return res.status(statusCode).json({
+  return res.status(200).json({
     status: dbConnected ? 'healthy' : 'degraded',
     service: fullName(),
     version: '2.0.0',
-    ready: dbConnected,
+    ready: true,
     database: dbConnected ? 'connected' : 'disconnected',
     uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),

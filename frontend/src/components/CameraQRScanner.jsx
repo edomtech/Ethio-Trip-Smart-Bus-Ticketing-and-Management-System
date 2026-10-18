@@ -125,7 +125,7 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
 
   const handleDetected = (content) => {
     let clean = content.trim();
-    if (clean.startsWith('ETHIOTRIP:') || clean.startsWith('ETHIOBUS:')) {
+    if (clean.startsWith('ETHIOTRIP:')) {
       const parts = clean.split(':');
       clean = parts[1] || clean;
     } else if (clean.includes('TICKET:')) {

@@ -7,39 +7,7 @@ export const STORAGE_KEYS = Object.freeze({
 });
 
 
-const LEGACY_ALIASES = Object.freeze({
-  ethiobus_token: STORAGE_KEYS.TOKEN,
-  ethiobus_user: STORAGE_KEYS.USER,
-  ethiobus_language: STORAGE_KEYS.LANGUAGE,
-  ethiobus_theme: STORAGE_KEYS.THEME,
-});
-
-let migrated = false;
-
-
-export const migrateLegacyStorage = () => {
-  if (migrated) return;
-  if (typeof window === 'undefined') return;
-
-  try {
-    Object.entries(LEGACY_ALIASES).forEach(([legacyKey, currentKey]) => {
-      const legacyValue = window.localStorage.getItem(legacyKey);
-      if (legacyValue === null) return;
-
-      const currentValue = window.localStorage.getItem(currentKey);
-      if (currentValue === null) {
-        window.localStorage.setItem(currentKey, legacyValue);
-      }
-      window.localStorage.removeItem(legacyKey);
-    });
-  } catch {
-  }
-
-  migrated = true;
-};
-
 const readItem = (key) => {
-  migrateLegacyStorage();
   try {
     return window.localStorage.getItem(key);
   } catch {
@@ -48,7 +16,6 @@ const readItem = (key) => {
 };
 
 const writeItem = (key, value) => {
-  migrateLegacyStorage();
   try {
     window.localStorage.setItem(key, value);
   } catch {
@@ -56,7 +23,6 @@ const writeItem = (key, value) => {
 };
 
 const removeItem = (key) => {
-  migrateLegacyStorage();
   try {
     window.localStorage.removeItem(key);
   } catch {

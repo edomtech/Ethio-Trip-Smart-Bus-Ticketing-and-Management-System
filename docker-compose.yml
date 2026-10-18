@@ -5,7 +5,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: ethio_bus_backend
+    container_name: ethio_trip_backend
     restart: always
     ports:
       - "5000:5000"
@@ -21,7 +21,7 @@ services:
       dockerfile: Dockerfile
       args:
         - VITE_API_URL=/api
-    container_name: ethio_bus_frontend
+    container_name: ethio_trip_frontend
     restart: always
     ports:
       - "80:80"

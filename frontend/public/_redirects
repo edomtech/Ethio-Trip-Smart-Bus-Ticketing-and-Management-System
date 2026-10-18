@@ -1,3 +1,3 @@
-/api/*   https://ethio-trip-smart-bus-ticketing-and.onrender.com/api/:splat   200
-/health  https://ethio-trip-smart-bus-ticketing-and.onrender.com/health      200
+/api/*   https://ethio-trip-smart-bus-ticketing-and-z9dl.onrender.com/api/:splat   200
+/health  https://ethio-trip-smart-bus-ticketing-and-z9dl.onrender.com/health      200
 /*       /index.html                                                         200

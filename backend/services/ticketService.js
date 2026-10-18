@@ -170,7 +170,7 @@ const activateTicketsForBooking = async (bookingId) => {
 const validateTicketForBoarding = async (ticketIdentifier, currentUser, scheduleId) => {
   let ticketNumber = ticketIdentifier;
 
-  if (ticketIdentifier.startsWith('ETHIOTRIP:') || ticketIdentifier.startsWith('ETHIOBUS:')) {
+  if (ticketIdentifier.startsWith('ETHIOTRIP:')) {
     const parts = ticketIdentifier.split(':');
     ticketNumber = parts[1] || ticketIdentifier;
   } else if (ticketIdentifier.includes('TICKET:')) {

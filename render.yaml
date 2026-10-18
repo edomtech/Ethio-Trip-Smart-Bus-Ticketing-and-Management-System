@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: ethio-bus-backend
+    name: ethio-trip-backend
     env: node
     plan: free
     rootDir: backend
