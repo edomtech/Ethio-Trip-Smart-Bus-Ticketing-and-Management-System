@@ -70,8 +70,10 @@ const AdminRoutes = () => {
     try {
       if (modal === 'add') {
         await routeAPI.create(form);
+        notify.success(MESSAGES.route.added);
       } else {
         await routeAPI.update(modal._id, form);
+        notify.success(MESSAGES.route.updated);
       }
       setModal(null);
       load();

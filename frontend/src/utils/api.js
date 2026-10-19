@@ -1,12 +1,24 @@
 import axios from 'axios';
 import { storage, migrateLegacyStorage } from './storage';
 
+const sanitizeBaseUrl = (url) => {
+  if (!url || typeof url !== 'string') return '';
+  let cleaned = url.trim().replace(/\/+$/, '');
+  if (!cleaned) return '';
+  if (cleaned === '/api') return '/api';
+  if (!cleaned.endsWith('/api')) {
+    cleaned += '/api';
+  }
+  return cleaned;
+};
+
+const configuredUrl = sanitizeBaseUrl(import.meta.env.VITE_API_URL);
 const defaultBaseUrl = import.meta.env.DEV
   ? 'http://localhost:5000/api'
   : 'https://ethio-trip-smart-bus-ticketing-and-z9dl.onrender.com/api';
 
 const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || defaultBaseUrl,
+  baseURL: configuredUrl || defaultBaseUrl,
   headers: { 'Content-Type': 'application/json' },
 });
 

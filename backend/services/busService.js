@@ -61,15 +61,21 @@ const createBus = async (busData, user) => {
     throw err;
   }
 
-  const existingPlate = await Bus.findOne({ plateNumber: busData.plateNumber?.trim() });
-  if (existingPlate) {
-    const err = new Error('A bus with this plate number already exists');
-    err.statusCode = 400;
-    throw err;
+  const cleanPlate = busData.plateNumber ? busData.plateNumber.trim() : '';
+  if (cleanPlate) {
+    const existingPlate = await Bus.findOne({
+      plateNumber: { $regex: new RegExp(`^${cleanPlate.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}$`, 'i') },
+    });
+    if (existingPlate) {
+      const err = new Error('A bus with this plate number already exists');
+      err.statusCode = 400;
+      throw err;
+    }
   }
 
   const bus = await Bus.create({
     ...busData,
+    plateNumber: cleanPlate,
     companyId: targetCompanyId,
   });
 
@@ -91,6 +97,22 @@ const updateBus = async (busId, updateData, user) => {
   const bus = await getBusById(busId, user);
 
   delete updateData.companyId;
+
+  if (updateData.plateNumber !== undefined) {
+    const cleanPlate = updateData.plateNumber ? updateData.plateNumber.trim() : '';
+    if (cleanPlate) {
+      const existingPlate = await Bus.findOne({
+        _id: { $ne: busId },
+        plateNumber: { $regex: new RegExp(`^${cleanPlate.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}$`, 'i') },
+      });
+      if (existingPlate) {
+        const err = new Error('A bus with this plate number already exists');
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+    updateData.plateNumber = cleanPlate;
+  }
 
   Object.assign(bus, updateData);
   await bus.save();

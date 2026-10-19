@@ -102,8 +102,10 @@ const AdminSchedules = () => {
     try {
       if (modal === 'add') {
         await scheduleAPI.create(form);
+        notify.success(MESSAGES.schedule.created);
       } else {
         await scheduleAPI.update(modal._id, form);
+        notify.success(MESSAGES.schedule.updated);
       }
       setModal(null);
       load();

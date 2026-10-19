@@ -77,8 +77,10 @@ const AdminDiscounts = () => {
     try {
       if (modal === 'add') {
         await discountAPI.create(form);
+        notify.success(MESSAGES.discount?.created || MESSAGES.common.saved);
       } else {
         await discountAPI.update(modal._id, form);
+        notify.success(MESSAGES.discount?.updated || MESSAGES.common.saved);
       }
       setModal(null);
       load();

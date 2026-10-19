@@ -40,6 +40,8 @@ const AdminAgents = () => {
     setSaving(true);
     try {
       await userAPI.createStaff(form);
+      const roleName = form.role === 'conductor' ? 'Conductor' : 'Staff Agent';
+      notify.success(MESSAGES.staff.created(form.name || 'Account', roleName));
       setShowModal(false);
       setForm(EMPTY);
       load();

@@ -25,10 +25,14 @@ export const uploadToCloudinary = async (fileOrData, folder = 'general') => {
   }
 
   try {
+    let rawApi = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
+    if (rawApi && rawApi !== '/api' && !rawApi.endsWith('/api')) {
+      rawApi += '/api';
+    }
     const defaultBaseUrl = import.meta.env.DEV
       ? 'http://localhost:5000/api'
       : 'https://ethio-trip-smart-bus-ticketing-and-z9dl.onrender.com/api';
-    const apiBase = import.meta.env.VITE_API_URL || defaultBaseUrl;
+    const apiBase = rawApi || defaultBaseUrl;
     const response = await fetch(`${apiBase}/upload/image`, {
       method: 'POST',
       headers: {

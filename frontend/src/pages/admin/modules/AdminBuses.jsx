@@ -51,8 +51,10 @@ const AdminBuses = () => {
     try {
       if (modal === 'add') {
         await busAPI.create(form);
+        notify.success(MESSAGES.bus.added);
       } else {
         await busAPI.update(modal._id, form);
+        notify.success(MESSAGES.bus.updated);
       }
       setModal(null);
       load();
