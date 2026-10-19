@@ -884,7 +884,7 @@ const ConductorDashboard = () => {
                           <div>
                             <div className="text-[0.72rem] text-slate-500 font-bold">{t('agent.agentVerification', 'Counter Verification')}</div>
                             <div className="font-extrabold text-green-600 flex items-center gap-1">
-                              <FaCheckCircle /> {t('agent.verifiedBy', 'Verified by')} {validationResult.verifiedBy || t('ticket agent', 'Ticket Agent')}
+                              <FaCheckCircle /> {t('agent.verifiedBy', 'Verified by')} {validationResult.verifiedBy?.name || (typeof validationResult.verifiedBy === 'string' ? validationResult.verifiedBy : null) || t('ticket agent', 'Ticket Agent')}
                             </div>
                           </div>
 

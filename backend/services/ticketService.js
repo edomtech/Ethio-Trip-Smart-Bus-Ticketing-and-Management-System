@@ -174,12 +174,15 @@ const validateTicketForBoarding = async (ticketIdentifier, currentUser, schedule
     const parts = ticketIdentifier.split(':');
     ticketNumber = parts[1] || ticketIdentifier;
   } else if (ticketIdentifier.includes('TICKET:')) {
-    const match = ticketIdentifier.match(/TICKET:\s*([^\s\n\r]+)/i);
+    const match = ticketIdentifier.match(/TICKET:\s*([^\s\n\r|;]+)/i);
     if (match) ticketNumber = match[1];
+  } else if (ticketIdentifier.includes('ticket=')) {
+    const match = ticketIdentifier.match(/ticket=([^&\s]+)/i);
+    if (match) ticketNumber = decodeURIComponent(match[1]);
   } else {
     try {
       const parsed = JSON.parse(ticketIdentifier);
-      ticketNumber = parsed.tkt || ticketIdentifier;
+      ticketNumber = parsed.ticketNumber || parsed.tkt || parsed.ticket || ticketIdentifier;
     } catch {
       ticketNumber = ticketIdentifier;
     }
@@ -198,12 +201,40 @@ const validateTicketForBoarding = async (ticketIdentifier, currentUser, schedule
     ticketQuery.companyId = userComp;
   }
 
-  const ticket = await Ticket.findOne(ticketQuery)
+  let ticket = await Ticket.findOne(ticketQuery)
     .populate('companyId', 'companyName logo')
     .populate('user', 'name email phone')
     .populate({ path: 'schedule', populate: ['bus', 'route', 'assignedConductor'] })
     .populate('booking')
-    .populate('boardedBy', 'name email');
+    .populate('boardedBy', 'name email')
+    .populate('verifiedBy', 'name email role');
+
+  if (!ticket) {
+    const mongoose = require('mongoose');
+    const isId = mongoose.Types.ObjectId.isValid(ticketNumber.trim());
+    const booking = await Booking.findOne({
+      $or: [
+        { ticketNumber: ticketNumber.trim() },
+        ...(isId ? [{ _id: ticketNumber.trim() }] : []),
+      ],
+    })
+      .populate('companyId')
+      .populate({ path: 'schedule', populate: ['bus', 'route', 'companyId'] })
+      .populate({ path: 'outboundLeg.schedule', populate: ['bus', 'route', 'companyId'] });
+
+    if (booking && (booking.status === 'confirmed' || booking.paymentStatus === 'paid')) {
+      const generated = await generateTicketsForBooking(booking, 'VERIFIED');
+      if (generated && generated.length > 0) {
+        ticket = await Ticket.findById(generated[0]._id)
+          .populate('companyId', 'companyName logo')
+          .populate('user', 'name email phone')
+          .populate({ path: 'schedule', populate: ['bus', 'route', 'assignedConductor'] })
+          .populate('booking')
+          .populate('boardedBy', 'name email')
+          .populate('verifiedBy', 'name email role');
+      }
+    }
+  }
 
   if (!ticket) {
     return {
