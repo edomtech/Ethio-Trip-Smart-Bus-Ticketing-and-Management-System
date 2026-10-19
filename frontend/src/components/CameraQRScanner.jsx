@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FaCamera, FaTimes, FaRedo, FaUpload, FaSearch, FaExclamationTriangle } from 'react-icons/fa';
 import { toast } from 'react-toastify';
-import jsQR from 'jsqr';
+import { Html5Qrcode } from 'html5-qrcode';
 
 const playBeep = () => {
   try {
@@ -10,14 +10,13 @@ const playBeep = () => {
     const gain = ctx.createGain();
     osc.type = 'sine';
     osc.frequency.setValueAtTime(880, ctx.currentTime);
-    gain.gain.setValueAtTime(0.18, ctx.currentTime);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + 0.15);
-  } catch {
-  }
+  } catch {}
 };
 
 const extractTicketNumber = (content) => {
@@ -57,12 +56,11 @@ const extractTicketNumber = (content) => {
   return clean;
 };
 
+const READER_ID = 'ethiotrip-html5-qr-reader';
+
 const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const streamRef = useRef(null);
-  const animFrameId = useRef(null);
-  const scanningActive = useRef(false);
+  const scannerRef = useRef(null);
+  const isRunningRef = useRef(false);
 
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState('');
@@ -70,114 +68,92 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
   const [manualInput, setManualInput] = useState('');
   const [analyzingImage, setAnalyzingImage] = useState(false);
 
-  useEffect(() => {
-    startCamera();
-    return () => {
-      stopCamera();
-    };
-  }, [facingMode]);
-
-  const startCamera = async () => {
-    stopCamera();
-    setCameraError('');
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setCameraError('Camera access is not supported in this browser. Please use manual code entry or upload an image.');
-        return;
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: facingMode },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      });
-
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.setAttribute('playsinline', 'true');
-        await videoRef.current.play();
-        setCameraActive(true);
-        scanningActive.current = true;
-        startScanningFrames();
-      }
-    } catch (err) {
-      console.warn('Camera start error:', err);
-      setCameraActive(false);
-      scanningActive.current = false;
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setCameraError('Camera permission was denied. Please allow camera access in your browser or enter ticket code manually.');
-      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        setCameraError('No camera found on this device. You can enter the ticket number or upload a photo.');
-      } else {
-        setCameraError('Unable to access camera. You can manually enter the ticket code below.');
-      }
+  const handleDetected = (rawText) => {
+    const ticketNo = extractTicketNumber(rawText);
+    playBeep();
+    toast.success(`Ticket scanned: ${ticketNo}`);
+    if (onScan) {
+      onScan(ticketNo);
     }
   };
 
-  const stopCamera = () => {
-    scanningActive.current = false;
-    if (animFrameId.current) {
-      cancelAnimationFrame(animFrameId.current);
-      animFrameId.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
+  const stopScanner = async () => {
+    if (scannerRef.current && isRunningRef.current) {
+      try {
+        await scannerRef.current.stop();
+      } catch (e) {
+        console.warn('Error stopping scanner:', e);
+      }
+      isRunningRef.current = false;
     }
     setCameraActive(false);
   };
 
-  const startScanningFrames = () => {
-    const scanLoop = () => {
-      if (!scanningActive.current) return;
+  const startScanner = async () => {
+    setCameraError('');
+    await stopScanner();
 
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
+    try {
+      const container = document.getElementById(READER_ID);
+      if (!container) return;
 
-      if (video && canvas && video.readyState >= 2) {
-        const width = video.videoWidth || 640;
-        const height = video.videoHeight || 480;
-
-        if (width > 0 && height > 0) {
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d', { willReadFrequently: true });
-          if (ctx) {
-            ctx.drawImage(video, 0, 0, width, height);
-            const imageData = ctx.getImageData(0, 0, width, height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height, {
-              inversionAttempts: 'attemptBoth',
-            });
-
-            if (code && code.data && code.data.trim()) {
-              scanningActive.current = false;
-              playBeep();
-              handleDetected(code.data.trim());
-              return;
-            }
-          }
-        }
+      if (!scannerRef.current) {
+        scannerRef.current = new Html5Qrcode(READER_ID, { verbose: false });
       }
 
-      animFrameId.current = requestAnimationFrame(scanLoop);
-    };
+      const config = {
+        fps: 10,
+        qrbox: (viewfinderWidth, viewfinderHeight) => {
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          const boxSize = Math.max(180, Math.floor(minEdge * 0.72));
+          return { width: boxSize, height: boxSize };
+        },
+        aspectRatio: 1.0,
+      };
 
-    animFrameId.current = requestAnimationFrame(scanLoop);
+      await scannerRef.current.start(
+        { facingMode: { ideal: facingMode } },
+        config,
+        (decodedText) => {
+          stopScanner();
+          handleDetected(decodedText);
+        },
+        () => {
+          // Frame read callback (no QR detected in this frame, ignore)
+        }
+      );
+
+      isRunningRef.current = true;
+      setCameraActive(true);
+    } catch (err) {
+      console.warn('Camera start failure:', err);
+      isRunningRef.current = false;
+      setCameraActive(false);
+
+      if (err?.name === 'NotAllowedError' || String(err).includes('NotAllowedError')) {
+        setCameraError('Camera permission was denied. Please allow camera access in your browser or enter ticket number below.');
+      } else if (err?.name === 'NotFoundError' || String(err).includes('NotFoundError')) {
+        setCameraError('No camera found on this device. You can enter the ticket number or upload a photo.');
+      } else {
+        setCameraError('Unable to start camera. You can manually enter the ticket number or upload an image.');
+      }
+    }
   };
 
-  const handleDetected = (rawContent) => {
-    const cleanTicketNumber = extractTicketNumber(rawContent);
-    toast.success(`Ticket scanned: ${cleanTicketNumber}`);
-    if (onScan) {
-      onScan(cleanTicketNumber);
-    }
+  useEffect(() => {
+    // Start camera on mount
+    const timer = setTimeout(() => {
+      startScanner();
+    }, 150);
+
+    return () => {
+      clearTimeout(timer);
+      stopScanner();
+    };
+  }, [facingMode]);
+
+  const toggleCameraFacing = () => {
+    setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
   };
 
   const handleManualSubmit = (e) => {
@@ -186,8 +162,7 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
       toast.warning('Please enter a ticket number');
       return;
     }
-    const clean = extractTicketNumber(manualInput.trim());
-    handleDetected(clean);
+    handleDetected(manualInput.trim());
   };
 
   const handleFileUpload = async (e) => {
@@ -196,40 +171,21 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
 
     setAnalyzingImage(true);
     try {
-      const img = new Image();
-      const reader = new FileReader();
+      let scanner = scannerRef.current;
+      if (!scanner) {
+        scanner = new Html5Qrcode(READER_ID, { verbose: false });
+        scannerRef.current = scanner;
+      }
 
-      reader.onload = (event) => {
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.naturalWidth || img.width;
-          canvas.height = img.naturalHeight || img.height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0);
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: 'attemptBoth',
-          });
-
-          if (code && code.data && code.data.trim()) {
-            playBeep();
-            handleDetected(code.data.trim());
-          } else {
-            toast.warning('No QR code detected in this photo. Please enter the ticket number below.');
-          }
-          setAnalyzingImage(false);
-        };
-        img.src = event.target.result;
-      };
-      reader.readAsDataURL(file);
+      const decodedText = await scanner.scanFile(file, true);
+      handleDetected(decodedText);
     } catch (err) {
-      toast.error('Could not process QR image');
+      console.warn('File QR parse error:', err);
+      toast.warning('No QR code detected in this photo. Please enter the ticket number below.');
+    } finally {
       setAnalyzingImage(false);
+      e.target.value = '';
     }
-  };
-
-  const toggleCameraFacing = () => {
-    setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
   };
 
   return (
@@ -255,50 +211,24 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
         )}
       </div>
 
-      {/* Video Viewport */}
-      <div className="relative w-full max-w-[340px] h-56 mx-auto mb-3.5 bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center shadow-inner">
-        <video
-          ref={videoRef}
-          className={`w-full h-full object-cover ${cameraActive ? 'block' : 'hidden'}`}
-          muted
-          playsInline
-        />
-
-        <canvas ref={canvasRef} className="hidden" />
-
-        {cameraActive && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-40 h-40 border-2 border-indigo-500/80 rounded-2xl relative shadow-[0_0_0_9999px_rgba(15,23,42,0.55),0_0_15px_rgba(99,102,241,0.4)]">
-              {/* Laser animation */}
-              <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-sky-400 shadow-[0_0_8px_#22c55e] animate-pulse" />
-
-              {/* Corner brackets */}
-              <div className="absolute -top-0.5 -left-0.5 w-5 h-5 border-t-[3.5px] border-l-[3.5px] border-emerald-400 rounded-tl-lg" />
-              <div className="absolute -top-0.5 -right-0.5 w-5 h-5 border-t-[3.5px] border-r-[3.5px] border-emerald-400 rounded-tr-lg" />
-              <div className="absolute -bottom-0.5 -left-0.5 w-5 h-5 border-b-[3.5px] border-l-[3.5px] border-emerald-400 rounded-bl-lg" />
-              <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 border-b-[3.5px] border-r-[3.5px] border-emerald-400 rounded-br-lg" />
-            </div>
-
-            <div className="absolute bottom-2 text-white text-[11px] font-bold bg-black/70 px-3 py-0.5 rounded-full backdrop-blur-xs">
-              Align QR code inside target box
-            </div>
-          </div>
-        )}
+      {/* Video Viewport Container */}
+      <div className="relative w-full max-w-[340px] h-64 mx-auto mb-3.5 bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center shadow-inner">
+        <div id={READER_ID} className="w-full h-full" />
 
         {!cameraActive && (
-          <div className="text-center p-4 text-slate-300 max-w-[300px]">
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center bg-slate-950/90 text-slate-300">
             <div className={`w-11 h-11 rounded-full bg-white/10 flex items-center justify-center mx-auto mb-2 text-xl ${cameraError ? 'text-red-400' : 'text-indigo-400'}`}>
               {cameraError ? <FaExclamationTriangle /> : <FaCamera />}
             </div>
             <div className="font-extrabold text-sm text-white mb-1">
-              {cameraError ? 'Camera Notice' : 'Camera Ready'}
+              {cameraError ? 'Camera Notice' : 'Scanner Inactive'}
             </div>
-            <div className="text-xs text-slate-400 mb-3 leading-snug">
-              {cameraError || 'Click below to start live camera scanning.'}
+            <div className="text-xs text-slate-400 mb-3 leading-snug max-w-[280px]">
+              {cameraError || 'Click below to turn on the camera.'}
             </div>
             <button
               type="button"
-              onClick={startCamera}
+              onClick={startScanner}
               className="py-2 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs cursor-pointer shadow-md shadow-indigo-600/25 transition border-none"
             >
               Start Camera
@@ -307,13 +237,13 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
         )}
       </div>
 
-      {/* Camera Controls */}
+      {/* Controls */}
       <div className="flex gap-2 flex-wrap mb-3">
         {cameraActive ? (
           <>
             <button
               type="button"
-              onClick={stopCamera}
+              onClick={stopScanner}
               className="flex-1 py-2 px-3 bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-xl font-bold text-xs cursor-pointer transition border-none"
             >
               Pause Camera
@@ -321,23 +251,23 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
             <button
               type="button"
               onClick={toggleCameraFacing}
-              className="py-2 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer transition"
+              className="py-2 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition"
             >
-              <FaRedo /> Switch Camera ({facingMode === 'environment' ? 'Back' : 'Front'})
+              <FaRedo /> Switch ({facingMode === 'environment' ? 'Back' : 'Front'})
             </button>
           </>
         ) : (
           <button
             type="button"
-            onClick={startCamera}
+            onClick={startScanner}
             className="flex-1 py-2.5 px-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition border-none"
           >
             <FaCamera /> Turn On Camera
           </button>
         )}
 
-        <label className="py-2 px-3 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer transition">
-          <FaUpload /> {analyzingImage ? 'Reading...' : 'Scan Photo'}
+        <label className="py-2 px-3 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
+          <FaUpload /> {analyzingImage ? 'Scanning...' : 'Scan Photo'}
           <input
             type="file"
             accept="image/*"
@@ -353,7 +283,7 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
           type="text"
           value={manualInput}
           onChange={(e) => setManualInput(e.target.value)}
-          placeholder="Or type Ticket Number..."
+          placeholder="Or type Ticket Number (e.g. TKT-...)"
           className="flex-1 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-mono"
         />
         <button
