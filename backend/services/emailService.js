@@ -6,6 +6,15 @@ if (typeof dns.setDefaultResultOrder === 'function') {
 const path = require('path');
 const dotenv = require('dotenv');
 const { PLATFORM } = require('../constants/branding');
+let cachedGmailIpv4 = '142.250.110.108';
+try {
+  dns.resolve4('smtp.gmail.com', (err, addrs) => {
+    if (!err && addrs && addrs.length > 0) {
+      cachedGmailIpv4 = addrs[0];
+    }
+  });
+} catch (e) {}
+
 
 
 const normalizeAddress = (value) => {
@@ -46,11 +55,10 @@ const createTransporter = () => {
 
   if (host === 'smtp.gmail.com' || (user && user.endsWith('@gmail.com'))) {
     return nodemailer.createTransport({
-      host: 'smtp.gmail.com',
+      host: cachedGmailIpv4 || 'smtp.gmail.com',
       port: 587,
       secure: false,
-      family: 4,
-      lookup: (hostname, options, callback) => dns.lookup(hostname, { family: 4 }, callback),
+      servername: 'smtp.gmail.com',
       connectionTimeout: 10000,
       greetingTimeout: 10000,
       socketTimeout: 10000,
@@ -59,6 +67,7 @@ const createTransporter = () => {
         pass,
       },
       tls: {
+        servername: 'smtp.gmail.com',
         rejectUnauthorized: false,
       },
     });
