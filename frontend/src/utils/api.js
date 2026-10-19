@@ -1,8 +1,12 @@
 import axios from 'axios';
 import { storage, migrateLegacyStorage } from './storage';
 
+const defaultBaseUrl = import.meta.env.DEV
+  ? 'http://localhost:5000/api'
+  : 'https://ethio-trip-smart-bus-ticketing-and-z9dl.onrender.com/api';
+
 const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: import.meta.env.VITE_API_URL || defaultBaseUrl,
   headers: { 'Content-Type': 'application/json' },
 });
 

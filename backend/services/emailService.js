@@ -46,6 +46,9 @@ const createTransporter = () => {
       port: 465,
       secure: true,
       family: 4,
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+      socketTimeout: 5000,
       auth: {
         user,
         pass,
@@ -62,6 +65,9 @@ const createTransporter = () => {
     port,
     secure,
     family: 4,
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 5000,
     auth: {
       user,
       pass,

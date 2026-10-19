@@ -18,8 +18,9 @@ const VerifyEmailPage = () => {
   const emailFromState = location.state?.email || user?.email || '';
   const newlyRegistered = location.state?.newlyRegistered || false;
 
+  const devOtp = location.state?.devOtp || '';
   const [email, setEmail] = useState(emailFromState);
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [otp, setOtp] = useState(devOtp && devOtp.length === 6 ? devOtp.split('') : ['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [error, setError] = useState('');

@@ -86,18 +86,26 @@ const PassengerRegister = () => {
 
     setLoading(true);
     try {
-      await authAPI.register({
+      const res = await authAPI.register({
         name: formData.name.trim(),
         email: formData.email.trim(),
         phone: formData.phone,
         nationalId: formData.nationalId.trim(),
         password: formData.password
       });
-      notify.success(MESSAGES.registration.verificationSent);
+      if (res?.devOtp) {
+        notify.info({
+          title: 'Verification Code',
+          description: res.message || `Your verification code is ${res.devOtp}`,
+        });
+      } else {
+        notify.success(MESSAGES.registration.verificationSent);
+      }
       navigate('/verify-email', {
         state: {
           email: formData.email.trim(),
           newlyRegistered: true,
+          devOtp: res?.devOtp,
         }
       });
     } catch (err) {

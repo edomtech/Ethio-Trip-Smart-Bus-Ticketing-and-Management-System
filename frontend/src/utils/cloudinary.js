@@ -25,8 +25,11 @@ export const uploadToCloudinary = async (fileOrData, folder = 'general') => {
   }
 
   try {
-    const token = storage.getToken();
-    const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/upload/image`, {
+    const defaultBaseUrl = import.meta.env.DEV
+      ? 'http://localhost:5000/api'
+      : 'https://ethio-trip-smart-bus-ticketing-and-z9dl.onrender.com/api';
+    const apiBase = import.meta.env.VITE_API_URL || defaultBaseUrl;
+    const response = await fetch(`${apiBase}/upload/image`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
