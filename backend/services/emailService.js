@@ -1,4 +1,8 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
 const path = require('path');
 const dotenv = require('dotenv');
 const { PLATFORM } = require('../constants/branding');
@@ -46,6 +50,7 @@ const createTransporter = () => {
       port: 587,
       secure: false,
       family: 4,
+      lookup: (hostname, options, callback) => dns.lookup(hostname, { family: 4 }, callback),
       connectionTimeout: 10000,
       greetingTimeout: 10000,
       socketTimeout: 10000,
@@ -68,6 +73,7 @@ const createTransporter = () => {
     port,
     secure,
     family: 4,
+    lookup: (hostname, options, callback) => dns.lookup(hostname, { family: 4 }, callback),
     connectionTimeout: 5000,
     greetingTimeout: 5000,
     socketTimeout: 5000,
