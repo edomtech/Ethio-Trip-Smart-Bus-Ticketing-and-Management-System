@@ -84,15 +84,22 @@ const conductorValidateTicket = async (req, res, next) => {
     const identifier = qrData || ticketNumber;
 
     if (!identifier) {
-      return res.status(400).json({ message: 'Ticket number or QR code content is required.' });
+      return res.status(400).json({ success: false, message: 'Ticket number or QR code content is required.' });
     }
 
     const result = await ticketService.validateTicketForBoarding(identifier, req.user, scheduleId);
-    if (!result.valid) {
-      return res.status(result.status === 'NOT_FOUND' ? 404 : 400).json(result);
+
+    // NOT_VERIFIED_BY_AGENT returns 200 so the conductor UI can still render the
+    // matched passenger details alongside the "counter verification required" notice.
+    if (!result.valid && result.status === 'NOT_VERIFIED_BY_AGENT') {
+      return res.status(200).json({ success: false, ...result });
     }
 
-    res.json(result);
+    if (!result.valid) {
+      return res.status(result.status === 'NOT_FOUND' ? 404 : 400).json({ success: false, ...result });
+    }
+
+    res.json({ success: true, ...result });
   } catch (err) {
     next(err);
   }
@@ -108,6 +115,9 @@ const conductorConfirmBoarding = async (req, res, next) => {
       ticket,
     });
   } catch (err) {
+    if (err.code === 'NOT_VERIFIED_BY_AGENT') {
+      return res.status(403).json({ success: false, code: err.code, message: err.message });
+    }
     next(err);
   }
 };

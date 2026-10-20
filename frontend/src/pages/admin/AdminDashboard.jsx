@@ -665,6 +665,7 @@ const AdminDashboard = () => {
           {activeTab === 'discounts' && <AdminDiscounts />}
           {activeTab === 'conductor_reports' && <AdminConductorReports />}
           {activeTab === 'reports' && <GenerateReports />}
+          {activeTab === 'support' && <CustomerSupport />}
           {activeTab === 'profile' && <AdminProfile />}
         </div>
       </main>

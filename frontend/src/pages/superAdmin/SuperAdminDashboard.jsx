@@ -132,7 +132,7 @@ const SuperAdminDashboard = () => {
     try {
       setLoading(true);
       const [compRes, auditRes, settingsRes, supportRes, repRes] = await Promise.all([
-        companyAPI.getAll().catch(() => ({ companies: [] })),
+        companyAPI.getAllCompanies().catch(() => ({ companies: [] })),
         auditAPI.getLogs().catch(() => ({ logs: [] })),
         platformSettingAPI.getSettings().catch(() => ({ settings: null })),
         supportAPI.getAll().catch(() => []),
@@ -305,12 +305,7 @@ const SuperAdminDashboard = () => {
   const handleApproveCompany = async (company) => {
     try {
       await companyAPI.updateCompanyStatus(company._id || company.id, 'active', 'Platform Admin Approved');
-      await notificationAPI.sendPassengerEmail({
-        email: company.adminEmail || company.email,
-        subject: 'Ethio Trip — Company Registration Approved! 🎉',
-        message: `Dear ${company.adminName || company.companyName} Admin,\n\nYour bus company registration for "${company.companyName}" has been successfully approved by Ethio Trip Platform Admin.\n\nYou can now log in using your registered admin email (${company.adminEmail || company.email}) to manage your fleet, add buses, define routes, and set travel schedules.\n\nWelcome to Ethio Trip platform!`,
-      }).catch(() => {});
-      notify.success(`🎉 Approved "${company.companyName}"! Notification email sent.`);
+      notify.success(`🎉 Approved "${company.companyName}"! The company admin has been notified by email.`);
       fetchData();
     } catch (err) {
       notify.error(err.message || 'Failed to approve company');
@@ -323,12 +318,7 @@ const SuperAdminDashboard = () => {
 
     try {
       await companyAPI.updateCompanyStatus(company._id || company.id, 'rejected', reason);
-      await notificationAPI.sendPassengerEmail({
-        email: company.adminEmail || company.email,
-        subject: 'Ethio Trip — Company Registration Update',
-        message: `Dear ${company.adminName || company.companyName} Admin,\n\nWe regret to inform you that your bus company registration for "${company.companyName}" has been rejected by Ethio Trip Platform Admin.\n\nReason: ${reason || 'Contact support for details.'}\n\nThank you,\nEthio Trip Team`,
-      }).catch(() => {});
-      notify.success(`Company "${company.companyName}" rejected.`);
+      notify.success(`Company "${company.companyName}" rejected. The company admin has been notified by email.`);
       fetchData();
     } catch (err) {
       notify.error(err.message || 'Failed to reject company');
@@ -363,6 +353,7 @@ const SuperAdminDashboard = () => {
             enabled: isCBE,
             accountNumber: isCBE ? editingCompany.cbeAccountNumber : '',
           },
+          chapa: editingCompany.paymentMethods?.chapa || { enabled: false, apiKey: '' },
         },
       };
 

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   registerCompany,
+  registerCompanyPublic,
   getCompanies,
   getActiveCompanies,
   getCompanyById,
@@ -12,6 +13,10 @@ const {
 const { protect, authorize, requireCompanyAccess } = require('../middleware/auth');
 
 router.get('/active', getActiveCompanies);
+
+// Public self-registration from the marketing site. The company is always
+// created in "pending" status and only a super admin can approve it.
+router.post('/register-public', registerCompanyPublic);
 
 router.use(protect);
 

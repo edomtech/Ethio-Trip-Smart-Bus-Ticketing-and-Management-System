@@ -44,12 +44,13 @@ const DataTable = ({
     });
   }, [data, activeSearch, isControlled]);
 
-  const totalPages = pageSize > 0 ? Math.ceil(filteredData.length / pageSize) : 1;
+  const totalPages = Math.max(1, pageSize > 0 ? Math.ceil(filteredData.length / pageSize) : 1);
+  const safePage = Math.min(currentPage, totalPages);
   const paginatedData = useMemo(() => {
     if (pageSize <= 0) return filteredData;
-    const start = (currentPage - 1) * pageSize;
+    const start = (safePage - 1) * pageSize;
     return filteredData.slice(start, start + pageSize);
-  }, [filteredData, currentPage, pageSize]);
+  }, [filteredData, safePage, pageSize]);
 
   return (
     <div className="w-full space-y-3">
@@ -138,24 +139,24 @@ const DataTable = ({
         {!loading && filteredData.length > 0 && pageSize > 0 && totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-[#1e352b] text-xs text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-900/40">
             <div>
-              {t('showing', 'Showing')} {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, filteredData.length)} / {filteredData.length}
+              {t('showing', 'Showing')} {(safePage - 1) * pageSize + 1} - {Math.min(safePage * pageSize, filteredData.length)} / {filteredData.length}
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                disabled={currentPage === 1}
+                disabled={safePage === 1}
                 className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
                 <FaChevronLeft className="text-[10px]" />
               </button>
               <span className="font-semibold text-slate-700 dark:text-slate-200">
-                {currentPage} / {totalPages}
+                {safePage} / {totalPages}
               </span>
               <button
                 type="button"
                 onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-                disabled={currentPage === totalPages}
+                disabled={safePage === totalPages}
                 className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
                 <FaChevronRight className="text-[10px]" />

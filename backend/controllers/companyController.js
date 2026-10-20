@@ -13,6 +13,23 @@ const registerCompany = async (req, res, next) => {
   }
 };
 
+const registerCompanyPublic = async (req, res, next) => {
+  try {
+    const result = await companyService.createCompanyBySuperAdmin(
+      { ...req.body, status: 'pending' },
+      null
+    );
+    res.status(201).json({
+      success: true,
+      message:
+        'Registration received! Your company account has been created and is pending approval from the platform administrator. You will receive an email once approved.',
+      ...result,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 const getCompanies = async (req, res, next) => {
   try {
     const companies = await companyService.getCompaniesList(req.query);
@@ -90,6 +107,7 @@ const getMyCompany = async (req, res, next) => {
 
 module.exports = {
   registerCompany,
+  registerCompanyPublic,
   getCompanies,
   getActiveCompanies,
   getCompanyById,

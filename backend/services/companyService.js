@@ -122,6 +122,26 @@ const createCompanyBySuperAdmin = async (companyData, superAdminUser) => {
     }).catch(() => {});
   }
 
+  if (!superAdminUser && company.status === 'pending') {
+    const { sendRawEmail, escapeHtml } = require('./emailService');
+    const { PLATFORM } = require('../constants/branding');
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #1e293b;">
+        <h2 style="color: #059669;">${PLATFORM.NAME} — Registration Received</h2>
+        <p>Hello <strong>${escapeHtml(adminUser.name)}</strong>,</p>
+        <p>We have received the registration for <strong>${escapeHtml(company.companyName)}</strong>.</p>
+        <p>Your account is <strong>pending approval</strong> from the platform administrator. You will receive an email as soon as it is approved.</p>
+        <p>Thank you,<br>${PLATFORM.NAME}</p>
+      </div>`;
+    sendRawEmail(
+      adminUser.email,
+      `${PLATFORM.NAME} — Company Registration Received`,
+      `Hello ${adminUser.name},\n\nWe have received the registration for "${company.companyName}".\n\nYour account is pending approval from the platform administrator. You will receive an email as soon as it is approved.\n\nThank you,\n${PLATFORM.NAME}`,
+      html,
+      'Company registration received'
+    ).catch(() => {});
+  }
+
   return { company, adminUser: adminUser.toJSON() };
 };
 
@@ -260,11 +280,29 @@ const updateCompanyProfile = async (companyId, updateData, adminUser) => {
     'cancellationPolicy',
   ];
 
+  const originalPaymentMethods =
+    company.paymentMethods?.toObject?.() || company.paymentMethods || {};
+
   allowedFields.forEach((field) => {
+    if (field === 'paymentMethods') return;
     if (updateData[field] !== undefined) {
       company[field] = updateData[field];
     }
   });
+
+  // Merge payment methods per-provider so a partial edit cannot silently wipe
+  // the settings of a provider that was omitted from the payload.
+  if (updateData.paymentMethods && typeof updateData.paymentMethods === 'object') {
+    const merged = { ...originalPaymentMethods };
+    for (const [provider, value] of Object.entries(updateData.paymentMethods)) {
+      if (value && typeof value === 'object') {
+        merged[provider] = { ...(merged[provider]?.toObject?.() || merged[provider] || {}), ...value };
+      } else {
+        merged[provider] = value;
+      }
+    }
+    company.paymentMethods = merged;
+  }
 
   if (!isSuper && updateData.status !== undefined && updateData.status !== company.status) {
     const err = new Error('Only a platform super admin can change your company approval status.');

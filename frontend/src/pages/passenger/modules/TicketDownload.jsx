@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { FaDownload, FaTicketAlt, FaBus, FaCalendarAlt, FaUser, FaMapMarkerAlt, FaPrint, FaTrash } from 'react-icons/fa';
 import { QRCodeSVG } from 'qrcode.react';
 import jsPDF from 'jspdf';
-import { bookingAPI } from '../../../utils/api';
+import { bookingAPI, ticketAPI } from '../../../utils/api';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useTranslation } from '../../../i18n';
 import { useNotification } from '../../../contexts/NotificationContext';
@@ -61,6 +61,23 @@ const TicketDownload = ({ bookings: initialBookings = null, onViewTicket = null,
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [activeLeg, setActiveLeg] = useState('outbound');  
+  const [issuedTickets, setIssuedTickets] = useState({ id: null, tickets: [] });
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!selected?._id) {
+      return () => { isMounted = false; };
+    }
+    ticketAPI
+      .getByBooking(selected._id)
+      .then((res) => {
+        if (isMounted) {
+          setIssuedTickets({ id: selected._id, tickets: Array.isArray(res?.tickets) ? res.tickets : [] });
+        }
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, [selected?._id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -219,7 +236,17 @@ const TicketDownload = ({ bookings: initialBookings = null, onViewTicket = null,
 
   const outboundTicketNo = selected?.outboundTicketNumber || (selected?.ticketNumber && !selected?.ticketNumber.endsWith('-RET') ? selected?.ticketNumber : (selected?.ticketNumber || 'ETH-685335-89'));
   const returnTicketNo = selected?.returnTicketNumber || (outboundTicketNo.includes('-RET') ? outboundTicketNo : `${outboundTicketNo}-RET`);
-  const currentTicketNo = isOutbound ? outboundTicketNo : returnTicketNo;
+  const fallbackTicketNo = isOutbound ? outboundTicketNo : returnTicketNo;
+
+  const legForTicket = isOutbound ? 'outbound' : 'return';
+  const seatListForTicket = (Array.isArray(legSeats) ? legSeats : [legSeats]).map((s) => String(s));
+  const issuedForLeg = (issuedTickets.id === selected?._id ? issuedTickets.tickets : [])
+    .filter((tk) => tk.legType === 'oneway' || tk.legType === legForTicket);
+  const primaryIssued =
+    issuedForLeg.find((tk) => seatListForTicket.includes(String(tk.seatNumber))) || issuedForLeg[0] || null;
+
+  const currentTicketNo = primaryIssued?.ticketNumber || fallbackTicketNo;
+  const qrSeat = primaryIssued?.seatNumber || seat;
 
   const totalPrice = selected?.totalPrice || selected?.baseFare || 700;
   const outboundPrice = selected?.outboundLeg?.price || (isRoundTrip ? Math.round(totalPrice / 2) : totalPrice);
@@ -253,7 +280,7 @@ const TicketDownload = ({ bookings: initialBookings = null, onViewTicket = null,
     `OPERATOR: ${operatorName}`,
     `ROUTE: ${routeFrom} -> ${routeTo}`,
     `BUS: ${busType} (${busNumber})`,
-    `SEAT: ${seat}`,
+    `SEAT: ${qrSeat}`,
     `DATE: ${formattedDate}`,
     `TIME: ${depTime}`,
     `FARE: ${currentPrice} ETB`,

@@ -28,6 +28,20 @@ const getSchedules = async (user, queryParams = {}) => {
     query.status = { $ne: 'cancelled' };
   }
 
+  const from = queryParams.from ? String(queryParams.from).trim() : '';
+  const to = queryParams.to ? String(queryParams.to).trim() : '';
+  const exactDate = queryParams.date ? String(queryParams.date).trim() : '';
+
+  if (exactDate) {
+    query.date = exactDate;
+  }
+
+  const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const filters = [];
+  if (from) filters.push({ 'route.from': { $regex: escapeRegex(from), $options: 'i' } });
+  if (to) filters.push({ 'route.to': { $regex: escapeRegex(to), $options: 'i' } });
+  if (filters.length > 0) query.$and = filters;
+
   return Schedule.find(query)
     .populate('bus')
     .populate('route')
@@ -170,7 +184,20 @@ const createSchedule = async (scheduleData, user) => {
     throw err;
   }
 
-  const { bus: busId, route: routeId, date, departureTime, arrivalTime, price, assignedConductor } = scheduleData;
+  const {
+    bus: busIdRaw,
+    route: routeIdRaw,
+    busId: busIdAlias,
+    routeId: routeIdAlias,
+    date,
+    departureTime,
+    arrivalTime,
+    price,
+    assignedConductor,
+  } = scheduleData;
+
+  const busId = busIdRaw || busIdAlias;
+  const routeId = routeIdRaw || routeIdAlias;
 
   const todayStr = new Date().toISOString().split('T')[0];
   if (date && date < todayStr) {
@@ -179,17 +206,17 @@ const createSchedule = async (scheduleData, user) => {
     throw err;
   }
 
-  const bus = await Bus.findOne({ _id: busId, companyId });
+  const bus = busId ? await Bus.findOne({ _id: busId, companyId }) : null;
   if (!bus) {
-    const err = new Error('Bus not found or does not belong to your company');
-    err.statusCode = 404;
+    const err = new Error(busId ? 'Bus not found or does not belong to your company' : 'Please select a bus for this schedule');
+    err.statusCode = busId ? 404 : 400;
     throw err;
   }
 
-  const route = await Route.findOne({ _id: routeId, companyId });
+  const route = routeId ? await Route.findOne({ _id: routeId, companyId }) : null;
   if (!route) {
-    const err = new Error('Route not found or does not belong to your company');
-    err.statusCode = 404;
+    const err = new Error(routeId ? 'Route not found or does not belong to your company' : 'Please select a route for this schedule');
+    err.statusCode = routeId ? 404 : 400;
     throw err;
   }
 
@@ -241,6 +268,12 @@ const updateSchedule = async (scheduleId, updateData, user) => {
   delete updateData.companyId;
   delete updateData.bookedSeats;
   delete updateData.availableSeats;
+
+  if (updateData.busId && !updateData.bus) updateData.bus = updateData.busId;
+  if (updateData.routeId && !updateData.route) updateData.route = updateData.routeId;
+  delete updateData.busId;
+  delete updateData.routeId;
+  delete updateData.tripId;
 
   const changingTripShape =
     (updateData.bus && updateData.bus.toString() !== String(schedule.bus?._id || schedule.bus)) ||

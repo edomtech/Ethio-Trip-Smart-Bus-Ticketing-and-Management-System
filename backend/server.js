@@ -15,6 +15,7 @@ const { getIsConnected } = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
 const { CANONICAL_ROLES } = require('./constants/roles');
 const { PLATFORM, fullName } = require('./constants/branding');
+const emailService = require('./services/emailService');
 
 dotenv.config();
 
@@ -112,12 +113,19 @@ app.use('/api/auth/verify-email', otpLimiter);
 
 const healthHandler = (req, res) => {
   const dbConnected = getIsConnected();
+  let email;
+  try {
+    email = emailService.getSmtpStatus();
+  } catch (e) {
+    email = { configured: false, provider: null, host: null, port: null };
+  }
   return res.status(200).json({
     status: dbConnected ? 'healthy' : 'degraded',
     service: fullName(),
     version: '2.0.0',
     ready: true,
     database: dbConnected ? 'connected' : 'disconnected',
+    email,
     uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
     roles: CANONICAL_ROLES,

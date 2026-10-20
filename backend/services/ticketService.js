@@ -167,39 +167,148 @@ const activateTicketsForBooking = async (bookingId) => {
 };
 
 
-const validateTicketForBoarding = async (ticketIdentifier, currentUser, scheduleId) => {
-  let ticketNumber = ticketIdentifier;
+const parseQrPayload = (rawPayload) => {
+  const raw = String(rawPayload || '').trim();
+  const result = { ticketNumber: raw, bookingRef: '', leg: '', seat: '' };
 
-  if (ticketIdentifier.startsWith('ETHIOTRIP:')) {
-    const parts = ticketIdentifier.split(':');
-    ticketNumber = parts[1] || ticketIdentifier;
-  } else if (ticketIdentifier.includes('TICKET:')) {
-    const match = ticketIdentifier.match(/TICKET:\s*([^\s\n\r|;]+)/i);
-    if (match) ticketNumber = match[1];
-  } else if (ticketIdentifier.includes('ticket=')) {
-    const match = ticketIdentifier.match(/ticket=([^&\s]+)/i);
-    if (match) ticketNumber = decodeURIComponent(match[1]);
-  } else {
+  if (!raw) return result;
+
+  if (raw.startsWith('{')) {
     try {
-      const parsed = JSON.parse(ticketIdentifier);
-      ticketNumber = parsed.ticketNumber || parsed.tkt || parsed.ticket || ticketIdentifier;
+      const parsed = JSON.parse(raw);
+      result.ticketNumber =
+        parsed.ticketNumber || parsed.tkt || parsed.ticket || parsed.ticketNo || raw;
+      result.bookingRef =
+        parsed.bookingReference || parsed.bookingRef || parsed.booking || parsed.ref || '';
+      result.leg = String(parsed.legType || parsed.leg || '').toLowerCase();
+      result.seat = parsed.seatNumber ? String(parsed.seatNumber) : (parsed.seat ? String(parsed.seat) : '');
+      return result;
     } catch {
-      ticketNumber = ticketIdentifier;
+      /* fall through to text parsing */
     }
   }
 
-  const ticketQuery = { ticketNumber: ticketNumber.trim() };
-  if (currentUser?.role !== 'super_admin') {
-    const userComp = currentUser?.companyId?._id?.toString() || currentUser?.companyId?.toString() || null;
-    if (!userComp) {
-      return {
-        valid: false,
-        status: 'WRONG_COMPANY',
-        message: 'Your account is not assigned to a transport company, so it cannot validate tickets.',
-      };
-    }
-    ticketQuery.companyId = userComp;
+  if (raw.startsWith('ETHIOTRIP:')) {
+    const parts = raw.split(':');
+    result.ticketNumber = parts[1] || raw;
+    if (parts[3]) result.seat = String(parts[3]).trim();
+    return result;
   }
+
+  const ticketMatch = raw.match(/TICKET:\s*([^\s\n\r|;]+)/i);
+  if (ticketMatch && ticketMatch[1]) result.ticketNumber = ticketMatch[1].trim();
+
+  const legMatch = raw.match(/LEG:\s*([A-Za-z]+)/i);
+  if (legMatch && legMatch[1]) {
+    const leg = legMatch[1].trim().toLowerCase();
+    result.leg = leg.startsWith('ret') ? 'return' : leg.startsWith('out') ? 'outbound' : leg;
+  }
+
+  const seatMatch = raw.match(/SEAT:\s*([^\n\r|;]+)/i);
+  if (seatMatch && seatMatch[1]) result.seat = seatMatch[1].trim().split(/[\s,]+/)[0];
+
+  const urlMatch = raw.match(/ticket=([^&\s]+)/i);
+  if (!ticketMatch && urlMatch && urlMatch[1]) {
+    result.ticketNumber = decodeURIComponent(urlMatch[1]).trim();
+  }
+
+  return result;
+};
+
+const populateTicketRelations = (ticketId) =>
+  Ticket.findById(ticketId)
+    .populate('companyId', 'companyName logo')
+    .populate('user', 'name email phone')
+    .populate({ path: 'schedule', populate: ['bus', 'route', 'assignedConductor'] })
+    .populate('booking')
+    .populate('boardedBy', 'name email')
+    .populate('verifiedBy', 'name email role');
+
+const resolveTicketFromBooking = async (bookingRef, { leg, seat, scheduleId, userComp }) => {
+  if (!bookingRef) return null;
+
+  const mongoose = require('mongoose');
+  const ref = String(bookingRef).trim();
+  const isId = mongoose.Types.ObjectId.isValid(ref);
+
+  const booking = await Booking.findOne({
+    $or: [
+      { ticketNumber: ref },
+      ...(isId ? [{ _id: ref }] : []),
+    ],
+  });
+
+  if (!booking) return null;
+
+  if (userComp) {
+    const bComp = booking.companyId?._id?.toString() || booking.companyId?.toString() || null;
+    if (!bComp || bComp !== userComp) return null;
+  }
+
+  let tickets = await Ticket.find({ booking: booking._id });
+
+  if (tickets.length === 0) {
+    if (booking.status !== BOOKING_STATUS.CONFIRMED && booking.paymentStatus !== PAYMENT_STATUS.PAID) {
+      return null;
+    }
+    tickets = await generateTicketsForBooking(booking, 'PENDING');
+  }
+
+  if (!tickets || tickets.length === 0) return null;
+
+  const normalizedLeg = leg === 'return' || leg === 'ret' ? 'return' : leg === 'outbound' || leg === 'out' ? 'outbound' : '';
+  const normalizedSeat = seat ? String(seat).trim().split(/[\s,]+/)[0] : '';
+
+  const candidates = tickets.filter((t) => {
+    if (normalizedSeat && String(t.seatNumber) !== normalizedSeat) return false;
+    if (normalizedLeg && t.legType !== 'oneway' && t.legType !== normalizedLeg) return false;
+    return true;
+  });
+
+  let pool = candidates.length > 0 ? candidates : tickets;
+
+  if (scheduleId) {
+    const tripMatch = pool.filter((t) => String(t.schedule?._id || t.schedule) === String(scheduleId));
+    if (tripMatch.length > 0) pool = tripMatch;
+  }
+
+  if (normalizedLeg) {
+    const legMatch = pool.filter((t) => t.legType === normalizedLeg || t.legType === 'oneway');
+    if (legMatch.length > 0) pool = legMatch;
+  }
+
+  const chosen = pool[0];
+  return populateTicketRelations(chosen._id);
+};
+
+const validateTicketForBoarding = async (ticketIdentifier, currentUser, scheduleId) => {
+  const parsed = parseQrPayload(ticketIdentifier);
+  const ticketNumber = String(parsed.ticketNumber || '').trim();
+  const bookingRef = String(parsed.bookingRef || '').trim();
+
+  if (!ticketNumber && !bookingRef) {
+    return {
+      valid: false,
+      status: 'NOT_FOUND',
+      message: 'Ticket not found.',
+    };
+  }
+
+  const userComp =
+    currentUser?.role === 'super_admin'
+      ? null
+      : currentUser?.companyId?._id?.toString() || currentUser?.companyId?.toString() || null;
+
+  if (currentUser?.role !== 'super_admin' && !userComp) {
+    return {
+      valid: false,
+      status: 'WRONG_COMPANY',
+      message: 'Your account is not assigned to a transport company, so it cannot validate tickets.',
+    };
+  }
+
+  const ticketQuery = { ticketNumber };
+  if (userComp) ticketQuery.companyId = userComp;
 
   let ticket = await Ticket.findOne(ticketQuery)
     .populate('companyId', 'companyName logo')
@@ -209,31 +318,22 @@ const validateTicketForBoarding = async (ticketIdentifier, currentUser, schedule
     .populate('boardedBy', 'name email')
     .populate('verifiedBy', 'name email role');
 
-  if (!ticket) {
-    const mongoose = require('mongoose');
-    const isId = mongoose.Types.ObjectId.isValid(ticketNumber.trim());
-    const booking = await Booking.findOne({
-      $or: [
-        { ticketNumber: ticketNumber.trim() },
-        ...(isId ? [{ _id: ticketNumber.trim() }] : []),
-      ],
-    })
-      .populate('companyId')
-      .populate({ path: 'schedule', populate: ['bus', 'route', 'companyId'] })
-      .populate({ path: 'outboundLeg.schedule', populate: ['bus', 'route', 'companyId'] });
+  if (!ticket && ticketNumber !== bookingRef) {
+    ticket = await resolveTicketFromBooking(bookingRef || ticketNumber, {
+      leg: parsed.leg,
+      seat: parsed.seat,
+      scheduleId,
+      userComp,
+    });
+  }
 
-    if (booking && (booking.status === 'confirmed' || booking.paymentStatus === 'paid')) {
-      const generated = await generateTicketsForBooking(booking, 'VERIFIED');
-      if (generated && generated.length > 0) {
-        ticket = await Ticket.findById(generated[0]._id)
-          .populate('companyId', 'companyName logo')
-          .populate('user', 'name email phone')
-          .populate({ path: 'schedule', populate: ['bus', 'route', 'assignedConductor'] })
-          .populate('booking')
-          .populate('boardedBy', 'name email')
-          .populate('verifiedBy', 'name email role');
-      }
-    }
+  if (!ticket && !ticketNumber.startsWith('TKT-')) {
+    ticket = await resolveTicketFromBooking(ticketNumber, {
+      leg: parsed.leg,
+      seat: parsed.seat,
+      scheduleId,
+      userComp,
+    });
   }
 
   if (!ticket) {
@@ -245,7 +345,6 @@ const validateTicketForBoarding = async (ticketIdentifier, currentUser, schedule
   }
 
   if (currentUser?.role !== 'super_admin') {
-    const userComp = currentUser?.companyId?._id?.toString() || currentUser?.companyId?.toString() || null;
     const tktComp = ticket.companyId?._id?.toString() || ticket.companyId?.toString() || null;
     if (!userComp || !tktComp || userComp !== tktComp) {
       return {
@@ -320,6 +419,27 @@ const validateTicketForBoarding = async (ticketIdentifier, currentUser, schedule
     };
   }
 
+  if (ticket.verificationStatus === 'REJECTED' || ticket.verificationStatus === 'INVALID') {
+    return {
+      valid: false,
+      status: 'TICKET_REJECTED',
+      message: ticket.rejectionReason
+        ? `This ticket was rejected by station staff: ${ticket.rejectionReason}`
+        : 'This ticket was rejected by station staff and cannot be used for boarding.',
+      ticket,
+    };
+  }
+
+  if (ticket.verificationStatus !== 'VERIFIED') {
+    return {
+      valid: false,
+      status: 'NOT_VERIFIED_BY_AGENT',
+      message:
+        'This ticket is paid but has not yet been verified by a counter agent. The passenger must be verified at the station counter before boarding.',
+      ticket,
+    };
+  }
+
   return {
     valid: true,
     status: 'VALID_TICKET',
@@ -350,6 +470,15 @@ const confirmPassengerBoarding = async (ticketId, ticketNumber, conductorUser) =
   if (ticket.status !== TICKET_STATUS.ACTIVE) {
     const err = new Error(`Ticket cannot be boarded in status: ${ticket.status}`);
     err.statusCode = 400;
+    throw err;
+  }
+
+  if (ticket.verificationStatus !== 'VERIFIED') {
+    const err = new Error(
+      'Boarding refused: this ticket has not been verified by a counter agent. Please send the passenger to the ticket counter.'
+    );
+    err.statusCode = 403;
+    err.code = 'NOT_VERIFIED_BY_AGENT';
     throw err;
   }
 
@@ -425,8 +554,7 @@ const getTripManifest = async (scheduleId, user) => {
 
   for (const b of relatedBookings) {
     try {
-      const defaultStatus = b.paymentStatus === PAYMENT_STATUS.PAID ? 'VERIFIED' : 'PENDING';
-      await generateTicketsForBooking(b, defaultStatus);
+      await generateTicketsForBooking(b, 'PENDING');
     } catch (err) {
       console.error('Error generating tickets for trip manifest:', err.message);
     }
@@ -435,6 +563,7 @@ const getTripManifest = async (scheduleId, user) => {
   return Ticket.find({ schedule: scheduleId, status: { $ne: TICKET_STATUS.CANCELLED } })
     .populate('user', 'name email phone')
     .populate('boardedBy', 'name email')
+    .populate('verifiedBy', 'name email role')
     .populate('booking')
     .sort({ seatNumber: 1 });
 };
@@ -462,9 +591,23 @@ const getTicketsByBooking = async (bookingId, user) => {
   const { assertBookingAccess } = require('./bookingService');
   assertBookingAccess(booking, user);
 
-  const tickets = await Ticket.find({ booking: bookingId })
+  let tickets = await Ticket.find({ booking: bookingId })
     .populate('companyId', 'companyName logo')
     .populate({ path: 'schedule', populate: ['bus', 'route'] });
+
+  if (
+    tickets.length === 0 &&
+    (booking.status === BOOKING_STATUS.CONFIRMED || booking.paymentStatus === PAYMENT_STATUS.PAID)
+  ) {
+    try {
+      await generateTicketsForBooking(booking, 'PENDING');
+      tickets = await Ticket.find({ booking: bookingId })
+        .populate('companyId', 'companyName logo')
+        .populate({ path: 'schedule', populate: ['bus', 'route'] });
+    } catch (err) {
+      console.error('Error generating tickets for booking view:', err.message);
+    }
+  }
 
   return { booking, tickets };
 };
@@ -472,6 +615,7 @@ const getTicketsByBooking = async (bookingId, user) => {
 module.exports = {
   generateTicketsForBooking,
   activateTicketsForBooking,
+  parseQrPayload,
   validateTicketForBoarding,
   confirmPassengerBoarding,
   getTripManifest,

@@ -129,7 +129,6 @@ const ConductorDashboard = () => {
     let query = ticketQuery;
     if (typeof customCodeOrEvent === 'string') {
       query = customCodeOrEvent;
-      setTicketQuery(customCodeOrEvent);
     } else if (customCodeOrEvent?.preventDefault) {
       customCodeOrEvent.preventDefault();
     }
@@ -145,19 +144,25 @@ const ConductorDashboard = () => {
     setValidationError('');
     setBoardingSuccess('');
 
-    let cleanCode = query.trim();
+    const rawPayload = query.trim();
+
+    let cleanCode = rawPayload;
     if (cleanCode.includes('TICKET:')) {
       const match = cleanCode.match(/TICKET:\s*([^\s\n]+)/);
       if (match && match[1]) cleanCode = match[1];
     } else if (cleanCode.includes('ETHIOTRIP:')) {
       const parts = cleanCode.split(':');
       if (parts[1]) cleanCode = parts[1];
+    } else if (cleanCode.includes('ticket=')) {
+      const match = cleanCode.match(/ticket=([^&\s]+)/);
+      if (match && match[1]) cleanCode = decodeURIComponent(match[1]);
     }
+    setTicketQuery(cleanCode);
 
     try {
       const res = await ticketAPI.conductorValidate({
         ticketNumber: cleanCode,
-        qrData: query.trim(),
+        qrData: rawPayload,
         scheduleId: selectedTrip?._id,
       });
 
@@ -165,14 +170,14 @@ const ConductorDashboard = () => {
         setValidationResult(res.ticket);
         setValidationError('');
         toast.success(`✅ ${t('ticket.verified', 'Ticket verified for')} ${res.ticket.passengerName} (${t('booking.seat', 'Seat')} ${res.ticket.seatNumber})`);
+      } else if (res.status === 'NOT_VERIFIED_BY_AGENT') {
+        setValidationResult(res.ticket || null);
+        setValidationError('');
+        toast.warning(`⚠️ ${t('conductor.requiresAgentVerification', 'Ticket requires counter verification by an Agent before boarding.')}`);
       } else {
         setValidationResult(res.ticket || null);
         setValidationError(res.message || t('conductor.invalidForBoarding', 'Ticket is not valid for boarding'));
-        if (res.status === 'NOT_VERIFIED_BY_AGENT') {
-          toast.warning(`⚠️ ${t('conductor.requiresAgentVerification', 'Ticket requires counter verification by an Agent before boarding.')}`);
-        } else {
-          toast.error(res.message || t('conductor.validationFailed', 'Validation failed'));
-        }
+        toast.error(res.message || t('conductor.validationFailed', 'Validation failed'));
       }
     } catch (err) {
       setValidationError(err.message || t('conductor.invalidTicketOrQR', 'Invalid Ticket / Unrecognized QR Code'));
@@ -884,7 +889,7 @@ const ConductorDashboard = () => {
                           <div>
                             <div className="text-[0.72rem] text-slate-500 font-bold">{t('agent.agentVerification', 'Counter Verification')}</div>
                             <div className="font-extrabold text-green-600 flex items-center gap-1">
-                              <FaCheckCircle /> {t('agent.verifiedBy', 'Verified by')} {validationResult.verifiedBy?.name || (typeof validationResult.verifiedBy === 'string' ? validationResult.verifiedBy : null) || t('ticket agent', 'Ticket Agent')}
+                              <FaCheckCircle /> {t('agent.verifiedBy', 'Verified by')} {validationResult.verifiedBy?.name || (typeof validationResult.verifiedBy === 'string' ? validationResult.verifiedBy : null) || t('ticket agent', 'Counter Agent')}{validationResult.verifiedAt ? ` · ${new Date(validationResult.verifiedAt).toLocaleTimeString()}` : ''}
                             </div>
                           </div>
 

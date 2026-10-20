@@ -73,19 +73,31 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
     playBeep();
     toast.success(`Ticket scanned: ${ticketNo}`);
     if (onScan) {
-      onScan(ticketNo);
+      // Pass the FULL raw payload so the backend can also read LEG / SEAT lines.
+      onScan(rawText);
     }
   };
 
-  const stopScanner = async () => {
-    if (scannerRef.current && isRunningRef.current) {
+  const stopScanner = async ({ removeDom = false } = {}) => {
+    const scanner = scannerRef.current;
+    if (scanner && isRunningRef.current) {
       try {
-        await scannerRef.current.stop();
+        await scanner.stop();
       } catch (e) {
         console.warn('Error stopping scanner:', e);
       }
       isRunningRef.current = false;
     }
+
+    if (removeDom && scanner) {
+      try {
+        scanner.clear();
+      } catch (e) {
+        console.warn('Error clearing scanner DOM:', e);
+      }
+      scannerRef.current = null;
+    }
+
     setCameraActive(false);
   };
 
@@ -97,9 +109,16 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
       const container = document.getElementById(READER_ID);
       if (!container) return;
 
-      if (!scannerRef.current) {
-        scannerRef.current = new Html5Qrcode(READER_ID, { verbose: false });
+      // Always rebuild on a clean container to avoid "element already has a child".
+      if (scannerRef.current) {
+        try {
+          scannerRef.current.clear();
+        } catch {}
+        scannerRef.current = null;
       }
+      container.innerHTML = '';
+
+      scannerRef.current = new Html5Qrcode(READER_ID, { verbose: false });
 
       const config = {
         fps: 10,
@@ -115,7 +134,6 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
         { facingMode: { ideal: facingMode } },
         config,
         (decodedText) => {
-          stopScanner();
           handleDetected(decodedText);
         },
         () => {
@@ -148,7 +166,7 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
 
     return () => {
       clearTimeout(timer);
-      stopScanner();
+      stopScanner({ removeDom: true });
     };
   }, [facingMode]);
 
@@ -171,8 +189,13 @@ const CameraQRScanner = ({ onScan, onClose, isScanning, activeSchedule }) => {
 
     setAnalyzingImage(true);
     try {
+      // scanFile() refuses to run while the live camera stream is active.
+      await stopScanner();
+
       let scanner = scannerRef.current;
       if (!scanner) {
+        const container = document.getElementById(READER_ID);
+        if (container) container.innerHTML = '';
         scanner = new Html5Qrcode(READER_ID, { verbose: false });
         scannerRef.current = scanner;
       }

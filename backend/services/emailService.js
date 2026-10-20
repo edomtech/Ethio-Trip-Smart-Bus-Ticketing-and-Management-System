@@ -6,14 +6,29 @@ if (typeof dns.setDefaultResultOrder === 'function') {
 const path = require('path');
 const dotenv = require('dotenv');
 const { PLATFORM } = require('../constants/branding');
-let cachedGmailIpv4 = '142.250.110.108';
-try {
-  dns.resolve4('smtp.gmail.com', (err, addrs) => {
-    if (!err && addrs && addrs.length > 0) {
-      cachedGmailIpv4 = addrs[0];
-    }
-  });
-} catch (e) {}
+
+const GMAIL_HOST = 'smtp.gmail.com';
+const GMAIL_SEED_IPV4S = ['142.250.110.108', '142.250.196.108'];
+const gmailIpv4s = GMAIL_SEED_IPV4S.slice();
+const GMAIL_CACHE_TTL_MS = 60 * 60 * 1000;
+let gmailResolvedAt = 0;
+
+const refreshGmailIpv4s = () => {
+  const now = Date.now();
+  if (now - gmailResolvedAt < GMAIL_CACHE_TTL_MS) return;
+  gmailResolvedAt = now;
+  try {
+    dns.resolve4(GMAIL_HOST, (err, addrs) => {
+      if (!err && Array.isArray(addrs) && addrs.length > 0) {
+        gmailIpv4s.length = 0;
+        addrs.forEach((addr) => {
+          if (addr && !gmailIpv4s.includes(addr)) gmailIpv4s.push(addr);
+        });
+      }
+    });
+  } catch (e) {}
+};
+refreshGmailIpv4s();
 
 
 
@@ -39,7 +54,7 @@ const normalizeRecipient = (value) => {
 };
 
 
-const createTransporter = () => {
+const readSmtpConfig = () => {
   dotenv.config({ path: path.join(__dirname, '../.env'), override: true });
 
   const host = process.env.SMTP_HOST;
@@ -48,52 +63,134 @@ const createTransporter = () => {
   const rawPass = process.env.SMTP_PASS;
   const pass = rawPass ? rawPass.replace(/\s+/g, '') : '';
   const secure = process.env.SMTP_SECURE === 'true' || port === 465;
+  const isGmail = host === GMAIL_HOST || (user && user.endsWith('@gmail.com'));
 
-  if (!user || !pass) {
-    return null;
-  }
-
-  if (host === 'smtp.gmail.com' || (user && user.endsWith('@gmail.com'))) {
-    return nodemailer.createTransport({
-      host: cachedGmailIpv4 || 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      servername: 'smtp.gmail.com',
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 10000,
-      auth: {
-        user,
-        pass,
-      },
-      tls: {
-        servername: 'smtp.gmail.com',
-        rejectUnauthorized: false,
-      },
-    });
-  }
-
-  if (!host) {
-    return null;
-  }
-
-  return nodemailer.createTransport({
+  return {
     host,
     port,
+    user,
+    pass,
     secure,
+    isGmail: !!isGmail,
+    configured: !!(user && pass),
+  };
+};
+
+const buildGmailTransport = (cfg, target) =>
+  nodemailer.createTransport({
+    host: target || GMAIL_HOST,
+    port: 587,
+    secure: false,
+    servername: GMAIL_HOST,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
+    auth: { user: cfg.user, pass: cfg.pass },
+    tls: { servername: GMAIL_HOST, rejectUnauthorized: false },
+  });
+
+const buildDirectTransport = (cfg) =>
+  nodemailer.createTransport({
+    host: cfg.host,
+    port: cfg.port,
+    secure: cfg.secure,
     family: 4,
     lookup: (hostname, options, callback) => dns.lookup(hostname, { family: 4 }, callback),
-    connectionTimeout: 5000,
-    greetingTimeout: 5000,
-    socketTimeout: 5000,
-    auth: {
-      user,
-      pass,
-    },
-    tls: {
-      rejectUnauthorized: false,
-    },
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 8000,
+    auth: { user: cfg.user, pass: cfg.pass },
+    tls: { rejectUnauthorized: false },
   });
+
+const buildHostnameTransport = (cfg) =>
+  nodemailer.createTransport({
+    host: cfg.host,
+    port: cfg.port,
+    secure: cfg.secure,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
+    auth: { user: cfg.user, pass: cfg.pass },
+    tls: { rejectUnauthorized: false },
+  });
+
+const createTransporter = () => {
+  const cfg = readSmtpConfig();
+
+  if (!cfg.configured) {
+    return null;
+  }
+
+  if (cfg.isGmail) {
+    return buildGmailTransport(cfg, gmailIpv4s[0] || GMAIL_HOST);
+  }
+
+  if (!cfg.host) {
+    return null;
+  }
+
+  return buildDirectTransport(cfg);
+};
+
+const FATAL_MAIL_CODES = ['EAUTH', 'EENVELOPE', 'EMISSINGAUTH', 'EINVALIDRECIPIENT'];
+
+const createTransportCandidates = () => {
+  const cfg = readSmtpConfig();
+  if (!cfg.configured) return [];
+
+  if (cfg.isGmail) {
+    refreshGmailIpv4s();
+    const targets = gmailIpv4s.slice(0, 4);
+    if (!targets.includes(GMAIL_HOST)) targets.push(GMAIL_HOST);
+    return targets.map((target) => buildGmailTransport(cfg, target));
+  }
+
+  if (!cfg.host) return [];
+  return [buildDirectTransport(cfg), buildHostnameTransport(cfg)];
+};
+
+const sendMailResilient = async (mailOptions, logLabel) => {
+  const overridden =
+    typeof module.exports.createTransporter === 'function' &&
+    module.exports.createTransporter !== createTransporter;
+
+  if (overridden) {
+    const transporter = module.exports.createTransporter();
+    if (!transporter) return { configured: false, reason: 'SMTP_NOT_CONFIGURED' };
+    return { configured: true, info: await transporter.sendMail(mailOptions) };
+  }
+
+  const candidates = createTransportCandidates();
+  if (!candidates.length) return { configured: false, reason: 'SMTP_NOT_CONFIGURED' };
+
+  let lastErr = null;
+  for (let i = 0; i < candidates.length; i += 1) {
+    try {
+      const info = await candidates[i].sendMail(mailOptions);
+      if (i > 0) console.warn(`[EMAIL] ${logLabel} delivered on fallback route #${i + 1}.`);
+      return { configured: true, info, route: i };
+    } catch (err) {
+      lastErr = err;
+      if (FATAL_MAIL_CODES.includes(err.code)) throw err;
+      if (i < candidates.length - 1) {
+        console.warn(
+          `[EMAIL] ${logLabel} route #${i + 1} failed (${err.code || err.message}). Retrying on next route.`
+        );
+      }
+    }
+  }
+  throw lastErr;
+};
+
+const getSmtpStatus = () => {
+  const cfg = readSmtpConfig();
+  return {
+    configured: cfg.configured,
+    provider: cfg.isGmail ? 'gmail' : cfg.host || null,
+    host: cfg.host || (cfg.isGmail ? GMAIL_HOST : null),
+    port: cfg.port,
+  };
 };
 
 
@@ -109,19 +206,9 @@ const sendOtpEmail = async (to, otp, recipientName = 'Passenger') => {
     };
   }
 
-  const transporter = (module.exports.createTransporter || createTransporter)();
   const smtpUser = normalizeAddress(process.env.SMTP_USER);
   const fromAddress = buildFromAddress(smtpUser);
   const safeName = String(recipientName || 'Passenger').trim();
-
-  if (!transporter) {
-    console.warn(`[EmailService] ⚠️ SMTP credentials not fully configured in environment. Delivery to ${recipient} cancelled.`);
-    return {
-      sent: false,
-      reason: 'SMTP_NOT_CONFIGURED',
-      message: 'SMTP credentials missing in environment (.env). Configure SMTP_USER and SMTP_PASS.',
-    };
-  }
 
   const senderEmail = normalizeAddress(process.env.EMAIL_FROM) || smtpUser || PLATFORM.FALLBACK_SENDER;
 
@@ -163,19 +250,33 @@ const sendOtpEmail = async (to, otp, recipientName = 'Passenger') => {
 
   console.log(`[EmailService] 📤 Sending "${PLATFORM.NAME}" verification code to passenger: ${recipient}`);
   try {
-    const info = await transporter.sendMail({
-      from: fromAddress,
-      replyTo: smtpUser || fromAddress,
-      to: recipient,
-      subject: `${PLATFORM.NAME} — Email Verification Code`,
-      text: plainText,
-      html: htmlContent,
-      headers: {
-        'X-Priority': '1',
-        'X-MSMail-Priority': 'High',
-        'Importance': 'high',
+    const result = await sendMailResilient(
+      {
+        from: fromAddress,
+        replyTo: smtpUser || fromAddress,
+        to: recipient,
+        subject: `${PLATFORM.NAME} — Email Verification Code`,
+        text: plainText,
+        html: htmlContent,
+        headers: {
+          'X-Priority': '1',
+          'X-MSMail-Priority': 'High',
+          'Importance': 'high',
+        },
       },
-    });
+      'OTP email'
+    );
+
+    if (!result.configured) {
+      console.warn(`[EmailService] ⚠️ SMTP credentials not fully configured in environment. Delivery to ${recipient} cancelled.`);
+      return {
+        sent: false,
+        reason: 'SMTP_NOT_CONFIGURED',
+        message: 'SMTP credentials missing in environment (.env). Configure SMTP_USER and SMTP_PASS.',
+      };
+    }
+
+    const info = result.info;
     console.log(`[EmailService] ✅ Mail server accepted the message for ${recipient}. MessageId: ${info.messageId} (acceptance is not a delivery guarantee — the mailbox must exist)`);
     return {
       sent: true,
@@ -232,12 +333,6 @@ const sendRawEmail = async (to, subject, text, html, logLabel) => {
   }
 
   const safeSubject = stripControlChars(subject).slice(0, 180) || PLATFORM.NAME;
-  const transporter = (module.exports.createTransporter || createTransporter)();
-
-  if (!transporter) {
-    console.error(`[EMAIL] ${logLabel} failed - SMTP is not configured in the backend .env (SMTP_USER / SMTP_PASS missing).`);
-    return { sent: false, reason: 'SMTP_NOT_CONFIGURED' };
-  }
 
   const smtpUser = normalizeAddress(process.env.SMTP_USER);
   const senderEmail = normalizeAddress(process.env.EMAIL_FROM) || smtpUser || PLATFORM.FALLBACK_SENDER;
@@ -246,14 +341,24 @@ const sendRawEmail = async (to, subject, text, html, logLabel) => {
   console.log(`[EmailService] Recipient: ${recipient}`);
 
   try {
-    const info = await transporter.sendMail({
-      from: fromAddress,
-      replyTo: smtpUser || fromAddress,
-      to: recipient,
-      subject: safeSubject,
-      text,
-      html,
-    });
+    const result = await sendMailResilient(
+      {
+        from: fromAddress,
+        replyTo: smtpUser || fromAddress,
+        to: recipient,
+        subject: safeSubject,
+        text,
+        html,
+      },
+      logLabel
+    );
+
+    if (!result.configured) {
+      console.error(`[EMAIL] ${logLabel} failed - SMTP is not configured in the backend .env (SMTP_USER / SMTP_PASS missing).`);
+      return { sent: false, reason: 'SMTP_NOT_CONFIGURED' };
+    }
+
+    const info = result.info;
     console.log(`[EMAIL] ${logLabel} sent to ${recipient} (messageId: ${info.messageId})`);
     return { sent: true, recipient, messageId: info.messageId };
   } catch (sendErr) {
@@ -689,6 +794,10 @@ const sendRefundPaymentMethodQuery = async (to, passengerName, refundAmount, com
 
 module.exports = {
   createTransporter,
+  getSmtpStatus,
+  sendRawEmail,
+  emailShell,
+  detailRow,
   sendOtpEmail,
   verifySmtpConnection,
   sendBookingConfirmation,

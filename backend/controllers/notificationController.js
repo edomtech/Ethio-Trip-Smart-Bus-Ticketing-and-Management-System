@@ -52,7 +52,8 @@ const clearAllNotifications = async (req, res, next) => {
 
 const sendPassengerEmail = async (req, res, next) => {
   try {
-    const { passengerEmail, subject, message, bookingRef } = req.body;
+    const { passengerEmail: passengerEmailRaw, email: emailAlias, subject, message, bookingRef } = req.body;
+    const passengerEmail = passengerEmailRaw || emailAlias;
 
     if (!passengerEmail || !message) {
       return res.status(400).json({ success: false, message: 'passengerEmail and message are required.' });

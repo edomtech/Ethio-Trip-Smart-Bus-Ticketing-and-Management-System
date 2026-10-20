@@ -340,7 +340,7 @@ const CounterBooking = () => {
           ) : (
             <div className="grid grid-cols-1 gap-4">
               {schedules.map(sch => {
-                const cap = sch.bus?.totalSeats || 45;
+                const cap = sch.bus?.capacity || sch.bus?.totalSeats || 45;
                 const booked = (sch.bookedSeats || []).length;
                 const left = Math.max(0, cap - booked);
                 const pct = Math.min(100, Math.round((booked / cap) * 100));

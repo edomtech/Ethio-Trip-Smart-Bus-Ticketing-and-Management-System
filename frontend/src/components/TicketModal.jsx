@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaTimes, FaDownload, FaPrint, FaTicketAlt } from 'react-icons/fa';
 import { QRCodeSVG } from 'qrcode.react';
 import jsPDF from 'jspdf';
 import { toast } from 'react-toastify';
 import { useTranslation } from '../i18n';
+import { ticketAPI } from '../utils/api';
 
 const convertSvgToPng = (svgEl) => {
   return new Promise((resolve) => {
@@ -33,6 +34,21 @@ const convertSvgToPng = (svgEl) => {
 const TicketModal = ({ booking, onClose }) => {
   const { t } = useTranslation();
   const [activeLeg, setActiveLeg] = useState('outbound');  
+  const [issuedTickets, setIssuedTickets] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!booking?._id) return undefined;
+    ticketAPI
+      .getByBooking(booking._id)
+      .then((res) => {
+        if (!cancelled) setIssuedTickets(Array.isArray(res?.tickets) ? res.tickets : []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [booking?._id]);
 
   if (!booking) return null;
 
@@ -149,7 +165,16 @@ const TicketModal = ({ booking, onClose }) => {
 
   const outboundTicketNo = booking.outboundTicketNumber || (booking.ticketNumber && !booking.ticketNumber.endsWith('-RET') ? booking.ticketNumber : ticketNumber);
   const returnTicketNo = booking.returnTicketNumber || (outboundTicketNo.includes('-RET') ? outboundTicketNo : `${outboundTicketNo}-RET`);
-  const currentTicketNo = isOutbound ? outboundTicketNo : returnTicketNo;
+  const fallbackTicketNo = isOutbound ? outboundTicketNo : returnTicketNo;
+
+  const legForTicket = isOutbound ? 'outbound' : 'return';
+  const seatListForTicket = (Array.isArray(legSeats) ? legSeats : [legSeats]).map((s) => String(s));
+  const issuedForLeg = issuedTickets.filter((tk) => tk.legType === 'oneway' || tk.legType === legForTicket);
+  const primaryIssued =
+    issuedForLeg.find((tk) => seatListForTicket.includes(String(tk.seatNumber))) || issuedForLeg[0] || null;
+
+  const currentTicketNo = primaryIssued?.ticketNumber || fallbackTicketNo;
+  const qrSeat = primaryIssued?.seatNumber || seats;
 
   const outboundPrice = booking.outboundLeg?.price || (isRoundTrip ? Math.round(totalPrice / 2) : totalPrice);
   const returnPrice = booking.returnLeg?.price || Math.round(totalPrice / 2);
@@ -175,7 +200,7 @@ const TicketModal = ({ booking, onClose }) => {
     `OPERATOR: ${operatorName}`,
     `ROUTE: ${routeFrom} -> ${routeTo}`,
     `BUS: ${busType} (${busNumber})`,
-    `SEAT: ${seats}`,
+    `SEAT: ${qrSeat}`,
     `DATE: ${formattedDate}`,
     `TIME: ${depTime}`,
     `FARE: ${currentPrice} ETB`,

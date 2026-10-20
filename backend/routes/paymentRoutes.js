@@ -36,7 +36,7 @@ router.get('/history', getUserPaymentHistory);
 
 router.post('/refund/request', requestRefund);
 router.get('/refund/my', getMyRefunds);
-router.get('/refund/all', authorize(ROLES.SUPER_ADMIN, ROLES.COMPANY_ADMIN), getRefunds);
+router.get('/refund/all', authorize(ROLES.SUPER_ADMIN, ROLES.COMPANY_ADMIN, ROLES.COMPANY_STAFF), getRefunds);
 router.put('/refund/:id/decision', authorize(ROLES.SUPER_ADMIN, ROLES.COMPANY_ADMIN), refundDecision);
 router.get('/refund/:id/verify', authorize(ROLES.SUPER_ADMIN, ROLES.COMPANY_ADMIN), verifyRefund);
 
