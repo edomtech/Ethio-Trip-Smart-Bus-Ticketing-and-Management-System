@@ -1,12 +1,12 @@
 
 const PLATFORM = Object.freeze({
   NAME: 'Ethio Trip',
-  TAGLINE: 'Smart Multi-Operator Bus Ticketing and Management System',
-  
+  TAGLINE: '',
+
   EMAIL_DISPLAY_NAME: 'Ethio Trip',
-  
+
   FALLBACK_SENDER: 'no-reply@ethiotrip.com',
-  
+
   STORAGE: Object.freeze({
     TOKEN: 'ethiotrip_token',
     USER: 'ethiotrip_user',
@@ -16,10 +16,10 @@ const PLATFORM = Object.freeze({
 });
 
 
-const fullName = () => `${PLATFORM.NAME} — ${PLATFORM.TAGLINE}`;
+const fullName = () => PLATFORM.NAME;
 
 
-const shortName = () => `${PLATFORM.NAME} - Smart Bus Ticketing System`;
+const shortName = () => PLATFORM.NAME;
 
 module.exports = {
   PLATFORM,

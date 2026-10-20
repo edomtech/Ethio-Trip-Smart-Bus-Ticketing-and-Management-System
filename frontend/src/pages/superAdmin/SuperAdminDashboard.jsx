@@ -41,7 +41,7 @@ const SuperAdminDashboard = () => {
   const [companies, setCompanies] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [platformSettings, setPlatformSettings] = useState({
-    systemName: 'Ethio Trip - Smart Bus Ticketing System',
+    systemName: 'Ethio Trip',
     supportEmail: 'support@ethiotrip.et',
     supportPhone: '+251 911 002 233',
     systemAddress: 'Addis Ababa, Ethiopia',
@@ -1791,7 +1791,7 @@ const SuperAdminDashboard = () => {
                           value={platformSettings.systemName || ''}
                           onChange={(e) => setPlatformSettings({ ...platformSettings, systemName: e.target.value })}
                           className="w-full p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 outline-none"
-                          placeholder="Ethio Trip - Smart Bus Ticketing System"
+                          placeholder="Ethio Trip"
                         />
                       </div>
 

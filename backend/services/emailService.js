@@ -244,12 +244,12 @@ const sendOtpEmail = async (to, otp, recipientName = 'Passenger') => {
 
   const senderEmail = normalizeAddress(process.env.EMAIL_FROM) || smtpUser || PLATFORM.FALLBACK_SENDER;
 
-  const plainText = `Hello ${safeName},\n\nThank you for registering with ${PLATFORM.NAME} — ${PLATFORM.TAGLINE}.\n\nYour email verification code is:\n\n${otp}\n\nThis code expires in 10 minutes. Do not share it with anyone.\n\nIf you did not request this verification code, you can ignore this email.\n\nThank you,\n${PLATFORM.NAME}`;
+  const plainText = `Hello ${safeName},\n\nThank you for registering with ${PLATFORM.NAME}.\n\nYour email verification code is:\n\n${otp}\n\nThis code expires in 10 minutes. Do not share it with anyone.\n\nIf you did not request this verification code, you can ignore this email.\n\nThank you,\n${PLATFORM.NAME}`;
 
   const htmlContent = `
     <div style="font-family: Arial, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 28px; color: #1e293b;">
       <div style="font-size: 20px; font-weight: 800; color: #059669; letter-spacing: -0.5px; margin-bottom: 16px;">
-        ${PLATFORM.NAME.toUpperCase()} — ${PLATFORM.TAGLINE}
+        ${PLATFORM.NAME.toUpperCase()}
       </div>
       <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin: 0 0 12px 0;">
         Verify Your Email Address
@@ -422,7 +422,7 @@ const emailShell = (title, greeting, bodyHtml, footerNote = '') => `
   <div style="font-family: 'Segoe UI', Arial, Helvetica, sans-serif; max-width: 560px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; color: #1e293b;">
     <div style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); padding: 22px 28px;">
       <div style="font-size: 18px; font-weight: 800; letter-spacing: -0.3px; color: #ffffff;">${escapeHtml(PLATFORM.NAME.toUpperCase())}</div>
-      <div style="font-size: 12px; color: #d1fae5; margin-top: 2px;">${escapeHtml(PLATFORM.TAGLINE || '')}</div>
+      ${PLATFORM.TAGLINE ? `<div style="font-size: 12px; color: #d1fae5; margin-top: 2px;">${escapeHtml(PLATFORM.TAGLINE)}</div>` : ''}
     </div>
     <div style="padding: 28px;">
       <h1 style="font-size: 20px; font-weight: 700; color: #0f172a; margin: 0 0 16px 0;">${escapeHtml(title)}</h1>

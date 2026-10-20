@@ -1,4 +1,4 @@
-{
+﻿{
   "common": {
     "search": "Search companies, buses, routes, users...",
     "viewAll": "View All",
@@ -95,7 +95,7 @@
     "system": "SYSTEM"
   },
   "home": {
-    "pill": "Ethio Trip — Smart Bus Ticketing Platform",
+    "pill": "Ethio Trip",
     "heroTitle": "Travel Across Ethiopia with Comfort & Safety",
     "heroDesc": "Welcome to Ethio Trip. Search, compare, and book tickets instantly from premium operators across Ethiopia.",
     "tripsDaily": "Trips Daily",
@@ -116,7 +116,7 @@
     "stayDuration": "Stay Duration",
     "day": "Day",
     "days": "Days",
-    "roundTripBonus": "🎉 Round Trip Bonus",
+    "roundTripBonus": "ðŸŽ‰ Round Trip Bonus",
     "stayDiscountApplied": "STAY DISCOUNT APPLIED!",
     "popularRoutes": "Popular Routes",
     "showLess": "Show Less",
@@ -248,7 +248,7 @@
     "and": "and",
     "privacyPolicy": "Privacy Policy",
     "createAccountBtn": "Create Account",
-    "creatingAccount": "Creating Account…",
+    "creatingAccount": "Creating Accountâ€¦",
     "alreadyHaveAccount": "Already have an account?",
     "orContinueWith": "or continue with"
   },
@@ -790,8 +790,8 @@
     "roundTripDiscount": "10% Round-Trip Discount Applied",
     "startingFrom": "Starting From",
     "selectLockCompany": "Select & Lock Company",
-    "outboundTripStep": "OUTBOUND TRIP · STEP 1 OF 2",
-    "returnTripStep": "RETURN TRIP · STEP 2 OF 2",
+    "outboundTripStep": "OUTBOUND TRIP Â· STEP 1 OF 2",
+    "returnTripStep": "RETURN TRIP Â· STEP 2 OF 2",
     "lockedCompany": "Locked Company",
     "chooseDepartureSchedule": "Choose Departure Schedule",
     "chooseReturnSchedule": "Choose Return Schedule",
@@ -818,7 +818,7 @@
     "outbound": "Outbound",
     "return": "Return",
     "estimatedRefund": "ESTIMATED REFUND",
-    "unpaidNoRefund": "UNPAID — No Refund",
+    "unpaidNoRefund": "UNPAID â€” No Refund",
     "seatsWillBeReleased": "Seats will be released.",
     "cancelInstruction": "After cancelling, use \"Request Refund\" tab to submit for admin approval.",
     "keepReservation": "Keep Reservation",
@@ -889,7 +889,7 @@
     "stop": "Stop",
     "howCanIHelp": "How can I help you today?",
     "promptEn": "Speak or type your bus travel question (e.g., buses from Addis Ababa to Bahir Dar)",
-    "promptAm": "ጥያቄዎን በአማርኛ ይናገሩ ወይም ይጻፉ (ለምሳሌ፡ ከአዲስ አበባ ወደ ባህር ዳር)",
+    "promptAm": "áŒ¥á‹«á‰„á‹ŽáŠ• á‰ áŠ áˆ›áˆ­áŠ› á‹­áŠ“áŒˆáˆ© á‹ˆá‹­áˆ á‹­áŒ»á‰ (áˆˆáˆáˆ³áˆŒá¡ áŠ¨áŠ á‹²áˆµ áŠ á‰ á‰£ á‹ˆá‹° á‰£áˆ…áˆ­ á‹³áˆ­)",
     "autoFilled": "Auto-filled on Bus Search:",
     "searching": "Searching schedules & generating response...",
     "send": "Send"

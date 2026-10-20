@@ -226,7 +226,7 @@ const LandingPage = () => {
           <div className="relative z-10 max-w-4xl mx-auto text-center">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-xs font-semibold mb-3">
               <span className="text-emerald-300"><FaBus /></span>
-              <span>{t('home.pill', 'Ethio Trip — Smart Bus Ticketing Platform')}</span>
+              <span>{t('home.pill', 'Ethio Trip')}</span>
             </div>
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white leading-tight tracking-tight mb-2">
               {t('home.heroTitle', 'Travel Across Ethiopia with Comfort & Safety')}
