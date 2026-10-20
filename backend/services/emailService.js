@@ -1,11 +1,137 @@
 const nodemailer = require('nodemailer');
 const dns = require('dns');
+const https = require('https');
 if (typeof dns.setDefaultResultOrder === 'function') {
   dns.setDefaultResultOrder('ipv4first');
 }
 const path = require('path');
 const dotenv = require('dotenv');
 const { PLATFORM } = require('../constants/branding');
+
+// Render free web services block outbound traffic to SMTP ports 25/465/587
+// (policy effective 2025-09-26), so SMTP can never work there. When an HTTP
+// email API is configured we deliver over HTTPS instead, which is not
+// affected by that restriction.
+const HTTP_EMAIL_PROVIDERS = Object.freeze({
+  resend: {
+    url: 'https://api.resend.com/emails',
+    buildAuth: (key) => `Bearer ${key}`,
+    buildBody: (from, to, subject, text, html) => ({
+      from,
+      to: [to],
+      subject,
+      text,
+      html: html || text,
+    }),
+  },
+  brevo: {
+    url: 'https://api.brevo.com/v3/smtp/email',
+    buildAuth: (key) => `api-key ${key}`,
+    buildBody: (from, to, subject, text, html) => ({
+      sender: parseSender(from),
+      to: [{ email: to }],
+      subject,
+      textContent: text,
+      htmlContent: html || text,
+    }),
+  },
+  sendgrid: {
+    url: 'https://api.sendgrid.com/v3/mail/send',
+    buildAuth: (key) => `Bearer ${key}`,
+    buildBody: (from, to, subject, text, html) => ({
+      personalizations: [{ to: [{ email: to }] }],
+      from: parseSender(from),
+      subject,
+      content: [
+        { type: 'text/plain', value: text || '' },
+        { type: 'text/html', value: html || text || '' },
+      ],
+    }),
+  },
+});
+
+function parseSender(value) {
+  const str = String(value || '');
+  const match = str.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+  if (match) return { name: match[1] || PLATFORM.EMAIL_DISPLAY_NAME, email: match[2] };
+  return { name: PLATFORM.EMAIL_DISPLAY_NAME, email: str };
+}
+
+const readHttpEmailConfig = () => {
+  dotenv.config({ path: path.join(__dirname, '../.env'), override: true });
+
+  const explicit = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase();
+  const candidates = explicit ? [explicit] : ['resend', 'brevo', 'sendgrid'];
+
+  for (const name of candidates) {
+    const provider = HTTP_EMAIL_PROVIDERS[name];
+    if (!provider) continue;
+    const keyEnv = `${name.toUpperCase()}_API_KEY`;
+    const key = (process.env[keyEnv] || '').trim();
+    if (key) {
+      return { name, key, ...provider };
+    }
+  }
+
+  return null;
+};
+
+const postJson = (url, headers, body, timeoutMs = 15000) =>
+  new Promise((resolve, reject) => {
+    let payload;
+    try {
+      payload = JSON.stringify(body);
+    } catch (err) {
+      reject(err);
+      return;
+    }
+
+    const target = new URL(url);
+    const req = https.request(
+      {
+        method: 'POST',
+        hostname: target.hostname,
+        path: `${target.pathname}${target.search}`,
+        timeout: timeoutMs,
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+          ...headers,
+        },
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        res.on('end', () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            resolve({ statusCode: res.statusCode, body: data });
+          } else {
+            const err = new Error(`HTTP ${res.statusCode}: ${data.slice(0, 300)}`);
+            err.code = `HTTP_${res.statusCode}`;
+            reject(err);
+          }
+        });
+      }
+    );
+
+    req.on('timeout', () => {
+      req.destroy();
+      const err = new Error('HTTP email request timeout');
+      err.code = 'ETIMEDOUT';
+      reject(err);
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+
+const sendViaHttpApi = async ({ from, to, subject, text, html }, cfg) => {
+  const body = cfg.buildBody(from, to, subject, text, html);
+  const res = await postJson(cfg.url, { Authorization: cfg.buildAuth(cfg.key) }, body);
+  return { messageId: `${cfg.name}-http-${res.statusCode}`, provider: cfg.name };
+};
 
 const GMAIL_HOST = 'smtp.gmail.com';
 const GMAIL_SEED_IPV4S = ['142.250.110.108', '142.250.196.108'];
@@ -151,6 +277,22 @@ const createTransportCandidates = () => {
 };
 
 const sendMailResilient = async (mailOptions, logLabel) => {
+  const httpCfg = readHttpEmailConfig();
+
+  if (httpCfg) {
+    const info = await sendViaHttpApi(
+      {
+        from: mailOptions.from,
+        to: mailOptions.to,
+        subject: mailOptions.subject,
+        text: mailOptions.text,
+        html: mailOptions.html,
+      },
+      httpCfg
+    );
+    return { configured: true, info, transport: 'http', provider: httpCfg.name, attempts: 1 };
+  }
+
   const overridden =
     typeof module.exports.createTransporter === 'function' &&
     module.exports.createTransporter !== createTransporter;
@@ -169,7 +311,7 @@ const sendMailResilient = async (mailOptions, logLabel) => {
     try {
       const info = await candidates[i].sendMail(mailOptions);
       if (i > 0) console.warn(`[EMAIL] ${logLabel} delivered on fallback route #${i + 1}.`);
-      return { configured: true, info, route: i, attempts: i + 1 };
+      return { configured: true, info, route: i, attempts: i + 1, transport: 'smtp' };
     } catch (err) {
       lastErr = err;
       if (i < candidates.length - 1) {
@@ -207,11 +349,14 @@ const recordSend = (fields) => {
 
 const getSmtpStatus = () => {
   const cfg = readSmtpConfig();
+  const httpCfg = readHttpEmailConfig();
   return {
-    configured: cfg.configured,
-    provider: cfg.isGmail ? 'gmail' : cfg.host || null,
-    host: cfg.host || (cfg.isGmail ? GMAIL_HOST : null),
-    port: cfg.port,
+    configured: !!(httpCfg || cfg.configured),
+    transport: httpCfg ? 'http' : cfg.configured ? 'smtp' : null,
+    provider: httpCfg ? httpCfg.name : cfg.isGmail ? 'gmail' : cfg.host || null,
+    host: httpCfg ? new URL(httpCfg.url).hostname : cfg.host || (cfg.isGmail ? GMAIL_HOST : null),
+    port: httpCfg ? 443 : cfg.port,
+    smtpBlockedOnFreeTier: !httpCfg && cfg.configured,
     lastSend: lastSend
       ? {
           at: lastSend.at,

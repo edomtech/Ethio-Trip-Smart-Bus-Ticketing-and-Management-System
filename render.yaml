@@ -39,6 +39,17 @@ services:
         value: "false"
       - key: EMAIL_FROM
         sync: false
+      # Render FREE web services block outbound SMTP ports 25/465/587, so
+      # Gmail SMTP can never deliver from this instance. Set an HTTP email API
+      # key instead (any one of these) and mail is sent over HTTPS.
+      - key: EMAIL_PROVIDER
+        value: resend
+      - key: RESEND_API_KEY
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: SENDGRID_API_KEY
+        sync: false
       - key: CHAPA_WEBHOOK_SECRET
         sync: false
       - key: CHAPA_BASE_URL
