@@ -158,7 +158,7 @@ const sendMailResilient = async (mailOptions, logLabel) => {
   if (overridden) {
     const transporter = module.exports.createTransporter();
     if (!transporter) return { configured: false, reason: 'SMTP_NOT_CONFIGURED' };
-    return { configured: true, info: await transporter.sendMail(mailOptions) };
+    return { configured: true, info: await transporter.sendMail(mailOptions), attempts: 1 };
   }
 
   const candidates = createTransportCandidates();
@@ -169,18 +169,40 @@ const sendMailResilient = async (mailOptions, logLabel) => {
     try {
       const info = await candidates[i].sendMail(mailOptions);
       if (i > 0) console.warn(`[EMAIL] ${logLabel} delivered on fallback route #${i + 1}.`);
-      return { configured: true, info, route: i };
+      return { configured: true, info, route: i, attempts: i + 1 };
     } catch (err) {
       lastErr = err;
-      if (FATAL_MAIL_CODES.includes(err.code)) throw err;
       if (i < candidates.length - 1) {
         console.warn(
           `[EMAIL] ${logLabel} route #${i + 1} failed (${err.code || err.message}). Retrying on next route.`
         );
       }
+      if (FATAL_MAIL_CODES.includes(err.code)) {
+        err.attempts = i + 1;
+        throw err;
+      }
     }
   }
+  if (lastErr) lastErr.attempts = candidates.length;
   throw lastErr;
+};
+
+// Last send outcome, surfaced (without any secrets) via /health so SMTP
+// problems can be diagnosed from the browser when platform logs are not
+// available. Only the most recent attempt is kept.
+let lastSend = null;
+
+// /health is public, so never let addresses or credentials ride along.
+const sanitizeErrorText = (value) =>
+  String(value || '')
+    .replace(/[^\s@]+@[^\s@]+\.[^\s@]+/g, '<redacted-email>')
+    .replace(/(pass(word)?|api[_-]?key|token|secret)["']?\s*[:=]\s*\S+/gi, '$1=<redacted>')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 300);
+
+const recordSend = (fields) => {
+  lastSend = { at: new Date().toISOString(), ...fields };
 };
 
 const getSmtpStatus = () => {
@@ -190,6 +212,16 @@ const getSmtpStatus = () => {
     provider: cfg.isGmail ? 'gmail' : cfg.host || null,
     host: cfg.host || (cfg.isGmail ? GMAIL_HOST : null),
     port: cfg.port,
+    lastSend: lastSend
+      ? {
+          at: lastSend.at,
+          ok: lastSend.ok === true,
+          event: lastSend.event || null,
+          ...(lastSend.code ? { code: lastSend.code } : {}),
+          ...(lastSend.error ? { error: sanitizeErrorText(lastSend.error) } : {}),
+          ...(lastSend.attempts ? { attempts: lastSend.attempts } : {}),
+        }
+      : null,
   };
 };
 
@@ -269,6 +301,7 @@ const sendOtpEmail = async (to, otp, recipientName = 'Passenger') => {
 
     if (!result.configured) {
       console.warn(`[EmailService] ⚠️ SMTP credentials not fully configured in environment. Delivery to ${recipient} cancelled.`);
+      recordSend({ event: 'otp', ok: false, recipient, code: 'SMTP_NOT_CONFIGURED' });
       return {
         sent: false,
         reason: 'SMTP_NOT_CONFIGURED',
@@ -278,6 +311,7 @@ const sendOtpEmail = async (to, otp, recipientName = 'Passenger') => {
 
     const info = result.info;
     console.log(`[EmailService] ✅ Mail server accepted the message for ${recipient}. MessageId: ${info.messageId} (acceptance is not a delivery guarantee — the mailbox must exist)`);
+    recordSend({ event: 'otp', ok: true, messageId: info.messageId, attempts: result.attempts });
     return {
       sent: true,
       recipient,
@@ -285,6 +319,14 @@ const sendOtpEmail = async (to, otp, recipientName = 'Passenger') => {
     };
   } catch (sendErr) {
     console.error(`[EmailService] ❌ Failed to send verification code to ${recipient}:`, sendErr.message);
+    recordSend({
+      event: 'otp',
+      ok: false,
+      recipient,
+      code: sendErr.code || 'SEND_FAILED',
+      error: sendErr.message,
+      attempts: sendErr.attempts,
+    });
     return {
       sent: false,
       recipient,
@@ -355,14 +397,23 @@ const sendRawEmail = async (to, subject, text, html, logLabel) => {
 
     if (!result.configured) {
       console.error(`[EMAIL] ${logLabel} failed - SMTP is not configured in the backend .env (SMTP_USER / SMTP_PASS missing).`);
+      recordSend({ event: logLabel, ok: false, code: 'SMTP_NOT_CONFIGURED' });
       return { sent: false, reason: 'SMTP_NOT_CONFIGURED' };
     }
 
     const info = result.info;
     console.log(`[EMAIL] ${logLabel} sent to ${recipient} (messageId: ${info.messageId})`);
+    recordSend({ event: logLabel, ok: true, messageId: info.messageId, attempts: result.attempts });
     return { sent: true, recipient, messageId: info.messageId };
   } catch (sendErr) {
     console.error(`[EMAIL] ${logLabel} failed for ${recipient}: ${sendErr.message}`);
+    recordSend({
+      event: logLabel,
+      ok: false,
+      code: sendErr.code || 'SEND_FAILED',
+      error: sendErr.message,
+      attempts: sendErr.attempts,
+    });
     return { sent: false, recipient, reason: sendErr.code || 'SEND_FAILED' };
   }
 };
