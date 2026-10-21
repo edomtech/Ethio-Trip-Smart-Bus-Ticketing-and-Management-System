@@ -121,11 +121,14 @@ const sendVerificationOTP = async (email) => {
   }
 
   if (!emailSent) {
+    const allowDevOtp = process.env.ALLOW_DEV_OTP_FALLBACK === 'true' && process.env.NODE_ENV !== 'production';
     return {
       success: true,
       emailSent: false,
-      devOtp: otp,
-      message: `Email delivery is currently unavailable on the server. Your verification code is ${otp} (or 123456).`,
+      ...(allowDevOtp ? { devOtp: otp } : {}),
+      message: allowDevOtp
+        ? `Email delivery is currently unavailable on the server. Your verification code is ${otp} (or 123456).`
+        : 'We were unable to send the verification code by email. Please try again shortly or contact support if the problem persists.',
     };
   }
 
@@ -304,18 +307,21 @@ const registerPassenger = async ({ name, email, phone, nationalId, password, cit
   }
 
   if (!emailSent) {
+    const allowDevOtp = process.env.ALLOW_DEV_OTP_FALLBACK === 'true' && process.env.NODE_ENV !== 'production';
     return {
       success: true,
       emailSent: false,
       otpSentTo: normalizedEmail,
-      devOtp: otp,
+      ...(allowDevOtp ? { devOtp: otp } : {}),
       user: {
         name: safeName,
         email: normalizedEmail,
         role: ROLES.PASSENGER,
         isEmailVerified: false,
       },
-      message: `Account created! Since automated email delivery is currently unavailable on the server, you can verify using code: ${otp} (or 123456).`,
+      message: allowDevOtp
+        ? `Account created! Since automated email delivery is currently unavailable on the server, you can verify using code: ${otp} (or 123456).`
+        : `Account created! We attempted to send a verification code to ${normalizedEmail} but delivery failed. Please try again or use "Resend code".`,
     };
   }
 

@@ -10,7 +10,7 @@ const chapaInitialize = async (req, res, next) => {
     const { bookingId } = req.body;
     if (!bookingId) return res.status(400).json({ message: 'bookingId is required' });
 
-    const result = await paymentService.initializePayment(bookingId, req.user);
+    const result = await paymentService.initializePayment(bookingId, req.user, req);
     res.json({ success: true, ...result });
   } catch (err) {
     next(err);
@@ -49,7 +49,7 @@ const initiatePayment = async (req, res, next) => {
       return res.status(201).json(result);
     }
 
-    const result = await paymentService.initializePayment(bookingId, req.user);
+    const result = await paymentService.initializePayment(bookingId, req.user, req);
     res.status(201).json({ success: true, ...result });
   } catch (err) {
     next(err);

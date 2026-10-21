@@ -6,6 +6,7 @@ const AuditLog = require('../models/AuditLog');
 const Notification = require('../models/Notification');
 const chapaService = require('./chapaService');
 const chapaConfig = require('../config/chapa');
+const { resolveBackendUrl, resolveFrontendUrl, withQuery } = require('../config/frontend');
 const { activateTicketsForBooking } = require('./ticketService');
 const { BOOKING_STATUS, PAYMENT_STATUS } = require('../constants/statuses');
 const { ROLES } = require('../constants/roles');
@@ -63,7 +64,7 @@ const assertPaymentAccess = (booking, user) => {
 };
 
 
-const initializePayment = async (bookingId, authenticatedUser) => {
+const initializePayment = async (bookingId, authenticatedUser, req = null) => {
   const booking = await Booking.findById(bookingId)
     .populate('companyId')
     .populate({ path: 'schedule', populate: ['route'] });
@@ -114,7 +115,8 @@ const initializePayment = async (bookingId, authenticatedUser) => {
   }
 
   const txRef = `ETHIOTRIP-${booking._id.toString().slice(-8)}-${Date.now()}`;
-  const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+  const frontendUrl = resolveFrontendUrl(req);
+  const backendUrl = resolveBackendUrl(req);
 
   let email = authenticatedUser.email || '';
   if (!email.includes('@')) {
@@ -132,8 +134,8 @@ const initializePayment = async (bookingId, authenticatedUser) => {
     firstName,
     lastName,
     txRef,
-    callbackUrl: `${frontendUrl}/payment/callback`,
-    returnUrl: `${frontendUrl}/payment/callback?tx_ref=${encodeURIComponent(txRef)}`,
+    callbackUrl: backendUrl ? `${backendUrl}/api/payments/chapa/webhook` : `${frontendUrl}/payment/callback`,
+    returnUrl: withQuery(frontendUrl, 'payment/callback', { tx_ref: txRef }),
     subaccountId,
     customization: {
       title: 'Ethio Trip',

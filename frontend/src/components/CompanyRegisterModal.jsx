@@ -106,7 +106,7 @@ const CompanyRegisterModal = ({ isOpen, onClose }) => {
         },
       };
 
-      await companyAPI.registerCompany(payload);
+      await companyAPI.registerCompanyPublic(payload);
       setSubmitted(true);
     } catch (err) {
       toast.error(err.message || 'Company registration failed.');

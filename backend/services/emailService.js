@@ -61,7 +61,10 @@ const readHttpEmailConfig = () => {
   dotenv.config({ path: path.join(__dirname, '../.env'), override: true });
 
   const explicit = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase();
-  const candidates = explicit ? [explicit] : ['resend', 'brevo', 'sendgrid'];
+  if (explicit && !HTTP_EMAIL_PROVIDERS[explicit]) {
+    console.warn(`[EmailService] Unknown EMAIL_PROVIDER "${explicit}", falling back to auto-detection.`);
+  }
+  const candidates = explicit && HTTP_EMAIL_PROVIDERS[explicit] ? [explicit] : ['resend', 'brevo', 'sendgrid'];
 
   for (const name of candidates) {
     const provider = HTTP_EMAIL_PROVIDERS[name];

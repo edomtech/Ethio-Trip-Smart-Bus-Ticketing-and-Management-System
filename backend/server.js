@@ -16,6 +16,7 @@ const errorHandler = require('./middleware/errorHandler');
 const { CANONICAL_ROLES } = require('./constants/roles');
 const { PLATFORM, fullName } = require('./constants/branding');
 const emailService = require('./services/emailService');
+const { getConfiguredFrontendUrls } = require('./config/frontend');
 
 dotenv.config();
 
@@ -28,15 +29,12 @@ if (!process.env.JWT_SECRET || !process.env.JWT_SECRET.trim()) {
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+app.set('trust proxy', true);
+
 app.use(helmet());
 
-const configuredOrigins = (process.env.FRONTEND_URL || '')
-  .split(',')
-  .map((url) => url.trim().replace(/\/+$/, ''))
-  .filter(Boolean);
-
 const allowedOrigins = [
-  ...configuredOrigins,
+  ...getConfiguredFrontendUrls(),
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',

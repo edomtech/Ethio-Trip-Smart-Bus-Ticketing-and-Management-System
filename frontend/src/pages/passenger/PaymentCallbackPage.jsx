@@ -16,8 +16,16 @@ const PaymentCallbackPage = () => {
 
   useEffect(() => {
     const txRef = searchParams.get('tx_ref') || searchParams.get('trx_ref') || searchParams.get('txRef');
+    const status = searchParams.get('status') || searchParams.get('Status');
 
     if (!txRef) {
+      if (status?.toLowerCase() === 'success' || status?.toLowerCase() === 'completed') {
+        setLoading(false);
+        setSuccess(true);
+        setMessage('Payment returned as successful. Verifying ticket details...');
+        setShowTicketModal(false);
+        return;
+      }
       setLoading(false);
       setSuccess(false);
       setMessage('No transaction reference found in payment response.');
@@ -27,15 +35,15 @@ const PaymentCallbackPage = () => {
     const verifyPayment = async () => {
       try {
         const res = await paymentAPI.chapaVerify(txRef);
-        if (res.verified) {
+        if (res.verified || res.success || res.status === 'success' || res.paymentStatus === 'PAID') {
           setSuccess(true);
-          setMessage('Payment successfully verified!');
-          setDetails(res);
+          setMessage(res.message || 'Payment successfully verified!');
+          setDetails({ ...(res || {}), txRef, verified: true });
           setShowTicketModal(true);  
         } else {
           setSuccess(false);
           setMessage(res.message || 'Payment verification failed or was canceled.');
-          setDetails(res);
+          setDetails({ ...(res || {}), txRef });
         }
       } catch (err) {
         setSuccess(false);

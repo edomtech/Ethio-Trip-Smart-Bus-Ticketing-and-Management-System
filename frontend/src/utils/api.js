@@ -129,6 +129,7 @@ export const authAPI = {
 
 export const companyAPI = {
   registerCompany: (data) => API.post('/companies/register', data).then((r) => r.data),
+  registerCompanyPublic: (data) => API.post('/companies/register-public', data).then((r) => r.data),
   getActiveCompanies: () => API.get('/companies/active').then((r) => r.data),
   getAllCompanies: (params) => API.get('/companies', { params }).then((r) => r.data),
   getAll: (params) => API.get('/companies/active', { params }).then((r) => r.data),

@@ -16,7 +16,7 @@ const ROLES = require('../constants/roles');
 
 router.get('/', optionalProtect, getSchedules);
 router.get('/search', optionalProtect, searchSchedules);
-router.get('/my-assigned', protect, authorize(ROLES.CONDUCTOR, ROLES.COMPANY_ADMIN, ROLES.SUPER_ADMIN), getMyAssignedSchedules);
+router.get('/my-assigned', protect, authorize(ROLES.CONDUCTOR, ROLES.COMPANY_STAFF, ROLES.COMPANY_ADMIN, ROLES.SUPER_ADMIN), getMyAssignedSchedules);
 router.get('/:id', optionalProtect, getScheduleById);
 router.get('/:id/seats', optionalProtect, getSeatMap);
 router.post('/', protect, authorize(ROLES.COMPANY_ADMIN, ROLES.SUPER_ADMIN), createSchedule);
