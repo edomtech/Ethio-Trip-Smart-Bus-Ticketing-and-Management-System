@@ -58,7 +58,7 @@ function parseSender(value) {
 }
 
 const readHttpEmailConfig = () => {
-  dotenv.config({ path: path.join(__dirname, '../.env'), override: true });
+  dotenv.config({ path: path.join(__dirname, '../.env') });
 
   const explicit = (process.env.EMAIL_PROVIDER || '').trim().toLowerCase();
   if (explicit && !HTTP_EMAIL_PROVIDERS[explicit]) {
@@ -184,7 +184,7 @@ const normalizeRecipient = (value) => {
 
 
 const readSmtpConfig = () => {
-  dotenv.config({ path: path.join(__dirname, '../.env'), override: true });
+  dotenv.config({ path: path.join(__dirname, '../.env') });
 
   const host = process.env.SMTP_HOST;
   const port = parseInt(process.env.SMTP_PORT || '587', 10);
