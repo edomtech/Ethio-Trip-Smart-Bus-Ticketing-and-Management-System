@@ -34,14 +34,14 @@ const CounterBooking = () => {
     fullName: '',
     phone: '',
     email: '',
-    gender: 'Male',
+    gender: '',
     age: '',
   });
 
   const [tripType, setTripType] = useState('oneway');
-  const [from, setFrom] = useState('Addis Ababa');
-  const [to, setTo] = useState('Bahir Dar');
-  const [date, setDate] = useState(TODAY);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [date, setDate] = useState('');
   const [returnDate, setReturnDate] = useState('');
 
   const [schedules, setSchedules] = useState([]);
@@ -99,6 +99,13 @@ const CounterBooking = () => {
     setSelectedSchedule(null);
     setShowTicketModalBooking(booking);
     setStep('ticket');
+
+    const targetEmail = pax.email || booking?.passenger?.email || booking?.contactEmail;
+    if (targetEmail && booking?._id) {
+      notificationAPI.sendTicketEmail({ bookingId: booking._id, email: targetEmail })
+        .then(() => toast.success(t('ticket.sentSuccess', 'Ticket sent to passenger email successfully!')))
+        .catch(() => {});
+    }
   };
 
   const resetAll = () => {
@@ -208,9 +215,9 @@ const CounterBooking = () => {
                   }}
                   className={inputClass}
                 >
+                  <option value="">{t('forms.selectGender', 'Select Gender')}</option>
                   <option value="Male">{t('forms.male', 'Male')}</option>
                   <option value="Female">{t('forms.female', 'Female')}</option>
-                  <option value="Other">{t('forms.other', 'Other')}</option>
                 </select>
               </div>
 
@@ -255,12 +262,14 @@ const CounterBooking = () => {
               <div>
                 <label className={labelClass}>{t('booking.fromOrigin', 'From (Origin)')}</label>
                 <select value={from} onChange={e => setFrom(e.target.value)} className={inputClass}>
+                  <option value="">{t('home.selectOrigin', 'Select Origin')}</option>
                   {CITIES.map(c => <option key={c} value={c}>{t(c, c)}</option>)}
                 </select>
               </div>
               <div>
                 <label className={labelClass}>{t('booking.toDestination', 'To (Destination)')}</label>
                 <select value={to} onChange={e => setTo(e.target.value)} className={inputClass}>
+                  <option value="">{t('home.selectDestination', 'Select Destination')}</option>
                   {CITIES.map(c => <option key={c} value={c}>{t(c, c)}</option>)}
                 </select>
               </div>

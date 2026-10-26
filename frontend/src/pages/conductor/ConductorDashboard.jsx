@@ -22,7 +22,7 @@ import {
 import { toast } from 'react-toastify';
 import { useTranslation } from '../../i18n';
 import LanguageSelector from '../../components/LanguageSelector';
-import CameraQRScanner from '../../components/CameraQRScanner';
+import CameraQRScanner, { extractTicketNumber } from '../../components/CameraQRScanner';
 import PassengerDetailsModal from '../../components/PassengerDetailsModal';
 import NotificationPanel from '../../components/NotificationPanel';
 import ThemeToggle from '../../components/ThemeToggle';
@@ -146,17 +146,7 @@ const ConductorDashboard = () => {
 
     const rawPayload = query.trim();
 
-    let cleanCode = rawPayload;
-    if (cleanCode.includes('TICKET:')) {
-      const match = cleanCode.match(/TICKET:\s*([^\s\n]+)/);
-      if (match && match[1]) cleanCode = match[1];
-    } else if (cleanCode.includes('ETHIOTRIP:')) {
-      const parts = cleanCode.split(':');
-      if (parts[1]) cleanCode = parts[1];
-    } else if (cleanCode.includes('ticket=')) {
-      const match = cleanCode.match(/ticket=([^&\s]+)/);
-      if (match && match[1]) cleanCode = decodeURIComponent(match[1]);
-    }
+    const cleanCode = extractTicketNumber(rawPayload) || rawPayload;
     setTicketQuery(cleanCode);
 
     try {
@@ -180,6 +170,10 @@ const ConductorDashboard = () => {
         toast.error(res.message || t('conductor.validationFailed', 'Validation failed'));
       }
     } catch (err) {
+      const errTicket = err.data?.ticket || null;
+      if (errTicket) {
+        setValidationResult(errTicket);
+      }
       setValidationError(err.message || t('conductor.invalidTicketOrQR', 'Invalid Ticket / Unrecognized QR Code'));
       toast.error(err.message || t('conductor.validationFailed', 'Validation failed'));
     } finally {
@@ -611,7 +605,10 @@ const ConductorDashboard = () => {
                 <div className="flex gap-3.5 flex-wrap">
                   <button
                     type="button"
-                    onClick={() => setActiveTab('scan_board')}
+                    onClick={() => {
+                      setActiveTab('scan_board');
+                      setShowCameraModal(true);
+                    }}
                     className="flex items-center gap-2 px-5.5 py-3 bg-indigo-600 text-white border-none rounded-[10px] font-extrabold text-[0.85rem] cursor-pointer shadow-[0_4px_12px_rgba(79,70,229,0.3)] hover:bg-indigo-700 transition-colors"
                   >
                     <FaQrcode /> {t('conductor.scanBoardPassenger', 'Scan / Board Passenger')}
@@ -962,6 +959,7 @@ const ConductorDashboard = () => {
                           setBoardingSuccess('');
                           setValidationResult(null);
                           setTicketQuery('');
+                          setShowCameraModal(true);
                         }}
                         className="px-5 py-2.5 bg-indigo-600 text-white border-none rounded-[10px] font-extrabold cursor-pointer hover:bg-indigo-700 transition-colors"
                       >

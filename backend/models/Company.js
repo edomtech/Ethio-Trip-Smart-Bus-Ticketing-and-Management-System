@@ -11,6 +11,7 @@ const companySchema = new mongoose.Schema(
     address:            { type: String, required: true },
     city:               { type: String, required: true, default: 'Addis Ababa' },
     logo:               { type: String, default: '' },
+    busImage:           { type: String, default: '' },
     description:        { type: String, default: '' },
     status:             {
       type: String,

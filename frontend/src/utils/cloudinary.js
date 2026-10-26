@@ -33,6 +33,7 @@ export const uploadToCloudinary = async (fileOrData, folder = 'general') => {
       ? 'http://localhost:5000/api'
       : 'https://ethio-trip-smart-bus-ticketing-and-z9dl.onrender.com/api';
     const apiBase = rawApi || defaultBaseUrl;
+    const token = storage.getToken();
     const response = await fetch(`${apiBase}/upload/image`, {
       method: 'POST',
       headers: {

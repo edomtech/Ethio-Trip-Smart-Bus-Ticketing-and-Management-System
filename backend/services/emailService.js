@@ -592,23 +592,111 @@ const detailRow = (label, value) => `
   </tr>
 `;
 
-const bookingContext = (booking = {}) => ({
-  passengerName: booking.passengerName || (booking.passenger && booking.passenger.name) || (booking.user && booking.user.name) || 'Passenger',
-  reference: booking.bookingReference || booking.bookingRef || booking.ticketNumber || (booking._id ? String(booking._id) : ''),
-  company: booking.companyName || (booking.company && (booking.company.companyName || booking.company.name)) || (booking.companyId && booking.companyId.companyName) || '',
-  origin: booking.origin || booking.from || (booking.route && (booking.route.origin || booking.route.from)) || '',
-  destination: booking.destination || booking.to || (booking.route && (booking.route.destination || booking.route.to)) || '',
-  departureDate: booking.departureDate || booking.travelDate || booking.date || '',
-  departureTime: booking.departureTime || booking.time || '',
-  bus: booking.busPlate || (booking.bus && (booking.bus.plateNumber || booking.bus.busName)) || booking.busNumber || '',
-  seats: Array.isArray(booking.seats)
-    ? booking.seats.map((seat) => (seat && seat.number ? seat.number : seat)).filter(Boolean).join(', ')
-    : (booking.seatNumber || booking.seats || ''),
-  passengerCount: booking.numberOfPassengers || (Array.isArray(booking.seats) && booking.seats.length) || 1,
-  totalAmount: booking.totalAmount !== undefined ? booking.totalAmount : booking.amount,
-  paymentStatus: booking.paymentStatus || booking.payment?.status || '',
-  ticketStatus: booking.ticketStatus || booking.status || '',
-});
+const bookingContext = (booking = {}) => {
+  const schedule = booking.schedule || booking.outboundLeg?.schedule || {};
+  const route = schedule.route || booking.route || booking.outboundLeg?.route || {};
+  const bus = schedule.bus || booking.bus || booking.outboundLeg?.bus || {};
+
+  const passengerName =
+    booking.passenger?.name ||
+    booking.passengerName ||
+    booking.passengerDetails?.name ||
+    (booking.user && booking.user.name) ||
+    'Passenger';
+
+  const company =
+    (booking.companyId && (booking.companyId.companyName || booking.companyId.name)) ||
+    booking.companyName ||
+    (booking.company && (booking.company.companyName || booking.company.name)) ||
+    (schedule.companyId && (schedule.companyId.companyName || schedule.companyId.name)) ||
+    'Ethio Trip Express';
+
+  const origin =
+    route.from ||
+    route.origin ||
+    booking.origin ||
+    booking.from ||
+    booking.outboundLeg?.route?.from ||
+    'Origin';
+
+  const destination =
+    route.to ||
+    route.destination ||
+    booking.destination ||
+    booking.to ||
+    booking.outboundLeg?.route?.to ||
+    'Destination';
+
+  const departureDate =
+    booking.outboundLeg?.date ||
+    schedule.date ||
+    booking.departureDate ||
+    booking.travelDate ||
+    booking.date ||
+    '';
+
+  const departureTime =
+    booking.outboundLeg?.departureTime ||
+    schedule.departureTime ||
+    booking.departureTime ||
+    booking.time ||
+    '';
+
+  const arrivalTime =
+    schedule.arrivalTime ||
+    booking.outboundLeg?.arrivalTime ||
+    booking.arrivalTime ||
+    '';
+
+  const busNumber =
+    bus.busNumber ||
+    bus.plateNumber ||
+    booking.busPlate ||
+    booking.busNumber ||
+    'B001';
+
+  const busType =
+    bus.type ||
+    bus.busType ||
+    booking.busType ||
+    'Luxury Coach';
+
+  const seats = Array.isArray(booking.selectedSeats) && booking.selectedSeats.length
+    ? booking.selectedSeats.join(', ')
+    : Array.isArray(booking.seats)
+      ? booking.seats.map((seat) => (seat && seat.number ? seat.number : seat)).filter(Boolean).join(', ')
+      : (booking.seatNumber || booking.seats || '1');
+
+  const passengerCount =
+    booking.numberOfPassengers ||
+    (Array.isArray(booking.selectedSeats) && booking.selectedSeats.length) ||
+    (Array.isArray(booking.seats) && booking.seats.length) ||
+    1;
+
+  const totalAmount =
+    booking.totalPrice !== undefined
+      ? booking.totalPrice
+      : (booking.totalAmount !== undefined ? booking.totalAmount : booking.amount);
+
+  return {
+    passengerName,
+    reference: booking.ticketNumber || booking.bookingReference || booking.bookingRef || (booking._id ? String(booking._id) : ''),
+    company,
+    origin,
+    destination,
+    departureDate,
+    departureTime,
+    arrivalTime,
+    bus: busNumber,
+    busType,
+    seats,
+    passengerCount,
+    totalAmount,
+    paymentStatus: booking.paymentStatus || booking.payment?.status || 'PAID',
+    ticketStatus: booking.ticketStatus || booking.status || 'CONFIRMED',
+    tripType: booking.tripType === 'round' ? 'Round Trip' : 'One-Way Trip',
+  };
+};
 
 const sendBookingConfirmation = async (to, booking = {}) => {
   const ctx = bookingContext(booking);
@@ -697,40 +785,111 @@ const sendPaymentConfirmation = async (to, booking = {}, payment = {}) => {
 const sendTicketEmail = async (to, ticket = {}, booking = {}) => {
   const ctx = bookingContext(booking);
   const ticketNumber = ticket.ticketNumber || ticket.ticketId || ctx.reference;
+  const seatNumber = ticket.seatNumber || ctx.seats || '1';
 
-  const rows = [
-    detailRow('Passenger', ctx.passengerName),
-    detailRow('From', ctx.origin),
-    detailRow('To', ctx.destination),
-    detailRow('Date', formatDateTime(ctx.departureDate)),
-    detailRow('Time', ctx.departureTime),
-    ctx.bus && detailRow('Bus', ctx.bus),
-    ctx.seats && detailRow('Seat', ctx.seats),
-    detailRow('Booking Reference', ctx.reference),
-    ticketNumber && ticketNumber !== ctx.reference ? detailRow('Ticket Number', ticketNumber) : '',
-  ].join('');
+  const formattedDate = ctx.departureDate ? formatDateTime(ctx.departureDate) || ctx.departureDate : 'Upcoming';
+
+  const qrVerificationData = [
+    `TICKET: ${ticketNumber}`,
+    `LEG: ${ctx.tripType.toUpperCase()}`,
+    `PASSENGER: ${ctx.passengerName}`,
+    `OPERATOR: ${ctx.company}`,
+    `ROUTE: ${ctx.origin} -> ${ctx.destination}`,
+    `BUS: ${ctx.busType} (${ctx.bus})`,
+    `SEAT: ${seatNumber}`,
+    `DATE: ${formattedDate}`,
+    `TIME: ${ctx.departureTime}`,
+    `FARE: ${formatAmount(ctx.totalAmount)} ETB`,
+    `STATUS: ${(ctx.paymentStatus || 'PAID').toUpperCase()}`,
+    `VERIFY: https://ethiotrip.com/verify?ticket=${ticketNumber}`
+  ].join('\n');
+
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(qrVerificationData)}`;
+
+  const ticketRowsHtml = [
+    detailRow('Ticket No', ticketNumber),
+    detailRow('Journey Leg', ctx.tripType),
+    detailRow('Passenger Name', ctx.passengerName),
+    detailRow('Bus Company', ctx.company),
+    ctx.busType && detailRow('Bus Type', ctx.busType),
+    ctx.bus && detailRow('Bus Number', ctx.bus),
+    detailRow('Route', `${ctx.origin} → ${ctx.destination}`),
+    detailRow('Date', formattedDate),
+    detailRow('Departure Time', ctx.departureTime),
+    ctx.arrivalTime && detailRow('Arrival Time', ctx.arrivalTime),
+    detailRow('Seat No', seatNumber),
+    detailRow('Total Fare', `${formatAmount(ctx.totalAmount)} ETB`),
+    detailRow('Payment Status', 'PAID'),
+  ].filter(Boolean).join('');
+
+  const html = `
+  <div style="font-family: 'Segoe UI', Arial, Helvetica, sans-serif; max-width: 460px; margin: 0 auto; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 18px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); color: #0f172a;">
+    <!-- Top accent stripes matching official ticket design -->
+    <div style="height: 6px; background: #dc2626; width: 100%;"></div>
+    <div style="height: 4px; background: #f59e0b; width: 100%;"></div>
+
+    <!-- Header Section -->
+    <div style="padding: 22px 24px 10px 24px; text-align: center;">
+      <div style="font-size: 11px; font-weight: 800; letter-spacing: 1.5px; color: #059669; text-transform: uppercase; margin-bottom: 4px;">OFFICIAL E-TICKET & BOARDING PASS</div>
+      <h1 style="font-size: 22px; font-weight: 900; color: #0f172a; margin: 0 0 6px 0; letter-spacing: -0.3px;">ETHIO TRIP E-TICKET</h1>
+      <p style="font-size: 13px; color: #64748b; margin: 0;">Thank you for choosing <strong>${escapeHtml(ctx.company)}</strong>!</p>
+    </div>
+
+    <!-- Ticket Table Details -->
+    <div style="padding: 10px 22px 16px 22px;">
+      <table style="width: 100%; border-collapse: collapse; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+        ${ticketRowsHtml}
+      </table>
+    </div>
+
+    <!-- QR Code Verification Section -->
+    <div style="padding: 0 22px 20px 22px;">
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; text-align: center;">
+        <div style="background: #ffffff; display: inline-block; padding: 10px; border-radius: 12px; border: 1px solid #cbd5e1; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+          <img src="${qrImageUrl}" alt="Scan to Verify Ticket" width="160" height="160" style="display: block; margin: 0 auto; border-radius: 6px;" />
+        </div>
+        <div style="font-size: 11px; font-weight: 800; color: #334155; margin-top: 10px; letter-spacing: 0.5px;">
+          SCAN TO VERIFY TICKET
+        </div>
+        <div style="font-size: 11px; color: #64748b; margin-top: 3px;">
+          Show this QR code to the conductor upon boarding.
+        </div>
+      </div>
+    </div>
+
+    <!-- Safe Journey Footer Bar -->
+    <div style="background: #064e3b; padding: 12px 22px; display: table; width: 100%; box-sizing: border-box;">
+      <div style="display: table-cell; vertical-align: middle; font-size: 13px; font-weight: 800; color: #ffffff;">
+        Safe Journey!
+      </div>
+      <div style="display: table-cell; vertical-align: middle; text-align: right; font-size: 12px; color: #a7f3d0; font-weight: 600;">
+        www.ethiotrip.com
+      </div>
+    </div>
+  </div>
+  `;
 
   const text = [
-    'Your Bus Ticket',
+    'ETHIO TRIP E-TICKET',
+    `Thank you for choosing ${ctx.company}!`,
     '',
+    `Ticket No: ${ticketNumber}`,
+    `Journey Leg: ${ctx.tripType}`,
     `Passenger: ${ctx.passengerName}`,
-    `From: ${ctx.origin}`,
-    `To: ${ctx.destination}`,
-    `Date: ${formatDateTime(ctx.departureDate)}`,
-    `Time: ${ctx.departureTime}`,
-    ctx.seats ? `Seat: ${ctx.seats}` : null,
-    `Booking Reference: ${ctx.reference}`,
+    `Bus Company: ${ctx.company}`,
+    `Bus: ${ctx.busType} (${ctx.bus})`,
+    `Route: ${ctx.origin} -> ${ctx.destination}`,
+    `Date: ${formattedDate}`,
+    `Departure Time: ${ctx.departureTime}`,
+    `Seat No: ${seatNumber}`,
+    `Total Fare: ${formatAmount(ctx.totalAmount)} ETB`,
+    `Payment Status: PAID`,
     '',
-    `Thank you, ${PLATFORM.NAME}`,
-  ].filter((line) => line !== null).join('\n');
+    'Show your QR code or Ticket No upon boarding.',
+    'Safe Journey! - Ethio Trip (www.ethiotrip.com)',
+  ].join('\n');
 
-  const html = emailShell(
-    'Your Bus Ticket',
-    `Hello <strong>${escapeHtml(ctx.passengerName)}</strong>, your ticket details are below. Please show this at boarding.`,
-    `<table style="width: 100%; border-collapse: collapse; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;">${rows}</table>`
-  );
-
-  return sendRawEmail(to, `${PLATFORM.NAME} - Your Bus Ticket (${ctx.reference})`, text, html, 'Ticket email');
+  return sendRawEmail(to, `${PLATFORM.NAME} - Your Bus Ticket (${ticketNumber})`, text, html, 'Ticket email');
 };
 
 const sendCancellationEmail = async (to, booking = {}, refundStatus) => {

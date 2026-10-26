@@ -29,9 +29,16 @@ if (!process.env.JWT_SECRET || !process.env.JWT_SECRET.trim()) {
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.set('trust proxy', true);
+// Trust exactly 1 reverse proxy (e.g. Render, Heroku, Nginx).
+// Using `true` is too permissive and triggers ERR_ERL_PERMISSIVE_TRUST_PROXY
+// from express-rate-limit because it allows clients to spoof X-Forwarded-For.
+app.set('trust proxy', 1);
 
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 
 const allowedOrigins = [
   ...getConfiguredFrontendUrls(),
@@ -40,15 +47,19 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
 ];
 
+const normalizeOrigin = (val) => String(val || '').trim().toLowerCase().replace(/\/+$/, '');
+
 app.use(cors({
   origin: (origin, callback) => {
-    if (
-      !origin ||
-      allowedOrigins.includes(origin) ||
-      origin.endsWith('.vercel.app') ||
-      origin.endsWith('.onrender.com') ||
-      process.env.NODE_ENV !== 'production'
-    ) {
+    if (!origin) return callback(null, true);
+    const cleaned = normalizeOrigin(origin);
+    const isAllowed =
+      allowedOrigins.some((ao) => normalizeOrigin(ao) === cleaned) ||
+      cleaned.endsWith('.vercel.app') ||
+      cleaned.endsWith('.onrender.com') ||
+      process.env.NODE_ENV !== 'production';
+
+    if (isAllowed) {
       callback(null, true);
     } else {
       callback(new Error(`CORS origin ${origin} not allowed`));

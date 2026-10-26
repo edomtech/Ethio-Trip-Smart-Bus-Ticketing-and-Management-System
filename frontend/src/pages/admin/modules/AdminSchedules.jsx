@@ -54,10 +54,7 @@ const AdminSchedules = () => {
   useEffect(() => { load(); }, []);
 
   const openAdd = () => {
-    setForm({
-      ...EMPTY,
-      tripId: `TRP-${Math.floor(1000 + Math.random() * 9000)}`,
-    });
+    setForm(EMPTY);
     setModal('add');
   };
 
@@ -100,11 +97,15 @@ const AdminSchedules = () => {
 
     setSaving(true);
     try {
+      const payload = {
+        ...form,
+        tripId: form.tripId?.trim() || `TRP-${Math.floor(1000 + Math.random() * 9000)}`,
+      };
       if (modal === 'add') {
-        await scheduleAPI.create(form);
+        await scheduleAPI.create(payload);
         notify.success(MESSAGES.schedule.created);
       } else {
-        await scheduleAPI.update(modal._id, form);
+        await scheduleAPI.update(modal._id, payload);
         notify.success(MESSAGES.schedule.updated);
       }
       setModal(null);
@@ -285,13 +286,12 @@ const AdminSchedules = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
                   <label className="text-[0.75rem] font-bold text-slate-500 block mb-1">
-                    {t('trip identifier (trip id)', 'Trip Identifier (Trip ID)')} *
+                    {t('trip identifier (trip id)', 'Trip Identifier (Trip ID)')}
                   </label>
                   <input
                     type="text"
                     value={form.tripId}
                     onChange={(e) => setForm({ ...form, tripId: e.target.value })}
-                    required
                     placeholder=""
                     className="w-full py-2 px-3 border-[1.5px] border-slate-200 rounded-lg text-[0.9rem] font-bold outline-none focus:border-eb-green"
                   />

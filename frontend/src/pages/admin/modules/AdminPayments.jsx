@@ -155,38 +155,50 @@ const AdminPayments = () => {
     {
       header: t('payment method', 'Method'),
       render: (p) => {
-        const rawMethod = p.booking?.paymentMethod || p.booking?.payment?.method || p.method || p.paymentMethod || 'Telebirr';
+        const rawMethod =
+          p.paymentDetails?.method ||
+          p.booking?.paymentMethod ||
+          p.booking?.payment?.method ||
+          p.method ||
+          p.paymentMethod ||
+          'Chapa';
         const methodLower = String(rawMethod).toLowerCase();
-        const isChapa = methodLower.includes('chapa') || methodLower.includes('card');
-        const isTelebirr = methodLower.includes('telebirr');
-        const isCbe = methodLower.includes('cbe');
-        const isCash = methodLower.includes('cash') || methodLower.includes('counter');
 
         let badgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
-        let icon = <FaMobileAlt />;
-        let label = 'Telebirr';
+        let icon = <FaCreditCard />;
+        let label = 'Chapa';
 
-        if (isChapa) {
-          badgeClass = 'bg-blue-100 text-blue-800 border-blue-200';
-          icon = <FaCreditCard />;
-          label = 'Chapa';
-        } else if (isCbe) {
-          badgeClass = 'bg-purple-100 text-purple-800 border-purple-200';
-          icon = <FaUniversity />;
-          label = 'CBE Birr';
-        } else if (isCash) {
-          badgeClass = 'bg-amber-100 text-amber-800 border-amber-200';
-          icon = <FaMoneyBillWave />;
-          label = 'Cash Counter';
-        } else if (isTelebirr) {
+        if (methodLower.includes('telebirr')) {
           badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-200';
           icon = <FaMobileAlt />;
           label = 'Telebirr';
+        } else if (methodLower.includes('cbe')) {
+          badgeClass = 'bg-purple-100 text-purple-800 border-purple-200';
+          icon = <FaUniversity />;
+          label = 'CBE Birr';
+        } else if (methodLower.includes('awash')) {
+          badgeClass = 'bg-sky-100 text-sky-800 border-sky-200';
+          icon = <FaUniversity />;
+          label = 'Awash Birr';
+        } else if (methodLower.includes('card') || methodLower.includes('visa') || methodLower.includes('master')) {
+          badgeClass = 'bg-indigo-100 text-indigo-800 border-indigo-200';
+          icon = <FaCreditCard />;
+          label = 'Card';
+        } else if (methodLower.includes('cash') || methodLower.includes('counter')) {
+          badgeClass = 'bg-amber-100 text-amber-800 border-amber-200';
+          icon = <FaMoneyBillWave />;
+          label = 'Cash';
+        } else if (methodLower.includes('chapa')) {
+          badgeClass = 'bg-blue-100 text-blue-800 border-blue-200';
+          icon = <FaCreditCard />;
+          label = 'Chapa';
+        } else {
+          label = rawMethod;
         }
 
         return (
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[0.72rem] font-bold border ${badgeClass}`}>
-            {icon} {t(label, label)}
+            {icon} {label}
           </span>
         );
       },

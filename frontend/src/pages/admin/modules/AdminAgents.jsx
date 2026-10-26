@@ -6,7 +6,7 @@ import { useNotification } from '../../../contexts/NotificationContext';
 import { MESSAGES } from '../../../constants/messages';
 import { useTranslation } from '../../../i18n';
 
-const EMPTY = { name: '', email: '', phone: '', city: 'Addis Ababa', password: '', role: 'agent' };
+const EMPTY = { name: '', email: '', phone: '', city: '', password: '', role: 'agent' };
 const CITIES = ['Addis Ababa', 'Dire Dawa', 'Mekelle', 'Hawassa', 'Bahir Dar', 'Jimma', 'Adama', 'Gondar', 'Dessie', 'Jijiga'];
 
 const AdminAgents = () => {
@@ -40,7 +40,7 @@ const AdminAgents = () => {
     setSaving(true);
     try {
       await userAPI.createStaff(form);
-      const roleName = form.role === 'conductor' ? 'Conductor' : 'Staff Agent';
+      const roleName = form.role === 'conductor' ? 'Conductor' : 'Staff';
       notify.success(MESSAGES.staff.created(form.name || 'Account', roleName));
       setShowModal(false);
       setForm(EMPTY);
@@ -54,12 +54,12 @@ const AdminAgents = () => {
 
   const handleDelete = async (staff) => {
     const id = staff?._id;
-    const roleLabel = staff?.role === 'conductor' ? t('conductor.portal', 'Bus Conductor') : t('agent.portal', 'Ticket Agent');
+    const roleLabel = staff?.role === 'conductor' ? t('conductor.portal', 'Conductor') : t('admin.staff', 'Staff');
 
     const confirmed = await notify.confirm({
       title: `${t('common.delete', 'Delete')} ${roleLabel}?`,
-      message: `${t('admin.deleteStaffTitle', 'Are you sure you want to delete')} ${staff?.name ? `"${staff.name}"` : ''}?`,
-      description: t('admin.deleteStaffDesc', 'This account will lose access immediately. This action cannot be undone.'),
+      message: `${t('admin.deleteUserTitle', 'Are you sure you want to delete')} ${staff?.name ? `"${staff.name}"` : ''}?`,
+      description: t('admin.deleteUserDesc', 'This account will lose access immediately. This action cannot be undone.'),
       confirmLabel: t('common.delete', 'Delete'),
       cancelLabel: t('common.cancel', 'Cancel'),
       variant: 'danger',
@@ -89,7 +89,7 @@ const AdminAgents = () => {
 
   const columns = [
     {
-      header: t('admin.staffName', 'Staff Name'),
+      header: t('admin.userName', 'User Name'),
       render: (a) => {
         const isConductor = a.role === 'conductor';
         return (
@@ -99,7 +99,7 @@ const AdminAgents = () => {
                 isConductor ? 'bg-gradient-to-br from-indigo-500 to-indigo-700' : 'bg-gradient-to-br from-sky-600 to-sky-700'
               }`}
             >
-              {(a.name || 'A')[0].toUpperCase()}
+              {(a.name || 'U')[0].toUpperCase()}
             </div>
             <div>
               <span className="font-bold text-slate-900 block">{a.name}</span>
@@ -110,7 +110,7 @@ const AdminAgents = () => {
       },
     },
     {
-      header: t('admin.staffRole', 'Staff Role'),
+      header: t('admin.userRole', 'User Role'),
       render: (a) => {
         const isConductor = a.role === 'conductor';
         return (
@@ -120,7 +120,7 @@ const AdminAgents = () => {
             }`}
           >
             {isConductor ? <FaUserShield /> : <FaUserTie />}
-            {isConductor ? t('conductor.portal', 'Bus Conductor') : t('agent.portal', 'Ticket Agent')}
+            {isConductor ? t('conductor.portal', 'Conductor') : t('admin.staff', 'Staff')}
           </span>
         );
       },
@@ -133,7 +133,7 @@ const AdminAgents = () => {
       header: t('admin.stationCity', 'Station / City'),
       render: (a) => (
         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[0.72rem] font-bold bg-slate-50 text-slate-700 border border-slate-200">
-          {a.city || 'Addis Ababa'}
+          {a.city || '—'}
         </span>
       ),
     },
@@ -143,7 +143,7 @@ const AdminAgents = () => {
         <button
           onClick={() => handleDelete(a)}
           disabled={deletingId === a._id}
-          aria-label={`Delete account ${a.name || 'staff'}`}
+          aria-label={`Delete account ${a.name || 'user'}`}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-[0.76rem] font-bold cursor-pointer border-none transition-colors"
         >
           <FaTrash /> {deletingId === a._id ? t('common.deleting', 'Deleting…') : t('common.delete', 'Delete')}
@@ -159,9 +159,9 @@ const AdminAgents = () => {
     <div>
       <div className="flex gap-2 mb-4 flex-wrap">
         {[
-          { id: 'ALL', label: `${t('admin.allStaff', 'All Staff')} (${staffList.length})` },
-          { id: 'agent', label: `${t('admin.ticketAgents', 'Ticket Agents')} (${agentCount})` },
-          { id: 'conductor', label: `${t('admin.conductors', 'Conductors')} (${conductorCount})` },
+          { id: 'ALL', label: `${t('admin.allUsers', 'All Users')} (${staffList.length})` },
+          { id: 'agent', label: `${t('admin.staff', 'Staff')} (${agentCount})` },
+          { id: 'conductor', label: `${t('admin.conductors', 'Conductor')} (${conductorCount})` },
         ].map((btn) => (
           <button
             key={btn.id}
@@ -181,14 +181,14 @@ const AdminAgents = () => {
         loading={loading}
         searchTerm={search}
         onSearchChange={setSearch}
-        searchPlaceholder={t('admin.searchStaff', 'Search staff by name, email, or city...')}
-        emptyMessage={t('admin.noStaffFound', "No staff accounts found. Click 'Add Staff' to create Ticket Agents and Conductors.")}
+        searchPlaceholder={t('admin.searchUsers', 'Search users by name, email, or city...')}
+        emptyMessage={t('admin.noUsersFound', "No user accounts found. Click 'Add User' to create Staff and Conductors.")}
         actions={
           <button
             onClick={() => { setForm(EMPTY); setShowModal(true); }}
             className="py-2.5 px-4.5 bg-gradient-to-br from-eb-green to-[#046623] text-white border-none rounded-xl font-extrabold text-[0.85rem] cursor-pointer flex items-center gap-2 shadow-[0_4px_14px_rgba(7,137,48,0.3)] hover:opacity-95 transition-opacity"
           >
-            <FaPlus /> {t('admin.addAgentConductor', 'Add Agent / Conductor')}
+            <FaPlus /> {t('admin.addUser', 'Add User')}
           </button>
         }
       />
@@ -205,9 +205,9 @@ const AdminAgents = () => {
             <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 py-[18px] px-[22px] flex justify-between items-center text-white">
               <div>
                 <div className="text-amber-300 text-[0.7rem] font-extrabold uppercase">
-                  {t('admin.staffManagement', 'Staff Management')}
+                  {t('admin.userManagement', 'User Management')}
                 </div>
-                <h3 className="text-white m-0 font-extrabold text-[1.1rem]">{t('admin.createStaffAccount', 'Create Staff Account')}</h3>
+                <h3 className="text-white m-0 font-extrabold text-[1.1rem]">{t('admin.createUserAccount', 'Create User Account')}</h3>
               </div>
               <button
                 onClick={() => setShowModal(false)}
@@ -220,21 +220,21 @@ const AdminAgents = () => {
             <form onSubmit={handleCreate} className="p-[22px] flex flex-col gap-3.5">
               <div>
                 <label className="text-[0.75rem] font-bold text-slate-500 block mb-1">
-                  {t('admin.accountRole', 'Account Role')}
+                  {t('admin.userRole', 'User Role')}
                 </label>
                 <select
                   value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
                   className="w-full py-2 px-3 border-[1.5px] border-slate-200 rounded-lg text-[0.9rem] font-bold outline-none focus:border-emerald-600"
                 >
-                  <option value="agent">{t('admin.roleAgentDesc', 'Ticket Agent (Counter Booking & Verification)')}</option>
-                  <option value="conductor">{t('admin.roleConductorDesc', 'Bus Conductor (Onboard QR Scan & Boarding)')}</option>
+                  <option value="agent">{t('admin.staff', 'Staff')}</option>
+                  <option value="conductor">{t('admin.conductor', 'Conductor')}</option>
                 </select>
               </div>
 
               <div>
                 <label className="text-[0.75rem] font-bold text-slate-500 block mb-1">
-                  {t('forms.passengerFullName', 'Full Name')}
+                  {t('admin.userName', 'User Name')}
                 </label>
                 <input
                   type="text"
@@ -288,6 +288,7 @@ const AdminAgents = () => {
                     onChange={(e) => setForm({ ...form, city: e.target.value })}
                     className="w-full py-2 px-3 border-[1.5px] border-slate-200 rounded-lg text-[0.9rem] outline-none focus:border-emerald-600"
                   >
+                    <option value="">{t('admin.selectCity', 'Select City / Station')}</option>
                     {CITIES.map((c) => (
                       <option key={c} value={c}>{t(c, c)}</option>
                     ))}

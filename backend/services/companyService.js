@@ -18,6 +18,7 @@ const createCompanyBySuperAdmin = async (companyData, superAdminUser) => {
     city,
     description,
     logo,
+    busImage,
     status,
     paymentMethods,
     adminName,
@@ -74,6 +75,7 @@ const createCompanyBySuperAdmin = async (companyData, superAdminUser) => {
     address: (address || '').trim(),
     city: city || 'Addis Ababa',
     logo: logo || '',
+    busImage: busImage || '',
     description: description || '',
     status: companyStatus,
     paymentMethods: paymentMethods || {
@@ -166,7 +168,7 @@ const getActiveCompaniesList = async () => {
 
 
 const publicCompanyFields = [
-  'companyName', 'logo', 'city', 'description', 'rating', 'totalReviews',
+  'companyName', 'logo', 'busImage', 'city', 'description', 'rating', 'totalReviews',
   'phone', 'email', 'status', 'cancellationPolicy', 'paymentMethods.method',
   'paymentMethods.accountName', 'createdAt',
 ].join(' ');
@@ -274,6 +276,7 @@ const updateCompanyProfile = async (companyId, updateData, adminUser) => {
     'address',
     'city',
     'logo',
+    'busImage',
     'description',
     ...(isSuper ? ['status'] : []),
     'paymentMethods',

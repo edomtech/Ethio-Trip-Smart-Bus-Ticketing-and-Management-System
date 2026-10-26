@@ -463,7 +463,15 @@ const getPaymentHistory = async (userId) => {
 };
 
 const getCompanyPayments = async (companyId) => {
-  return Payment.find({ $or: [{ companyId }, { company: companyId }] })
+  const compIdStr = companyId?._id ? companyId._id.toString() : companyId.toString();
+  const companyBookingIds = await Booking.find({ companyId: compIdStr }).distinct('_id');
+  return Payment.find({
+    $or: [
+      { companyId: compIdStr },
+      { company: compIdStr },
+      { booking: { $in: companyBookingIds } },
+    ],
+  })
     .populate('companyId', 'companyName logo')
     .populate('company', 'companyName logo')
     .populate('user', 'name email phone')

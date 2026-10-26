@@ -23,61 +23,69 @@ const AdminPassengers = () => {
 
       const passengerMap = new Map();
       const userList = Array.isArray(users) ? users : users?.users || [];
-      const userMap = new Map();
-      userList.forEach(u => {
-        if (u.email) userMap.set(u.email.toLowerCase(), u);
+
+      // First populate from registered DB users
+      userList.forEach((u) => {
+        const idKey = u._id ? u._id.toString() : (u.email || '').toLowerCase();
+        if (!idKey) return;
+        passengerMap.set(idKey, {
+          id: idKey,
+          name: u.name || 'Passenger',
+          email: u.email || '—',
+          phone: u.phone || '—',
+          nationalId: u.nationalId || '—',
+          city: u.city || '—',
+          totalBookings: 0,
+          lastBookingDate: null,
+          registeredDate: u.createdAt,
+          isRegistered: true,
+        });
       });
 
+      // Match bookings to update total bookings and last active date
       (bookings || []).forEach((b) => {
-        const email = b.passenger?.email || (b.user && b.user.email) || '';
-        const phone = b.passenger?.phone || (b.user && b.user.phone) || '';
-        const name = b.passenger?.name || (b.user && b.user.name) || 'Passenger';
-        const key = (email || phone || b.user?._id || b.user || name || b._id)?.toString().toLowerCase().trim();
-        if (!key) return;
+        const userId = (b.user?._id || b.user)?.toString();
+        const email = (b.passenger?.email || b.user?.email || '').toLowerCase();
+        const phone = b.passenger?.phone || b.user?.phone || '';
+        const nationalId = b.passenger?.nationalId || b.passenger?.idNumber || '';
 
-        const matchedUser = (email && userMap.get(email.toLowerCase())) || (b.user && typeof b.user === 'object' ? b.user : null);
+        let p = null;
+        if (userId && passengerMap.has(userId)) {
+          p = passengerMap.get(userId);
+        } else if (email && passengerMap.has(email)) {
+          p = passengerMap.get(email);
+        }
 
-        if (!passengerMap.has(key)) {
-          passengerMap.set(key, {
-            name,
-            email: email || '—',
-            phone: phone || '—',
-            totalBookings: 1,
-            totalSpent: b.totalPrice || 0,
-            lastBookingDate: b.createdAt,
-            registeredDate: matchedUser?.createdAt || b.createdAt,
-            isRegistered: !!matchedUser,
-            city: matchedUser?.city || b.user?.city || '—',
-          });
-        } else {
-          const p = passengerMap.get(key);
+        if (p) {
           p.totalBookings += 1;
-          p.totalSpent += b.totalPrice || 0;
-          if (new Date(b.createdAt) > new Date(p.lastBookingDate)) {
+          if (nationalId && (!p.nationalId || p.nationalId === '—')) p.nationalId = nationalId;
+          if (b.passenger?.city && (!p.city || p.city === '—')) p.city = b.passenger.city;
+          if (new Date(b.createdAt) > new Date(p.lastBookingDate || 0)) {
             p.lastBookingDate = b.createdAt;
           }
-          if (matchedUser?.createdAt && !p.isRegistered) {
-            p.registeredDate = matchedUser.createdAt;
-            p.isRegistered = true;
+        } else {
+          const guestKey = (email || phone || b._id).toString().toLowerCase();
+          if (!passengerMap.has(guestKey)) {
+            passengerMap.set(guestKey, {
+              id: guestKey,
+              name: b.passenger?.name || 'Guest Passenger',
+              email: email || '—',
+              phone: phone || '—',
+              nationalId: nationalId || '—',
+              city: b.passenger?.city || '—',
+              totalBookings: 1,
+              lastBookingDate: b.createdAt,
+              registeredDate: b.createdAt,
+              isRegistered: false,
+            });
+          } else {
+            const guest = passengerMap.get(guestKey);
+            guest.totalBookings += 1;
+            if (nationalId && (!guest.nationalId || guest.nationalId === '—')) guest.nationalId = nationalId;
+            if (new Date(b.createdAt) > new Date(guest.lastBookingDate || 0)) {
+              guest.lastBookingDate = b.createdAt;
+            }
           }
-        }
-      });
-
-      userList.forEach((u) => {
-        const emailKey = (u.email || '').toLowerCase();
-        if (!emailKey) return;
-        if (!passengerMap.has(emailKey)) {
-          passengerMap.set(emailKey, {
-            name: u.name || 'Passenger',
-            email: emailKey,
-            phone: u.phone || '—',
-            totalBookings: 0,
-            totalSpent: 0,
-            lastBookingDate: null,
-            registeredDate: u.createdAt,
-            isRegistered: true,
-            city: u.city || '—',
-          });
         }
       });
 
@@ -99,7 +107,9 @@ const AdminPassengers = () => {
       const matchSearch =
         p.name.toLowerCase().includes(q) ||
         p.email.toLowerCase().includes(q) ||
-        p.phone.includes(q);
+        p.phone.includes(q) ||
+        (p.nationalId && p.nationalId.toLowerCase().includes(q)) ||
+        (p.city && p.city.toLowerCase().includes(q));
       if (!matchSearch) return false;
     }
 
@@ -185,6 +195,22 @@ const AdminPassengers = () => {
             ),
           },
           {
+            header: t('booking.nationalId', 'National ID'),
+            render: (p) => (
+              <span className="text-[0.82rem] font-bold text-slate-800">
+                {p.nationalId || '—'}
+              </span>
+            ),
+          },
+          {
+            header: t('admin.stationCity', 'City / Station'),
+            render: (p) => (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[0.72rem] font-bold bg-slate-50 text-slate-700 border border-slate-200">
+                {p.city || '—'}
+              </span>
+            ),
+          },
+          {
             header: t('registration date', 'Registration Date'),
             render: (p) => (
               <div>
@@ -202,14 +228,6 @@ const AdminPassengers = () => {
             render: (p) => (
               <span className="font-extrabold text-blue-600">
                 {p.totalBookings} {t('tickets', 'tickets')}
-              </span>
-            ),
-          },
-          {
-            header: t('total spent', 'Total Spent'),
-            render: (p) => (
-              <span className="font-extrabold text-green-600">
-                ETB {p.totalSpent.toLocaleString()}
               </span>
             ),
           },

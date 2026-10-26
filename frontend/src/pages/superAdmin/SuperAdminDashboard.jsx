@@ -15,7 +15,8 @@ import {
   FaSearch, FaEdit, FaEye, FaPrint, FaDownload, FaCheckCircle,
   FaTimesCircle, FaMobileAlt, FaCreditCard, FaUpload, FaBars,
   FaTimes, FaLock, FaUser, FaPhone, FaEnvelope, FaMapMarkerAlt,
-  FaIdCard, FaFileInvoice, FaSyncAlt, FaCrown, FaChartLine, FaHeadset, FaPaperPlane, FaQuestionCircle
+  FaIdCard, FaFileInvoice, FaSyncAlt, FaCrown, FaChartLine, FaHeadset, FaPaperPlane, FaQuestionCircle,
+  FaTicketAlt, FaBus, FaUsers
 } from 'react-icons/fa';
 
 const formatRelativeTime = (timestamp) => {
@@ -78,6 +79,7 @@ const SuperAdminDashboard = () => {
     city: 'Addis Ababa',
     description: '',
     logo: '',
+    busImage: '',
     status: 'active',
     adminName: '',
     adminEmail: '',
@@ -87,10 +89,11 @@ const SuperAdminDashboard = () => {
     telebirrNumber: '0911002233',
     cbeEnabled: true,
     cbeAccountNumber: '1000123456789',
-    chapaEnabled: false,
-    chapaKey: '',
+    chapaEnabled: true,
+    chapaKey: 'CHAPA-ET-2026-LIVE',
   };
   const [companyForm, setCompanyForm] = useState(initialCompanyForm);
+  const [uploadingBusImage, setUploadingBusImage] = useState(false);
 
   const formatAdminName = (rawName) => {
     if (!rawName) return 'Platform Admin';
@@ -183,6 +186,25 @@ const SuperAdminDashboard = () => {
     }
   };
 
+  const handleBusImageUpload = async (e, isEdit = false) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setUploadingBusImage(true);
+      const url = await uploadToCloudinary(file);
+      if (isEdit) {
+        setEditingCompany(prev => ({ ...prev, busImage: url }));
+      } else {
+        setCompanyForm(prev => ({ ...prev, busImage: url }));
+      }
+      notify.success('Bus fleet photo uploaded successfully!');
+    } catch (err) {
+      notify.notifyError(err, 'Failed to upload bus image');
+    } finally {
+      setUploadingBusImage(false);
+    }
+  };
+
   const handleAvatarUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -232,6 +254,7 @@ const SuperAdminDashboard = () => {
         city: companyForm.city || 'Addis Ababa',
         description: companyForm.description.trim(),
         logo: companyForm.logo || '',
+        busImage: companyForm.busImage || '',
         status: companyForm.status || 'active',
         adminName: companyForm.adminName.trim(),
         adminEmail: companyForm.adminEmail.toLowerCase().trim(),
@@ -344,6 +367,7 @@ const SuperAdminDashboard = () => {
         city: editingCompany.city,
         description: editingCompany.description,
         logo: editingCompany.logo,
+        busImage: editingCompany.busImage || '',
         paymentMethods: {
           telebirr: {
             enabled: isTelebirr,
@@ -353,7 +377,10 @@ const SuperAdminDashboard = () => {
             enabled: isCBE,
             accountNumber: isCBE ? editingCompany.cbeAccountNumber : '',
           },
-          chapa: editingCompany.paymentMethods?.chapa || { enabled: false, apiKey: '' },
+          chapa: editingCompany.paymentMethods?.chapa?.enabled !== false ? {
+            enabled: true,
+            accountNumber: editingCompany.paymentMethods?.chapa?.accountNumber || 'CHAPA-ET-2026-LIVE',
+          } : { enabled: false, accountNumber: '' },
         },
       };
 
@@ -437,9 +464,10 @@ const SuperAdminDashboard = () => {
     let chapaCount = 0;
 
     companies.forEach(c => {
-      const t = c.paymentMethods?.telebirr?.enabled ?? true;
-      const b = c.paymentMethods?.cbe?.enabled ?? true;
-      const ch = c.paymentMethods?.chapa?.enabled ?? (c.payment?.enabled ?? true);
+      const pm = c.paymentMethods;
+      const t = pm ? pm.telebirr?.enabled !== false : true;
+      const b = pm ? pm.cbe?.enabled !== false : true;
+      const ch = pm ? pm.chapa?.enabled !== false : (c.payment?.enabled !== false);
       if (t && b && ch) allThreeCount++;
       if (t) telebirrCount++;
       if (b) cbeCount++;
@@ -1035,16 +1063,45 @@ const SuperAdminDashboard = () => {
                         className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                       />
                     </div>
-                    <div className="md:col-span-2">
-                      <label className="text-xs font-bold text-slate-700 block mb-1">Company Logo</label>
-                      <div className="flex items-center gap-4">
-                        {companyForm.logo && (
-                          <img src={companyForm.logo} alt="Logo preview" className="w-12 h-12 rounded-xl object-contain border border-slate-200 p-1" />
-                        )}
-                        <label className="cursor-pointer px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-2 transition">
-                          <FaUpload /> {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
-                          <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
-                        </label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:col-span-2 pt-2 border-t border-slate-100">
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">Company Official Logo</label>
+                        <div className="flex items-center gap-3">
+                          {companyForm.logo ? (
+                            <img src={companyForm.logo} alt="Logo preview" className="w-14 h-14 rounded-xl object-contain border border-slate-200 p-1 bg-white shrink-0" />
+                          ) : (
+                            <div className="w-14 h-14 rounded-xl bg-slate-100 border border-dashed border-slate-300 flex items-center justify-center text-slate-400 text-xs shrink-0">
+                              Logo
+                            </div>
+                          )}
+                          <div>
+                            <label className="cursor-pointer px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-2 transition inline-flex">
+                              <FaUpload /> {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
+                              <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                            </label>
+                            <span className="block text-[10px] text-slate-400 mt-1">PNG, JPG up to 5MB</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">Bus Fleet Image (Shown on Bus Page)</label>
+                        <div className="flex items-center gap-3">
+                          {companyForm.busImage ? (
+                            <img src={companyForm.busImage} alt="Bus preview" className="w-14 h-14 rounded-xl object-cover border border-slate-200 p-0.5 bg-white shrink-0" />
+                          ) : (
+                            <div className="w-14 h-14 rounded-xl bg-slate-100 border border-dashed border-slate-300 flex items-center justify-center text-slate-400 text-xs shrink-0">
+                              <FaBus />
+                            </div>
+                          )}
+                          <div>
+                            <label className="cursor-pointer px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl flex items-center gap-2 transition border border-blue-200 inline-flex">
+                              <FaUpload /> {uploadingBusImage ? 'Uploading...' : 'Upload Bus Image'}
+                              <input type="file" accept="image/*" onChange={handleBusImageUpload} className="hidden" />
+                            </label>
+                            <span className="block text-[10px] text-slate-400 mt-1">Displayed on passenger bus fleet page</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1851,13 +1908,6 @@ const SuperAdminDashboard = () => {
                         </span>
                       </div>
 
-                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
-                        <div>
-                          <span className="font-bold text-slate-800 block">Operator Revenue Split</span>
-                          <span className="text-[11px] text-slate-500">Standard operator share on ticket sales</span>
-                        </div>
-                        <span className="font-black text-slate-900 text-xs">90% Operator / 10% Platform</span>
-                      </div>
 
                       <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
                         <div>
@@ -1932,36 +1982,6 @@ const SuperAdminDashboard = () => {
                     </div>
                   </div>
 
-                  {/* System Health & Infrastructure */}
-                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-                    <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
-                      <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center text-sm">
-                        <FaCheckCircle />
-                      </div>
-                      <h3 className="text-sm font-bold text-slate-900 m-0">System Health &amp; Live Environment</h3>
-                    </div>
-
-                    <div className="space-y-3 text-xs">
-                      <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
-                        <span className="text-slate-600 font-semibold">Database Engine:</span>
-                        <span className="font-mono font-bold text-slate-900">MongoDB (ethio_trip)</span>
-                      </div>
-                      <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
-                        <span className="text-slate-600 font-semibold">Payment Engine:</span>
-                        <span className="font-bold text-emerald-700 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500" /> Chapa Production Gateway (Live Mode)
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
-                        <span className="text-slate-600 font-semibold">Active Transport Operators:</span>
-                        <span className="font-black text-blue-700">{companies.filter(c => c.status === 'active').length} Companies Active</span>
-                      </div>
-                      <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
-                        <span className="text-slate-600 font-semibold">Audit Governance Logging:</span>
-                        <span className="font-bold text-slate-800">{auditLogs.length} Records Tracked</span>
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
                 <div className="flex justify-end pt-2">
@@ -2004,59 +2024,65 @@ const SuperAdminDashboard = () => {
                 </div>
               </div>
 
-              {/* KPI Summary Cards */}
+              {/* Platform Performance & Operational KPI Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
                   <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase">
-                    <span>Registered Operators</span>
+                    <span>Total System Bookings</span>
                     <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
-                      <FaBuilding />
+                      <FaTicketAlt />
                     </div>
                   </div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">{companies.length}</div>
+                  <div className="text-2xl font-black text-slate-900 mt-2">
+                    {(platformReports?.totalBookings ?? 0).toLocaleString()}
+                  </div>
                   <span className="text-[11px] text-emerald-600 font-semibold mt-1 block">
-                    {companies.filter(c => c.status === 'active').length} Active &amp; Selling Tickets
+                    {platformReports?.bookingsBreakdown?.confirmed || 0} Confirmed • {platformReports?.bookingsBreakdown?.completed || 0} Completed
                   </span>
                 </div>
 
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
                   <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase">
-                    <span>Platform Commission (10%)</span>
+                    <span>Gross Ticket Sales</span>
                     <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
                       <FaCreditCard />
                     </div>
                   </div>
                   <div className="text-2xl font-black text-emerald-700 mt-2">
-                    ETB {((platformReports?.totalRevenue || 0) * 0.1).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    ETB {(platformReports?.totalRevenue || 0).toLocaleString()}
                   </div>
                   <span className="text-[11px] text-slate-500 font-semibold mt-1 block">
-                    Gross Ticket Vol: ETB {(platformReports?.totalRevenue || 0).toLocaleString()}
+                    Today: ETB {(platformReports?.todayRevenue || 0).toLocaleString()} • Month: ETB {(platformReports?.monthRevenue || 0).toLocaleString()}
                   </span>
                 </div>
 
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
                   <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase">
-                    <span>Active Transport Hubs</span>
+                    <span>Passengers Served</span>
                     <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
-                      <FaMapMarkerAlt />
+                      <FaUsers />
                     </div>
                   </div>
-                  <div className="text-2xl font-black text-purple-700 mt-2">{regionalBreakdown.length}</div>
+                  <div className="text-2xl font-black text-purple-700 mt-2">
+                    {(platformReports?.totalPassengers || platformReports?.allTimeUniquePassengers || 0).toLocaleString()}
+                  </div>
                   <span className="text-[11px] text-slate-500 font-semibold mt-1 block">
-                    Major Cities across Ethiopia
+                    {(platformReports?.totalSeatsBooked || 0).toLocaleString()} Total Seats Reserved System-Wide
                   </span>
                 </div>
 
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
                   <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase">
-                    <span>Governance Audit Logs</span>
+                    <span>Active Fleet &amp; Routes</span>
                     <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center">
-                      <FaHistory />
+                      <FaBus />
                     </div>
                   </div>
-                  <div className="text-2xl font-black text-amber-700 mt-2">{auditLogs.length}</div>
+                  <div className="text-2xl font-black text-amber-700 mt-2">
+                    {platformReports?.activeBuses ?? (platformReports?.totalBuses ?? 0)} Buses
+                  </div>
                   <span className="text-[11px] text-slate-500 font-semibold mt-1 block">
-                    100% Traceable Operator Events
+                    {platformReports?.activeRoutes ?? (platformReports?.totalRoutes ?? 0)} Active Intercity Routes
                   </span>
                 </div>
               </div>
@@ -2342,6 +2368,36 @@ const SuperAdminDashboard = () => {
                     required
                     className="w-full p-2.5 rounded-xl border border-slate-300 outline-none"
                   />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:col-span-2 pt-2 border-t border-slate-100">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1 text-xs">Company Logo</label>
+                    <div className="flex items-center gap-3">
+                      {editingCompany.logo ? (
+                        <img src={editingCompany.logo} alt="Logo" className="w-12 h-12 rounded-xl object-contain border border-slate-200 p-1 bg-white" />
+                      ) : (
+                        <div className="w-12 h-12 rounded-xl bg-slate-100 border border-dashed border-slate-300 flex items-center justify-center text-slate-400 text-xs">Logo</div>
+                      )}
+                      <label className="cursor-pointer px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition">
+                        <FaUpload /> {uploadingLogo ? 'Uploading...' : 'Change Logo'}
+                        <input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e, true)} className="hidden" />
+                      </label>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1 text-xs">Bus Fleet Image (Bus Page)</label>
+                    <div className="flex items-center gap-3">
+                      {editingCompany.busImage ? (
+                        <img src={editingCompany.busImage} alt="Bus" className="w-12 h-12 rounded-xl object-cover border border-slate-200 p-0.5 bg-white" />
+                      ) : (
+                        <div className="w-12 h-12 rounded-xl bg-slate-100 border border-dashed border-slate-300 flex items-center justify-center text-slate-400 text-xs"><FaBus /></div>
+                      )}
+                      <label className="cursor-pointer px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition border border-blue-200">
+                        <FaUpload /> {uploadingBusImage ? 'Uploading...' : 'Change Bus Photo'}
+                        <input type="file" accept="image/*" onChange={(e) => handleBusImageUpload(e, true)} className="hidden" />
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
 

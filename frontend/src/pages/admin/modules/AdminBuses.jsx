@@ -6,7 +6,7 @@ import { useNotification } from '../../../contexts/NotificationContext';
 import { MESSAGES } from '../../../constants/messages';
 import { useTranslation } from '../../../i18n';
 
-const EMPTY = { busNumber: '', plateNumber: '', type: 'Standard', capacity: 45, status: 'active' };
+const EMPTY = { busNumber: '', plateNumber: '', type: '', capacity: '', status: 'active' };
 
 const AdminBuses = () => {
   const { t } = useTranslation();
@@ -36,11 +36,11 @@ const AdminBuses = () => {
   const openAdd = () => { setForm(EMPTY); setModal('add'); };
   const openEdit = (bus) => {
     setForm({
-      busNumber: bus.busNumber,
+      busNumber: bus.busNumber || '',
       plateNumber: bus.plateNumber || '',
-      type: bus.type,
-      capacity: bus.capacity,
-      status: bus.status,
+      type: bus.type || '',
+      capacity: bus.capacity || '',
+      status: bus.status || 'active',
     });
     setModal(bus);
   };
@@ -49,11 +49,16 @@ const AdminBuses = () => {
     e.preventDefault();
     setSaving(true);
     try {
+      const payload = {
+        ...form,
+        type: form.type || 'Standard',
+        capacity: form.capacity ? Number(form.capacity) : 45,
+      };
       if (modal === 'add') {
-        await busAPI.create(form);
+        await busAPI.create(payload);
         notify.success(MESSAGES.bus.added);
       } else {
-        await busAPI.update(modal._id, form);
+        await busAPI.update(modal._id, payload);
         notify.success(MESSAGES.bus.updated);
       }
       setModal(null);
@@ -230,6 +235,7 @@ const AdminBuses = () => {
                     onChange={(e) => setForm({ ...form, type: e.target.value })}
                     className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-lg text-[0.9rem] focus:outline-none focus:border-eb-green"
                   >
+                    <option value="">{t('buses.selectType', 'Select Bus Type')}</option>
                     {['Standard', 'Luxury', 'VIP'].map((item) => (
                       <option key={item} value={item}>{t(item, item)}</option>
                     ))}
@@ -239,8 +245,9 @@ const AdminBuses = () => {
                   <label className="text-[0.75rem] font-bold text-slate-500 block mb-1">{t('buses.capacity', 'Capacity')}</label>
                   <input
                     type="number"
-                    value={form.capacity}
-                    onChange={(e) => setForm({ ...form, capacity: Number(e.target.value) })}
+                    value={form.capacity ?? ''}
+                    placeholder=""
+                    onChange={(e) => setForm({ ...form, capacity: e.target.value === '' ? '' : Number(e.target.value) })}
                     min={10}
                     max={80}
                     className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-lg text-[0.9rem] focus:outline-none focus:border-eb-green"

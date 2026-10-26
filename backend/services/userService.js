@@ -63,13 +63,24 @@ const getAllUsers = async (user, queryParams = {}) => {
       err.statusCode = 403;
       throw err;
     }
-    query.companyId = userCompanyId;
-  } else if (queryParams.companyId) {
-    query.companyId = queryParams.companyId;
-  }
-
-  if (role) {
-    query.role = role;
+    if (role === 'passenger') {
+      const Booking = require('../models/Booking');
+      const companyUserIds = await Booking.find({ companyId: userCompanyId, user: { $ne: null } }).distinct('user');
+      query._id = { $in: companyUserIds };
+      query.role = 'passenger';
+    } else {
+      query.companyId = userCompanyId;
+      if (role) {
+        query.role = role;
+      }
+    }
+  } else {
+    if (queryParams.companyId) {
+      query.companyId = queryParams.companyId;
+    }
+    if (role) {
+      query.role = role;
+    }
   }
 
   return User.find(query)
@@ -172,7 +183,7 @@ const createUser = async (userData, creatorUser) => {
     password,
     role: assignedRole,
     companyId: targetCompanyId || null,
-    city: city || 'Addis Ababa',
+    city: city || '',
     isActive: true,
   });
 

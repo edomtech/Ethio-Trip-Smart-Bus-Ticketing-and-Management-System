@@ -127,6 +127,9 @@ const BusesPage = () => {
     if (bus.image && bus.image.trim()) {
       return bus.image;
     }
+    if (bus.companyId?.busImage && bus.companyId.busImage.trim()) {
+      return bus.companyId.busImage;
+    }
     const compName = bus.companyId?.companyName;
     if (compName && COMPANY_BUS_IMAGES[compName]) {
       return COMPANY_BUS_IMAGES[compName];

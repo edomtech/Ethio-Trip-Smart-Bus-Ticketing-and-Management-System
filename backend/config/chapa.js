@@ -11,5 +11,5 @@ module.exports = {
   webhookSecret: cleanKey(process.env.CHAPA_WEBHOOK_SECRET || process.env.CHAPA_SECRET_KEY),
   baseUrl: process.env.CHAPA_BASE_URL || 'https://api.chapa.co/v1',
   mode: (process.env.CHAPA_SECRET_KEY || '').includes('TEST') ? 'TEST' : 'LIVE',
-  seatHoldMinutes: parseInt(process.env.SEAT_HOLD_MINUTES || '15', 10),
+  seatHoldMinutes: parseInt(process.env.SEAT_HOLD_MINUTES || '60', 10),
 };

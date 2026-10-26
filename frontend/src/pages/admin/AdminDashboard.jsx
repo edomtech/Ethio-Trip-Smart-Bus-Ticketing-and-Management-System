@@ -167,7 +167,7 @@ const AdminDashboard = () => {
 
   const navItems = [
     { id: 'dashboard', label: t('admin.dashboard', 'Dashboard'), icon: <FaChartBar /> },
-    { id: 'agents', label: t('admin.staffs', 'Staffs'), icon: <FaUserTie /> },
+    { id: 'agents', label: t('admin.users', 'Users'), icon: <FaUserTie /> },
     { id: 'passengers', label: t('admin.passengers', 'Passengers'), icon: <FaUsers /> },
     { id: 'buses', label: t('admin.buses', 'Buses'), icon: <FaBus /> },
     { id: 'routes', label: t('admin.routes', 'Routes'), icon: <FaRoute /> },

@@ -73,10 +73,10 @@ const BusSearch = ({ onSelectSchedule }) => {
   };
 
   const [tripType, setTripType] = useState('oneway');
-  const [fromCity, setFromCity] = useState('Addis Ababa');
-  const [toCity, setToCity] = useState('Bahir Dar');
-  const [travelDate, setTravelDate] = useState(new Date().toISOString().split('T')[0]);
-  const [returnDate, setReturnDate] = useState(getFutureDateString(3));
+  const [fromCity, setFromCity] = useState('');
+  const [toCity, setToCity] = useState('');
+  const [travelDate, setTravelDate] = useState('');
+  const [returnDate, setReturnDate] = useState('');
   const [passengers, setPassengers] = useState(1);
 
   const [flowStep, setFlowStep] = useState('search');
@@ -106,7 +106,7 @@ const BusSearch = ({ onSelectSchedule }) => {
     fullName: user?.name || '',
     phone: user?.phone || '',
     email: user?.email || '',
-    gender: 'Male',
+    gender: '',
     age: '',
     emergencyContact: '',
   });
@@ -174,8 +174,16 @@ const BusSearch = ({ onSelectSchedule }) => {
 
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
+    if (!fromCity || !toCity) {
+      toast.error(t('search.selectCities', 'Please select departure and destination cities'));
+      return;
+    }
     if (fromCity === toCity) {
       toast.error(t('search.diffCities', 'Departure and Destination cities must be different'));
+      return;
+    }
+    if (!travelDate) {
+      toast.error(t('search.selectDate', 'Please select travel date'));
       return;
     }
 
@@ -428,6 +436,7 @@ const BusSearch = ({ onSelectSchedule }) => {
                   onChange={(e) => setFromCity(e.target.value)}
                   className="bg-transparent border-0 outline-none w-full text-xs font-semibold text-slate-800 dark:text-slate-100"
                 >
+                  <option value="">{t('home.selectOrigin', 'Select Departure City')}</option>
                   {cities.map((c) => <option key={c} value={c} className="dark:bg-slate-900">{t(c, c)}</option>)}
                 </select>
               </div>
@@ -455,6 +464,7 @@ const BusSearch = ({ onSelectSchedule }) => {
                   onChange={(e) => setToCity(e.target.value)}
                   className="bg-transparent border-0 outline-none w-full text-xs font-semibold text-slate-800 dark:text-slate-100"
                 >
+                  <option value="">{t('home.selectDestination', 'Select Destination City')}</option>
                   {cities.filter((c) => c !== fromCity).map((c) => <option key={c} value={c} className="dark:bg-slate-900">{t(c, c)}</option>)}
                 </select>
               </div>

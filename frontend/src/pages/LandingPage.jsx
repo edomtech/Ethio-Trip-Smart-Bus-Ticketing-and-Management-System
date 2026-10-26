@@ -59,10 +59,10 @@ const LandingPage = () => {
   };
 
   const [tripType, setTripType] = useState('oneway');
-  const [fromCity, setFromCity] = useState('Addis Ababa');
-  const [toCity, setToCity] = useState('Dire Dawa');
-  const [travelDate, setTravelDate] = useState(new Date().toISOString().split('T')[0]);
-  const [returnDate, setReturnDate] = useState(getFutureDateString(3));
+  const [fromCity, setFromCity] = useState('');
+  const [toCity, setToCity] = useState('');
+  const [travelDate, setTravelDate] = useState('');
+  const [returnDate, setReturnDate] = useState('');
   const [passengers, setPassengers] = useState(1);
 
 
@@ -138,7 +138,8 @@ const LandingPage = () => {
 
   const handleSearch = async (e) => {
     e?.preventDefault();
-    if (fromCity === toCity) return;
+    if (!fromCity || !toCity || fromCity === toCity) return;
+    if (!travelDate) return;
     setLoading(true);
     try {
       const res = await scheduleAPI.search({ from: fromCity, to: toCity, date: travelDate });
@@ -271,6 +272,7 @@ const LandingPage = () => {
                       onChange={(e) => setFromCity(e.target.value)}
                       className="bg-transparent border-0 outline-none w-full text-xs font-semibold text-slate-800 dark:text-slate-100"
                     >
+                      <option value="">{t('home.selectOrigin', 'Select Departure City')}</option>
                       {cities.map((c) => <option key={c} value={c} className="dark:bg-slate-900">{t(c, c)}</option>)}
                     </select>
                   </div>
@@ -296,6 +298,7 @@ const LandingPage = () => {
                       onChange={(e) => setToCity(e.target.value)}
                       className="bg-transparent border-0 outline-none w-full text-xs font-semibold text-slate-800 dark:text-slate-100"
                     >
+                      <option value="">{t('home.selectDestination', 'Select Destination City')}</option>
                       {cities.filter((c) => c !== fromCity).map((c) => <option key={c} value={c} className="dark:bg-slate-900">{t(c, c)}</option>)}
                     </select>
                   </div>

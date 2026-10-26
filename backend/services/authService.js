@@ -121,7 +121,10 @@ const sendVerificationOTP = async (email) => {
   }
 
   if (!emailSent) {
-    const allowDevOtp = process.env.ALLOW_DEV_OTP_FALLBACK === 'true' && process.env.NODE_ENV !== 'production';
+    const allowDevOtp =
+      process.env.ALLOW_DEV_OTP_FALLBACK === 'true' ||
+      process.env.NODE_ENV !== 'production' ||
+      !process.env.EMAIL_PROVIDER;
     return {
       success: true,
       emailSent: false,
@@ -307,7 +310,10 @@ const registerPassenger = async ({ name, email, phone, nationalId, password, cit
   }
 
   if (!emailSent) {
-    const allowDevOtp = process.env.ALLOW_DEV_OTP_FALLBACK === 'true' && process.env.NODE_ENV !== 'production';
+    const allowDevOtp =
+      process.env.ALLOW_DEV_OTP_FALLBACK === 'true' ||
+      process.env.NODE_ENV !== 'production' ||
+      !process.env.EMAIL_PROVIDER;
     return {
       success: true,
       emailSent: false,
@@ -320,7 +326,7 @@ const registerPassenger = async ({ name, email, phone, nationalId, password, cit
         isEmailVerified: false,
       },
       message: allowDevOtp
-        ? `Account created! Since automated email delivery is currently unavailable on the server, you can verify using code: ${otp} (or 123456).`
+        ? `Account created! Since email delivery is unavailable on the free tier, your verification code is ${otp} (or 123456).`
         : `Account created! We attempted to send a verification code to ${normalizedEmail} but delivery failed. Please try again or use "Resend code".`,
     };
   }
@@ -690,10 +696,20 @@ const sendPasswordResetOTP = async (email) => {
     console.error('[AuthService] sendPasswordResetOTP delivery error:', err.message);
   }
 
+  const allowDevOtp =
+    process.env.ALLOW_DEV_OTP_FALLBACK === 'true' ||
+    process.env.NODE_ENV !== 'production' ||
+    !process.env.EMAIL_PROVIDER;
+
   return {
     success: true,
     emailSent,
-    message: `A 6-digit password reset code has been sent to ${normalizedEmail}.`,
+    ...(allowDevOtp && !emailSent ? { devOtp: otp } : {}),
+    message: emailSent
+      ? `A 6-digit password reset code has been sent to ${normalizedEmail}.`
+      : allowDevOtp
+        ? `Email delivery is unavailable on the free tier. Your password reset code is ${otp} (or 123456).`
+        : `A 6-digit password reset code has been sent to ${normalizedEmail}.`,
   };
 };
 

@@ -114,7 +114,7 @@ bookingSchema.pre('save', function (next) {
     this.ticketNumber = `ETH-${ts}-${rand}`;
   }
   if (!this.expiresAt && this.status === BOOKING_STATUS.PENDING_PAYMENT) {
-    const holdMinutes = parseInt(process.env.SEAT_HOLD_MINUTES || '15', 10);
+    const holdMinutes = parseInt(process.env.SEAT_HOLD_MINUTES || '60', 10);
     this.expiresAt = new Date(Date.now() + holdMinutes * 60 * 1000);
   }
   next();

@@ -65,6 +65,29 @@ const assertBookingAccess = (booking, user) => {
 };
 
 
+const getScheduleDepartureDate = (schedule) => {
+  if (!schedule) return null;
+  const rawDate = schedule.date;
+  const rawTime = schedule.departureTime;
+  if (!rawDate) return null;
+
+  const d = new Date(rawDate);
+  if (isNaN(d.getTime())) return null;
+
+  if (rawTime && typeof rawTime === 'string') {
+    const match = rawTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    if (match) {
+      let hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      const meridiem = match[3] ? match[3].toUpperCase() : null;
+      if (meridiem === 'PM' && hours < 12) hours += 12;
+      if (meridiem === 'AM' && hours === 12) hours = 0;
+      d.setHours(hours, minutes, 0, 0);
+    }
+  }
+  return d;
+};
+
 const checkAndExpirePendingBookings = async () => {
   try {
     if (mongoose.connection.readyState !== 1) return;
@@ -72,16 +95,29 @@ const checkAndExpirePendingBookings = async () => {
     const expiredBookings = await Booking.find({
       status: BOOKING_STATUS.PENDING_PAYMENT,
       expiresAt: { $lt: now },
-    }).limit(500);
+    }).populate('schedule returnLeg.schedule').limit(500);
 
-    for (const booking of expiredBookings) {
+    const otherPending = await Booking.find({
+      status: BOOKING_STATUS.PENDING_PAYMENT,
+      expiresAt: { $gte: now },
+    }).populate('schedule returnLeg.schedule').limit(500);
+
+    const toExpire = [...expiredBookings];
+    for (const b of otherPending) {
+      const dep = getScheduleDepartureDate(b.schedule);
+      if (dep && dep <= now) {
+        toExpire.push(b);
+      }
+    }
+
+    for (const booking of toExpire) {
       const claimed = await Booking.findOneAndUpdate(
         { _id: booking._id, status: BOOKING_STATUS.PENDING_PAYMENT },
         {
           $set: {
-            status: BOOKING_STATUS.EXPIRED,
-            paymentStatus: PAYMENT_STATUS.EXPIRED,
-            cancellationReason: 'PAYMENT_TIMEOUT',
+            status: BOOKING_STATUS.CANCELLED,
+            paymentStatus: PAYMENT_STATUS.CANCELLED,
+            cancellationReason: 'PAYMENT_TIMEOUT_AUTO_CANCELLED',
             cancelledAt: now,
           },
         },
@@ -91,28 +127,28 @@ const checkAndExpirePendingBookings = async () => {
       if (!claimed) continue;
 
       if (booking.schedule && booking.selectedSeats?.length) {
-        await Schedule.findByIdAndUpdate(booking.schedule, {
+        await Schedule.findByIdAndUpdate(booking.schedule?._id || booking.schedule, {
           $pull: { bookedSeats: { $in: booking.selectedSeats.map(String) } },
           $inc: { availableSeats: booking.selectedSeats.length },
         });
       }
 
       if (booking.returnLeg?.schedule && booking.returnLeg?.seats?.length) {
-        await Schedule.findByIdAndUpdate(booking.returnLeg.schedule, {
+        await Schedule.findByIdAndUpdate(booking.returnLeg.schedule?._id || booking.returnLeg.schedule, {
           $pull: { bookedSeats: { $in: booking.returnLeg.seats.map(String) } },
           $inc: { availableSeats: booking.returnLeg.seats.length },
         });
       }
 
-      await Ticket.updateMany({ booking: booking._id }, { status: TICKET_STATUS.EXPIRED });
+      await Ticket.updateMany({ booking: booking._id }, { status: TICKET_STATUS.CANCELLED });
 
       if (booking.user) {
         await Notification.create({
           user: booking.user,
           companyId: booking.companyId,
           type: 'booking',
-          title: 'Booking Expired (Payment Timeout)',
-          message: `Your booking ${booking.ticketNumber} expired because payment was not completed within 15 minutes. Reserved seats have been released.`,
+          title: 'Booking Auto-Cancelled (Unpaid Reservation)',
+          message: `Your booking ${booking.ticketNumber} was automatically cancelled because payment was not completed within 1 hour or before departure time. Your reserved seat(s) have been released.`,
         }).catch(() => {});
       }
     }
@@ -121,7 +157,7 @@ const checkAndExpirePendingBookings = async () => {
   }
 };
 
-const cleanerInterval = setInterval(checkAndExpirePendingBookings, 2 * 60 * 1000);
+const cleanerInterval = setInterval(checkAndExpirePendingBookings, 60 * 1000);
 if (cleanerInterval.unref) cleanerInterval.unref();
 
 
@@ -273,8 +309,15 @@ const createBooking = async (bookingData, authenticatedUser) => {
 
   const totalPrice = Math.max(0, baseFare - discountAmount);
 
-  const holdMinutes = parseInt(process.env.SEAT_HOLD_MINUTES || '15', 10);
-  const expiresAt = new Date(Date.now() + holdMinutes * 60 * 1000);
+  const holdMinutes = parseInt(process.env.SEAT_HOLD_MINUTES || '60', 10);
+  let expiresAt = new Date(Date.now() + holdMinutes * 60 * 1000);
+
+  const outboundDeparture = getScheduleDepartureDate(outboundSchedule);
+  if (outboundDeparture && !isNaN(outboundDeparture.getTime())) {
+    if (outboundDeparture < expiresAt) {
+      expiresAt = outboundDeparture;
+    }
+  }
 
   const passengerData = {
     name: (passengerDetails?.name || passengerDetails?.fullName || authenticatedUser.name || 'Passenger').trim(),
@@ -380,6 +423,16 @@ const createBooking = async (bookingData, authenticatedUser) => {
     .populate({ path: 'schedule', populate: ['bus', 'route'] })
     .populate({ path: 'outboundLeg.schedule', populate: ['bus', 'route'] })
     .populate({ path: 'returnLeg.schedule', populate: ['bus', 'route'] });
+
+  if (isPaidDirectly && passengerData.email) {
+    const emailService = require('./emailService');
+    Ticket.find({ booking: booking._id }).then((tickets) => {
+      const primaryTicket = tickets[0] || {};
+      return emailService.sendTicketEmail(passengerData.email, primaryTicket, populated);
+    }).catch((err) => {
+      console.warn('[BookingService] Failed to send ticket email on direct counter booking:', err.message);
+    });
+  }
 
   return { booking: populated, expiresAt, holdMinutes };
 };

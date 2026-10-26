@@ -190,8 +190,12 @@ const parseQrPayload = (rawPayload) => {
 
   if (raw.startsWith('ETHIOTRIP:')) {
     const parts = raw.split(':');
-    result.ticketNumber = parts[1] || raw;
-    if (parts[3]) result.seat = String(parts[3]).trim();
+    result.ticketNumber = (parts[1] || '').trim();
+    if (parts.length === 3 && parts[2]) {
+      result.seat = String(parts[2]).trim();
+    } else if (parts[3]) {
+      result.seat = String(parts[3]).trim();
+    }
     return result;
   }
 
@@ -294,10 +298,17 @@ const validateTicketForBoarding = async (ticketIdentifier, currentUser, schedule
     };
   }
 
-  const userComp =
+  let userComp =
     currentUser?.role === 'super_admin'
       ? null
       : currentUser?.companyId?._id?.toString() || currentUser?.companyId?.toString() || null;
+
+  if (!userComp && scheduleId) {
+    const sch = await Schedule.findById(scheduleId);
+    if (sch?.companyId) {
+      userComp = sch.companyId.toString();
+    }
+  }
 
   if (currentUser?.role !== 'super_admin' && !userComp) {
     return {
@@ -307,7 +318,12 @@ const validateTicketForBoarding = async (ticketIdentifier, currentUser, schedule
     };
   }
 
-  const ticketQuery = { ticketNumber };
+  const mongoose = require('mongoose');
+  const isObjectId = mongoose.Types.ObjectId.isValid(ticketNumber);
+
+  const ticketQuery = isObjectId
+    ? { $or: [{ ticketNumber }, { _id: ticketNumber }] }
+    : { ticketNumber };
   if (userComp) ticketQuery.companyId = userComp;
 
   let ticket = await Ticket.findOne(ticketQuery)
@@ -317,6 +333,20 @@ const validateTicketForBoarding = async (ticketIdentifier, currentUser, schedule
     .populate('booking')
     .populate('boardedBy', 'name email')
     .populate('verifiedBy', 'name email role');
+
+  if (!ticket && isObjectId) {
+    // Also try without companyId filter initially to see if it exists
+    const anyCompTicket = await Ticket.findById(ticketNumber)
+      .populate('companyId', 'companyName logo')
+      .populate('user', 'name email phone')
+      .populate({ path: 'schedule', populate: ['bus', 'route', 'assignedConductor'] })
+      .populate('booking')
+      .populate('boardedBy', 'name email')
+      .populate('verifiedBy', 'name email role');
+    if (anyCompTicket) {
+      ticket = anyCompTicket;
+    }
+  }
 
   if (!ticket && ticketNumber !== bookingRef) {
     ticket = await resolveTicketFromBooking(bookingRef || ticketNumber, {

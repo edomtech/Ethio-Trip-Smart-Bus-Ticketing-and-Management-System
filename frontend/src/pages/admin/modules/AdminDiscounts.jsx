@@ -10,9 +10,9 @@ const EMPTY = {
   code: '',
   name: '',
   discountType: 'percentage',
-  discountValue: 10,
+  discountValue: '',
   tripType: 'round',
-  minAmount: 0,
+  minAmount: '',
   isActive: true,
   holidayTag: 'None',
   showOnHomePage: false,
@@ -44,7 +44,7 @@ const AdminDiscounts = () => {
   useEffect(() => { load(); }, []);
 
   const openAdd = () => {
-    setForm({ ...EMPTY, code: `OFFER${Math.floor(100 + Math.random() * 900)}` });
+    setForm(EMPTY);
     setModal('add');
   };
 
@@ -75,11 +75,16 @@ const AdminDiscounts = () => {
     }
     setSaving(true);
     try {
+      const payload = {
+        ...form,
+        discountValue: form.discountValue ? Number(form.discountValue) : 0,
+        minAmount: form.minAmount ? Number(form.minAmount) : 0,
+      };
       if (modal === 'add') {
-        await discountAPI.create(form);
+        await discountAPI.create(payload);
         notify.success(MESSAGES.discount?.created || MESSAGES.common.saved);
       } else {
-        await discountAPI.update(modal._id, form);
+        await discountAPI.update(modal._id, payload);
         notify.success(MESSAGES.discount?.updated || MESSAGES.common.saved);
       }
       setModal(null);
