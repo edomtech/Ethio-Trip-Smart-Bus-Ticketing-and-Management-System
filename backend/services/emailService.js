@@ -1017,6 +1017,15 @@ const sendTripNotification = async (to, booking = {}, updateMessage) => {
 };
 
 const verifySmtpConnection = async () => {
+  // If an HTTP email API (Resend, Brevo, SendGrid) is configured, skip the
+  // SMTP connection test entirely -- SMTP ports are blocked on Render free tier
+  // and the HTTP path works fine without any SMTP verification.
+  const httpCfg = readHttpEmailConfig();
+  if (httpCfg) {
+    console.log(\[EMAIL] Email service ready -- using HTTP API provider: ${httpCfg.name}\);
+    return { ok: true, transport: 'http-api', provider: httpCfg.name };
+  }
+
   const transporter = createTransporter();
 
   if (!transporter) {
