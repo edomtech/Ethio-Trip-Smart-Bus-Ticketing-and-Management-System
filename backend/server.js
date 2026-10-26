@@ -189,6 +189,11 @@ const startServer = async () => {
       console.warn('⚠️ MongoDB not immediately reachable. Server starting; reconnecting in background:', dbErr.message);
     }
 
+    // Diagnostic: print which email env vars are present (not their values)
+    console.log('[EMAIL CONFIG] EMAIL_PROVIDER=' + (process.env.EMAIL_PROVIDER || '(not set)'));
+    console.log('[EMAIL CONFIG] RESEND_API_KEY=' + (process.env.RESEND_API_KEY ? '(set)' : '(NOT SET)'));
+    console.log('[EMAIL CONFIG] EMAIL_FROM=' + (process.env.EMAIL_FROM || '(not set)'));
+
     require('./services/emailService')
       .verifySmtpConnection()
       .catch(() => {});
