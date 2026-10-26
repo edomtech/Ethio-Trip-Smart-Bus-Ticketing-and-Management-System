@@ -1022,7 +1022,7 @@ const verifySmtpConnection = async () => {
   // and the HTTP path works fine without any SMTP verification.
   const httpCfg = readHttpEmailConfig();
   if (httpCfg) {
-    console.log(\[EMAIL] Email service ready -- using HTTP API provider: ${httpCfg.name}\);
+    console.log(`[EMAIL] Email service ready -- using HTTP API provider: ` + httpCfg.name);
     return { ok: true, transport: 'http-api', provider: httpCfg.name };
   }
 
