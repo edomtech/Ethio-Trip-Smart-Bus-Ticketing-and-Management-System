@@ -93,19 +93,14 @@ const PassengerRegister = () => {
         nationalId: formData.nationalId.trim(),
         password: formData.password
       });
-      if (res?.devOtp) {
-        notify.info({
-          title: 'Verification Code',
-          description: res.message || `Your verification code is ${res.devOtp}`,
-        });
-      } else {
-        notify.success(MESSAGES.registration.verificationSent);
-      }
+      notify.success({
+        title: MESSAGES?.registration?.verificationSent?.title || 'Verification Code Sent',
+        description: `Verification code sent to ${formData.email.trim()}. Please check your email inbox and enter the code.`,
+      });
       navigate('/verify-email', {
         state: {
           email: formData.email.trim(),
           newlyRegistered: true,
-          devOtp: res?.devOtp,
         }
       });
     } catch (err) {
