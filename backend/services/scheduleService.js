@@ -36,11 +36,18 @@ const getSchedules = async (user, queryParams = {}) => {
     query.date = exactDate;
   }
 
-  const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const filters = [];
-  if (from) filters.push({ 'route.from': { $regex: escapeRegex(from), $options: 'i' } });
-  if (to) filters.push({ 'route.to': { $regex: escapeRegex(to), $options: 'i' } });
-  if (filters.length > 0) query.$and = filters;
+  if (from || to) {
+    const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const routeQuery = {};
+    if (query.companyId) {
+      routeQuery.companyId = query.companyId;
+    }
+    if (from) routeQuery.from = { $regex: escapeRegex(from), $options: 'i' };
+    if (to) routeQuery.to = { $regex: escapeRegex(to), $options: 'i' };
+    const matchingRoutes = await Route.find(routeQuery).select('_id');
+    const routeIds = matchingRoutes.map((r) => r._id);
+    query.route = { $in: routeIds };
+  }
 
   return Schedule.find(query)
     .populate('bus')
@@ -220,8 +227,20 @@ const createSchedule = async (scheduleData, user) => {
     throw err;
   }
 
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  const tripId = `TRP-${rand}`;
+  const crypto = require('crypto');
+  let tripId = scheduleData.tripId?.trim();
+  if (tripId) {
+    const existing = await Schedule.findOne({ tripId });
+    if (existing) {
+      const err = new Error(`A trip with Trip ID "${tripId}" already exists. Please choose another.`);
+      err.statusCode = 400;
+      throw err;
+    }
+  } else {
+    const ts = Date.now().toString(36).toUpperCase();
+    const randHex = crypto.randomBytes(2).toString('hex').toUpperCase();
+    tripId = `TRP-${ts}-${randHex}`;
+  }
 
   const schedule = await Schedule.create({
     tripId,

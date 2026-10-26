@@ -444,7 +444,7 @@ const validateTicketForBoarding = async (ticketIdentifier, currentUser, schedule
     return {
       valid: false,
       status: 'TRIP_MISMATCH',
-      message: `Trip mismatch: Ticket is for trip on ${ticket.schedule?.date} (${ticket.schedule?.departureTime}), not this trip.`,
+      message: `Trip mismatch: Passenger ticket is for "${ticket.route || (ticket.schedule?.route ? `${ticket.schedule.route.from} → ${ticket.schedule.route.to}` : '')}" on ${ticket.travelDate || ticket.schedule?.date || ''} (${ticket.departureTime || ticket.schedule?.departureTime || ''}), not this selected trip.`,
       ticket,
     };
   }

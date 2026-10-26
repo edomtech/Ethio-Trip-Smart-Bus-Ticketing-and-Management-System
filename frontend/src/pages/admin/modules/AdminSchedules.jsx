@@ -332,6 +332,11 @@ const AdminSchedules = () => {
                     </option>
                   ))}
                 </select>
+                {buses.length === 0 && (
+                  <p className="text-[0.75rem] text-amber-600 mt-1 font-medium">
+                    ⚠️ No buses found for your company. Please add a bus in the Buses tab first.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -351,6 +356,11 @@ const AdminSchedules = () => {
                     </option>
                   ))}
                 </select>
+                {routes.length === 0 && (
+                  <p className="text-[0.75rem] text-amber-600 mt-1 font-medium">
+                    ⚠️ No routes found for your company. Please add a route in the Routes tab first.
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">

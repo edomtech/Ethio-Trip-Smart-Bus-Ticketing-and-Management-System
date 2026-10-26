@@ -115,8 +115,8 @@ const CompanyRegisterModal = ({ isOpen, onClose }) => {
       toast.warning('Please provide all company admin details (name, email, phone, password).');
       return;
     }
-    if (form.adminPassword.length < 6) {
-      toast.warning('Admin password must be at least 6 characters.');
+    if (form.adminPassword.length < 8) {
+      toast.warning('Admin password must be at least 8 characters.');
       return;
     }
 
@@ -422,7 +422,7 @@ const CompanyRegisterModal = ({ isOpen, onClose }) => {
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Admin Password *</label>
                   <input
                     type="password"
-                    placeholder="Minimum 6 characters"
+                    placeholder="Minimum 8 characters"
                     value={form.adminPassword}
                     onChange={(e) => setForm({ ...form, adminPassword: e.target.value })}
                     required

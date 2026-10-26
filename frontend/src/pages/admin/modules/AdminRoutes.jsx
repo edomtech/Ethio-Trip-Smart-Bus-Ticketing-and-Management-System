@@ -66,6 +66,18 @@ const AdminRoutes = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (!form.from?.trim() || !form.to?.trim()) {
+      notify.warning(MESSAGES.booking.routeRequired);
+      return;
+    }
+    if (form.from.trim().toLowerCase() === form.to.trim().toLowerCase()) {
+      notify.warning(MESSAGES.booking.sameCity);
+      return;
+    }
+    if (!form.distance || Number(form.distance) <= 0) {
+      notify.warning({ title: 'Distance Required', description: 'Please enter a valid route distance in kilometers.' });
+      return;
+    }
     setSaving(true);
     try {
       if (modal === 'add') {

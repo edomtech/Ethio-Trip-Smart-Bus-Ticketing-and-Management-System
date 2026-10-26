@@ -47,6 +47,14 @@ const AdminBuses = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (!form.busNumber?.trim()) {
+      notify.warning({ title: 'Bus Name Required', description: 'Please enter the bus name or model.' });
+      return;
+    }
+    if (!form.plateNumber?.trim()) {
+      notify.warning(MESSAGES.bus.plateRequired);
+      return;
+    }
     setSaving(true);
     try {
       const payload = {

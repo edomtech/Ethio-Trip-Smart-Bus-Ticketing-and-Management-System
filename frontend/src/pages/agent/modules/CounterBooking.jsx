@@ -79,8 +79,12 @@ const CounterBooking = () => {
     try {
       const data = await scheduleAPI.getAll({ from, to, date });
       const all = Array.isArray(data) ? data : (data?.schedules || []);
-      const filtered = companyId
-        ? all.filter(s => (s.companyId?._id || s.companyId) === companyId)
+      const userCompStr = String(companyId?._id || companyId || '').trim();
+      const filtered = userCompStr
+        ? all.filter((s) => {
+            const sCompStr = String(s.companyId?._id || s.companyId || '').trim();
+            return !sCompStr || sCompStr === userCompStr;
+          })
         : all;
       setSchedules(filtered);
       setStep('results');
